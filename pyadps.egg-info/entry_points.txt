@@ -1,0 +1,2 @@
+[console_scripts]
+run-pyadps = pyadps.__main__:main

@@ -1,0 +1,11 @@
+streamlit
+numpy
+matplotlib
+scipy
+wmm2020
+cmake
+pandas
+netCDF4
+plotly
+plotly-resampler
+meson

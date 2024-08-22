@@ -1,0 +1,37 @@
+Metadata-Version: 2.1
+Name: pyadps
+Version: 0.1.0
+Summary: A package for ADPS with Streamlit web interface
+Author: amol
+Author-email: velip09@gmail.com
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+Requires-Dist: streamlit
+Requires-Dist: numpy
+Requires-Dist: matplotlib
+Requires-Dist: scipy
+Requires-Dist: wmm2020
+Requires-Dist: cmake
+Requires-Dist: pandas
+Requires-Dist: netCDF4
+Requires-Dist: plotly
+Requires-Dist: plotly-resampler
+Requires-Dist: meson
+
+# pyadps
+
+`pyadps` is a Python package for ADPS (Acoustic Doppler Profiling System) data processing and visualization. It provides a Streamlit web interface for various functionalities such as data reading, quality control tests, profiling, and visualization.
+
+## Installation
+
+To install the package, use the following command:
+
+```bash
+pip install pyadps

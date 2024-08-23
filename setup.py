@@ -45,17 +45,17 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'streamlit',
-        'numpy',
-        'matplotlib',
-        'scipy',
-        'wmm2020',
-        'cmake',
-        'pandas',
-        'netCDF4',
-        'plotly',
-        'plotly-resampler',
-        'meson'
+        'streamlit==1.36.0',
+        'numpy==1.26.4',
+        'matplotlib==3.8.4',
+        'scipy==1.14.0',
+        'wmm2020==1.1.1',
+        'cmake==3.30.2',
+        'pandas==2.2.2',
+        'netCDF4==1.7.1',
+        'plotly==5.22.0',
+        'plotly-resampler==0.10.0',
+        'meson==1.4.1'
     ],
     ext_modules=[f2py_Extension('pyadps.utils.fortreadrdi', ['pyadps/utils/fortreadrdi.v0.7.f95'])],
     cmdclass=dict(

@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="pyadps",
-    version="0.0.2",
+    version="0.0.3",
     install_requires=[
         "streamlit>=1.36.0",
         "numpy>=1.26.4",

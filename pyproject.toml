@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyadps"
-version = "0.0.2"
+version = "0.0.3"
 description = "A Python package for ADCP data processing"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,17 +20,17 @@ classifiers = [
 ]
 
 dependencies = [
-    "streamlit==1.36.0",
-    "numpy==1.26.4",
-    "matplotlib==3.8.4",
-    "scipy==1.14.0",
-    "wmm2020==1.1.1",
-    "cmake==3.30.2",
-    "pandas==2.2.2",
-    "netCDF4==1.7.1",
-    "plotly==5.22.0",
-    "plotly-resampler==0.10.0",
-    "meson==1.4.1"
+    "streamlit>=1.36.0",
+    "numpy>=1.26.4",
+    "matplotlib>=3.8.4",
+    "scipy>=1.14.0",
+    "wmm2020>=1.1.1",
+    "cmake>=3.30.2",
+    "pandas>=2.2.2",
+    "netCDF4>=1.7.1",
+    "plotly>=5.22.0",
+    "plotly-resampler>=0.10.0",
+    "meson>=1.4.1"
 ]
 
 [project.optional-dependencies]

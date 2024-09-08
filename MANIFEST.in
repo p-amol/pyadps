@@ -1,12 +1,2 @@
-
-### `MANIFEST.in`
-
-Here’s an example of a `MANIFEST.in` file to include the necessary files in your package distribution:
-
-```plaintext
-include README.md
-include requirements.txt
-include pyadps/pages/*.py
-include pyadps/utils/fortreadrdi.v0.6.f95
-include pyadps/utils/*.so
-
+graft src
+recursive-exclude __pycache__ *.py[cod]

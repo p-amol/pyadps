@@ -45,3 +45,8 @@ packages = ["pyadps"]
 
 [tool.setuptools.package-data]
 "pyadps" = ["utils/metadata/*.json"]
+
+[project.urls]
+Homepage = "https://github.com/p-amol/pyadps.git"
+Repository = "https://github.com/p-amol/pyadps.git" 
+

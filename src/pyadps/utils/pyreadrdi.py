@@ -445,7 +445,7 @@ def fileheader(rdi_file):
 
         skip_array = [None] * datatype[i]
         for dtype in range(datatype[i]):
-            bseek = bskip + address_offset[i][dtype]
+            bseek = int(bskip) + int(address_offset[i][dtype])
             bfile.seek(bseek, 0)
             readbyte = bfile.read(2)
             skip_array[dtype] = int.from_bytes(
@@ -456,7 +456,7 @@ def fileheader(rdi_file):
         # bytekip is the number of bytes to skip to reach
         # an ensemble from beginning of file.
         # ?? Should byteskip be from current position ??
-        bskip = bskip + byte[i] + 2
+        bskip = int(bskip) + int(byte[i]) + 2
         bfile.seek(bskip, 0)
         byteskip = np.append(byteskip, np.int32(bskip))
         i += 1

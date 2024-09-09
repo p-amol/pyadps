@@ -1,6 +1,6 @@
 # pyadps
 
-`pyadps` is a Python package for processing Acoustic Doppler Current Profiler (ADCP) data. It provides a Streamlit web interface for various functionalities such as data reading, quality control tests, profiling, and visualization.
+`pyadps` is a Python package for processing Acoustic Doppler Current Profiler (ADCP) data. It provides a Streamlit web interface for various functionalities such as data reading, quality control tests, and visualization.
 
 ## Installation
 

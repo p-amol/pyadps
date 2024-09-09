@@ -65,6 +65,7 @@ Examples (add-on)
 """
 
 import io
+import os
 import sys
 from enum import Enum
 from struct import error as StructError
@@ -266,6 +267,7 @@ def safe_open(filename, mode="rb"):
     Error: Permission denied.
     """
     try:
+        filename = os.path.abspath(filename)
         file = open(filename, mode)
         return (file, ErrorCode.SUCCESS)
     except FileNotFoundError as e:

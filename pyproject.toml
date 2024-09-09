@@ -16,6 +16,7 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 
+
 [tool.poetry.dependencies]
 python = "<4.0.0,>=3.12"
 streamlit = ">=1.36.0"

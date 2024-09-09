@@ -1,52 +1,49 @@
-[build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
 
-[project]
+[tool.poetry]
 name = "pyadps"
-version = "0.0.3"
+version = "0.0.4"
 description = "A Python package for ADCP data processing"
+authors = ["P. Amol <prakashamol@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.12"
-license = {text = "MIT"}
-authors = [
-    { name = "P. Amol", email = "your.email@example.com" }
-]
-
+license = "MIT"
+homepage = "https://example.com"  # You can add your homepage URL or GitHub URL here
+repository = "https://github.com/p-amol/pyadps"  # Replace with your repository link
+documentation = "https://example.com/docs"  # Optional documentation link
+keywords = ["adcp", "data-processing", "oceanography"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent"
 ]
 
-dependencies = [
-    "streamlit>=1.36.0",
-    "numpy>=1.26.4",
-    "matplotlib>=3.8.4",
-    "scipy>=1.14.0",
-    "wmm2020>=1.1.1",
-    "cmake>=3.30.2",
-    "pandas>=2.2.2",
-    "netCDF4>=1.7.1",
-    "plotly>=5.22.0",
-    "plotly-resampler>=0.10.0",
-    "meson>=1.4.1"
-]
+[tool.poetry.dependencies]
+python = ">=3.12"
+streamlit = ">=1.36.0"
+numpy = ">=1.26.4"
+matplotlib = ">=3.8.4"
+scipy = ">=1.14.0"
+wmm2020 = ">=1.1.1"
+cmake = ">=3.30.2"
+pandas = ">=2.2.2"
+netCDF4 = ">=1.7.1"
+plotly = ">=5.22.0"
+plotly-resampler = ">=0.10.0"
+meson = ">=1.4.1"
 
-[project.optional-dependencies]
+[tool.poetry.extras]
 tests = ["pytest"]
 
-[project.scripts]
+[tool.poetry.scripts]
 run-pyadps = "pyadps.__main__:main"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["pyadps"]
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
-[tool.setuptools.package-data]
-"pyadps" = ["utils/metadata/*.json"]
+[tool.poetry.package]
+include = [
+    { path = "utils/metadata/*.json", format = "json" }
+]
 
-[project.urls]
-Homepage = "https://github.com/p-amol/pyadps.git"
-Repository = "https://github.com/p-amol/pyadps.git" 
-
+[tool.poetry.packages]
+pyadps = { from = "src" }

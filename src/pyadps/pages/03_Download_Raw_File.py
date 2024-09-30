@@ -78,13 +78,13 @@ if add_attributes == "Yes":
     col1, col2 = st.columns(2)
     
     with col1:
-        st.session_state.attributes['Cruise_No.'] = st.text_input("Cruise_No.")
-        st.session_state.attributes['Ship_No.'] = st.text_input("Ship_No.")
-        st.session_state.attributes['Project_No.'] = st.text_input("Project_No.")
-        st.session_state.attributes['Water_Depth'] = st.text_input("Water_Depth")
-        st.session_state.attributes['Deployment_Depth'] = st.text_input("Deploymen_Depth")
-        st.session_state.attributes['Deployment_Date'] = st.date_input("Deployment_Date")
-        st.session_state.attributes['Recovery_Date'] = st.date_input("Recovery_Date")
+        st.session_state.attributes['Cruise_No.'] = st.text_input("Cruise No.")
+        st.session_state.attributes['Ship_No.'] = st.text_input("Ship No.")
+        st.session_state.attributes['Project_No.'] = st.text_input("Project No.")
+        st.session_state.attributes['Water_Depth'] = st.text_input("Water Depth")
+        st.session_state.attributes['Deployment_Depth'] = st.text_input("Deploymen Depth")
+        st.session_state.attributes['Deployment_Date'] = st.date_input("Deployment Date")
+        st.session_state.attributes['Recovery_Date'] = st.date_input("Recovery Date")
 
 
     with col2:
@@ -92,7 +92,7 @@ if add_attributes == "Yes":
         st.session_state.attributes['Longitude'] = st.text_input("Longitude")
         st.session_state.attributes['Platform_Type'] = st.text_input("Platform_Type")
         st.session_state.attributes['Participants'] = st.text_area("Participants")
-        st.session_state.attributes['File_created_by'] = st.text_input("File_created_by")
+        st.session_state.attributes['File_created_by'] = st.text_input("File created by")
         st.session_state.attributes['Contact'] = st.text_input("Contact")
         st.session_state.attributes['Comments'] = st.text_area("Comments")
 

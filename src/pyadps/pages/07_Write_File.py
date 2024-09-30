@@ -344,8 +344,8 @@ if generate_config_radio == "Yes":
             config["Velocity Test"]["Despike_Cutoff"] = str(st.session_state.despike_cutoff)
 
         if st.session_state.isFlatline:
-            config["Velocity Test"]["Flatline Kernal"] = str(st.session_state.flatline_kernal)
-            config["Velocity Test"]["Flatline Deviation"] = str(st.session_state.flatline_cutoff)
+            config["Velocity Test"]["Flatline_Kernal"] = str(st.session_state.flatline_kernal)
+            config["Velocity Test"]["Flatline_Deviation"] = str(st.session_state.flatline_cutoff)
 
 
     # Optional section (attributes)

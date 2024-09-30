@@ -1,0 +1,26 @@
+/* Make the main content area full width */
+.wy-nav-content-wrap {
+    max-width: 100%;
+    padding: 0;
+}
+/* Adjust the main content to account for the fixed sidebar */
+.wy-nav-content {
+    margin-left: 100px; /* Same width as the sidebar */
+}
+
+/* Ensure the top navigation bar spans the full width */
+.wy-nav-top {
+    width: 100%;
+}
+
+.footer {
+    text-align: center;
+    margin-top: 20px;
+    padding: 5px;
+    background-color: #f8f8f8;
+    border-top: 5px solid #e7e7e7;
+}
+
+.footer p {
+    margin: 1px 0;
+}

@@ -236,6 +236,7 @@ if update_mask:
     if end_ens < x[-1]:
         mask[:, end_ens:] = 1
 
+    st.session_state.ens_range = ens_range
     st.session_state.start_ens = start_ens
     st.session_state.end_ens = end_ens
     st.session_state.maskp = mask
@@ -264,6 +265,7 @@ the relation between beam angle and the thickness of the contaminated layer.
 mask = st.session_state.maskp
 beam = st.radio("Select beam", (1, 2, 3, 4), horizontal=True)
 beam = beam - 1
+st.session_state.beam = beam
 fillplot_plotly(echo[beam, :, :], title="Echo Intensity")
 
 with st.form(key="cutbin_form"):
@@ -271,6 +273,7 @@ with st.form(key="cutbin_form"):
     cut_bins_mask = st.form_submit_button(label="Cut bins")
 
     if cut_bins_mask:
+        st.session_state.extra_cells = extra_cells
         mask = side_lobe_beam_angle(flobj, vlobj, mask, extra_cells=extra_cells)
         fillplot_plotly(
             echo[beam, :, :],
@@ -308,6 +311,7 @@ If the `bin` option is selected, ensure that the end data are trimmed.
 last_cell = st.radio(
     "Select the depth of last bin for regridding", ("Bin", "Surface"), horizontal=True
 )
+st.session_state.last_cell = last_cell
 st.write(last_cell)
 regrid_button = st.button(label="Regrid Data")
 

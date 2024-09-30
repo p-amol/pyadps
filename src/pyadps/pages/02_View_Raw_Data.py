@@ -32,16 +32,6 @@ def fillplot_matplotlib(data):
     st.pyplot(fig)
 
 
-# def fillplot_bokeh(data, option):
-# Bokeh (contourf Does not work as version is 2.4.3)
-# q = figure(min_width=550, min_height=300)
-# levels = (-255, 255)
-# contour_renderer = q.image(X, Y, data[option - 1, :, :], levels, fill_color=RdYlBu)
-# colorbar = contour_renderer.construct_color_bar()
-# q.add_layout(colorbar, "right")
-# st.bokeh_chart(q)
-
-
 @st.cache_data
 def fillplot_plotly(data, colorscale="balance", title="Data", xaxis="time"):
     if xaxis == "time":
@@ -134,3 +124,5 @@ var_option = st.selectbox(
 )
 beam = st.radio("Select beam", (1, 2, 3, 4), horizontal=True)
 call_plot(var_option, beam, xaxis=str(xbutton))
+
+

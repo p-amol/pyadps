@@ -68,7 +68,7 @@ def flead_ncatt(fl_obj, ncfile_id, ens=0):
             setattr(ncfile_id, format_key, format(value))
 
 
-def main(infile, outfile):
+def main(infile, outfile, attributes=None):
     """
     Main function to create netcdf file. Stores 3-D data types like
     velocity, echo, correlation, and percent good.
@@ -139,14 +139,20 @@ def main(infile, outfile):
         if i == 0:
             ensemble[:] = np.arange(1, vshape[0] + 1, 1)
         varid[i][0 : vshape[0], 0 : vshape[1], 0 : vshape[2]] = var.T
+        
+    # Add global attributes if provided
+    if attributes:
+        for key, value in attributes.items():
+            setattr(outnc, key, str(value))  # Convert to string to store in NetCDF metadata
 
     # outnc.history = "Created " + time.ctime(time.time())
     flead_ncatt(flead, outnc)
+    
 
     outnc.close()
 
 
-def vlead_nc(infile, outfile):
+def vlead_nc(infile, outfile, attributes=None):
     """
     Function to create ncfile containing Variable Leader.
 
@@ -182,11 +188,16 @@ def vlead_nc(infile, outfile):
 
         varid[i][0 : vshape[0]] = var
         i += 1
+        
+    # Add global attributes if provided
+    if attributes:
+        for key, value in attributes.items():
+            setattr(outnc, key, str(value))  # Store attributes as strings
 
     outnc.close()
 
 
-def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01"):
+def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=None):
     """
     Function to create the processed NetCDF file.
 
@@ -198,7 +209,11 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01"):
         t0 (string): Time unit and origin
     """
     ncfile = nc4.Dataset(outfile, mode="w", format="NETCDF4")
-    zsize = len(depth)
+    # Check if depth is scalar or array
+    if np.isscalar(depth):
+        zsize = 1  # Handle scalar depth
+    else:
+        zsize = len(depth)  # Handle array depth
     tsize = len(time)
     ncfile.createDimension("depth", zsize)
     ncfile.createDimension("time", tsize)
@@ -238,5 +253,10 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01"):
     vvel[:, :] = data[1, :, :].T
     wvel[:, :] = data[2, :, :].T
     evel[:, :] = data[3, :, :].T
+    
+    # Add global attributes if provided
+    if attributes:
+        for key, value in attributes.items():
+            setattr(ncfile, key, str(value))  # Store attributes as strings
 
     ncfile.close()

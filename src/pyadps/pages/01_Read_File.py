@@ -43,35 +43,6 @@ def file_access(uploaded_file):
     return path
 
 
-@st.cache_data
-def file_write(path):
-    """
-    Creates a temporary directory and stores the raw NetCDF file
-    for downloading.
-
-    Args:
-        path (string): Temporary path of the binary file
-    """
-    tempdirname = tempfile.TemporaryDirectory(delete=False)
-    st.session_state.rawfilename = tempdirname.name + "/rawfile.nc"
-    wr.main(path, st.session_state.rawfilename)
-
-
-@st.cache_data
-def file_write_vlead(path):
-    """
-    Creates a temporary directory and stores the raw NetCDF file
-    containing Variable Leader data for downloading.
-
-    Args:
-        path (string): Temporary path of the binary file
-    """
-    tempvardirname = tempfile.TemporaryDirectory(delete=False)
-    st.session_state.vleadfilename = tempvardirname.name + "/vlead.nc"
-    st.write(st.session_state.vleadfilename)
-    wr.vlead_nc(path, st.session_state.vleadfilename)
-
-
 def color_bool(val):
     """
     Takes a scalar and returns a string with
@@ -311,36 +282,3 @@ with right:
     st.write((df.style.map(color_bool2)))
     # st.dataframe(df)
 
-
-##########Download Raw File ##########
-st.header("NetCDF File", divider="blue")
-st.write(
-    """
-       Click to generate and download raw file in NetCDF format. The `rawfile.nc` consists of velocity, echo intensity, percent good and correlation. 
-       These variables are dependent on beams, cells, and ensembles. 
-       The Fixed Leader values for the first ensemble is stored as attributes. The Variable Leader data can be downloaded separately (`vlead.nc`).
-
-       The file generation may take some time. Please be patient. 
-        """
-)
-download_button = st.button("Generate Raw NetCDF files")
-download_var_button = st.button("Generate Raw Variable Leader NetCDF File")
-if download_button:
-    file_write(st.session_state.fpath)
-    st.write(st.session_state.rawfilename)
-    with open(st.session_state.rawfilename, "rb") as file:
-        st.download_button(
-            label="Download Raw File",
-            data=file,
-            file_name="rawfile.nc",
-        )
-
-if download_var_button:
-    file_write_vlead(st.session_state.fpath)
-    st.write(st.session_state.vleadfilename)
-    with open(st.session_state.vleadfilename, "rb") as file:
-        st.download_button(
-            label="Download Variable Leader",
-            data=file,
-            file_name="vlead.nc",
-        )

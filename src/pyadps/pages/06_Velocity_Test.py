@@ -130,6 +130,10 @@ with st.form(key="magnet_form"):
         st.session_state.dummyvelocity, mag = magnetic_declination(
             velocity, lat, lon, depth, year
         )
+        st.session_state.lat = lat
+        st.session_state.lon = lon
+        st.session_state.depth = depth
+        st.session_state.year = year
         st.session_state.angle = np.trunc(mag[0][0])
         st.session_state.isMagnet = True
 
@@ -161,6 +165,12 @@ with st.form(key="cutbin_form"):
     submit_cutoff = st.form_submit_button(label="Submit")
 
 if submit_cutoff:
+
+    st.session_state.maxuvel = maxuvel
+    st.session_state.maxvvel = maxvvel
+    st.session_state.maxwvel = maxwvel
+
+
     st.session_state.maskd = velocity_cutoff(
         velocity[0, :, :], st.session_state.maskd, cutoff=maxuvel
     )
@@ -191,6 +201,10 @@ despike_kernal = st.number_input(
 despike_cutoff = st.number_input("Enter Despike Cutoff (mm/s)", 0, 1000, 150, 1)
 despike_button = st.button("Despike")
 if despike_button:
+
+    st.session_state.despike_kernal = despike_kernal
+    st.session_state.despike_cutoff = despike_cutoff
+
     st.session_state.maskd = despike(
         velocity[0, :, :],
         st.session_state.maskd,
@@ -220,6 +234,9 @@ flatline_cutoff = st.number_input("Enter Flatline deviation", 0, 100, 1, 1)
 flatline_button = st.button("Remove Flatline")
 
 if flatline_button:
+    st.session_state.flatline_kernal = flatline_kernal
+    st.session_state.flatline_cutoff = flatline_cutoff
+
     st.session_state.maskd = flatline(
         velocity[0, :, :],
         st.session_state.maskd,

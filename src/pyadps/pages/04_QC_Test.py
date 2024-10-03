@@ -108,6 +108,27 @@ def plot_noise(dep=0, rec=-1):
     fig.update_xaxes(title="Echo (count)")
     fig.update_yaxes(title="Cells")
     st.plotly_chart(fig)
+    
+#########  NOISE FLOOR IDENTIFICATION ##############
+dn = rn = 1
+st.header("Noise Floor Identification", divider="blue")
+st.write(
+    """
+    If the ADCP has collected data from the air either 
+    before deployment or after recovery, this data can 
+    be used to estimate the echo intensity threshold. 
+    The plots below show the echo intensity from the first 
+    and last ensembles. The noise level is typically around 
+    30-40 counts throughout the entire profile.
+"""
+)
+dn = st.number_input("Deployment Ensemble", x[0] + 1, x[-1] + 1, x[0] + 1)
+# r = st.number_input("Recovery Ensemble", -1 * (x[-1] + 1), -1 * (x[0] + 1), -1)
+rn = st.number_input("Recovery Ensemble", x[0] + 1, x[-1] + 1, x[-1] + 1)
+dn = dn - 1
+rn = rn - 1
+
+plot_noise(dep=dn, rec=rn)
 
 
 ################## QC Test ###################
@@ -205,26 +226,6 @@ with left:
         st.write(st.session_state.newthresh)
 
 
-#########  NOISE FLOOR IDENTIFICATION ##############
-dn = rn = 1
-st.header("Noise Floor Identification", divider="blue")
-st.write(
-    """
-    If the ADCP has collected data from the air either 
-    before deployment or after recovery, this data can 
-    be used to estimate the echo intensity threshold. 
-    The plots below show the echo intensity from the first 
-    and last ensembles. The noise level is typically around 
-    30-40 counts throughout the entire profile.
-"""
-)
-dn = st.number_input("Deployment Ensemble", x[0] + 1, x[-1] + 1, x[0] + 1)
-# r = st.number_input("Recovery Ensemble", -1 * (x[-1] + 1), -1 * (x[0] + 1), -1)
-rn = st.number_input("Recovery Ensemble", x[0] + 1, x[-1] + 1, x[-1] + 1)
-dn = dn - 1
-rn = rn - 1
-
-plot_noise(dep=dn, rec=rn)
 
 st.header("Default Mask File", divider="blue")
 

@@ -6,11 +6,26 @@ import plotly.graph_objects as go
 import streamlit as st
 import utils.writenc as wr
 from plotly_resampler import FigureResampler
+import configparser
+
 
 if "flead" not in st.session_state:
     st.write(":red[Please Select Data!]")
     st.stop()
 
+if "fname" not in st.session_state:
+    st.session_state.fname = "No file selected"
+
+if "rawfilename" not in st.session_state:
+    st.session_state.rawfilename = "rawfile.nc"
+
+if "vleadfilename" not in st.session_state:
+    st.session_state.vleadfilename = "vlead.nc"
+
+
+# Check if attributes exist in session state
+if "attributes" not in st.session_state:
+    st.session_state.attributes = {}
 
 if st.session_state.isVelocityMask:
     st.session_state.final_mask = st.session_state.velocity_mask
@@ -169,28 +184,64 @@ else:
 
 file_type_radio = st.radio("Select output file format:", ("NetCDF", "CSV"))
 
-download_button = st.button("Generate Processed files")
-
+if file_type_radio == "NetCDF":
+    add_attr_button = st.checkbox("Add attributes to NetCDF file")
+    
+    if add_attr_button:
+        st.write("### Modify Attributes")
+        
+        # Create two-column layout for attributes
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Display attributes in the first column
+            for key in ["Cruise_No.", "Ship_No.", "Project_No.", "Water_Depth", "Deployment_Depth","Deployment_Date","Recovery_Date"]:
+                if key in st.session_state.attributes:
+                   st.session_state.attributes[key] = st.text_input(key, value=st.session_state.attributes[key])
+                else:
+                   st.session_state.attributes[key] = st.text_input(key)
+                
+        with col2:
+            # Display attributes in the second column
+            for key in ["Latitude", "Longitude","Platform_Type","Participants", "File_created_by", "Contact", "Comments"]:
+                if key in st.session_state.attributes:
+                   st.session_state.attributes[key] = st.text_input(key, value=st.session_state.attributes[key])
+                else:
+                   st.session_state.attributes[key] = st.text_input(key)     
+                   
+download_button = st.button("Generate Processed files")           
 
 if download_button:
     st.session_state.processed_filename = file_write()
     st.write(":grey[Processed file created. Click the download button.]")
     st.write(st.session_state.processed_filename)
     depth = np.trunc(st.session_state.final_depth)
+    
     if file_type_radio == "NetCDF":
-        wr.finalnc(
-            st.session_state.processed_filename,
-            depth,
-            st.session_state.date,
-            st.session_state.write_velocity,
-        )
-
-        with open(st.session_state.processed_filename, "rb") as file:
-            st.download_button(
-                label="Download NetCDF File",
-                data=file,
-                file_name="processed_file.nc",
+        if add_attr_button and st.session_state.attributes:
+            # Generate file with attributes
+            wr.finalnc(
+                st.session_state.processed_filename,
+                depth,
+                st.session_state.date,
+                st.session_state.write_velocity,
+                attributes=st.session_state.attributes  # Pass edited attributes
             )
+        else:
+            # Generate file without attributes
+            wr.finalnc(
+                st.session_state.processed_filename,
+                depth,
+                st.session_state.date,
+                st.session_state.write_velocity
+            )
+    
+    with open(st.session_state.processed_filename, "rb") as file:
+        st.download_button(
+            label="Download NetCDF File",
+            data=file,
+            file_name="processed_file.nc",
+        )
 
     if file_type_radio == "CSV":
         udf = pd.DataFrame(
@@ -228,4 +279,89 @@ if download_button:
             data=vcsv,
             file_name="vertical_velocity.csv",
             mime="text/csf",
+        )
+        
+        
+# Header for the Config.ini File Generator
+st.header("Config.ini File Generator", divider="blue")
+
+# Radio button to decide whether to generate the config.ini file
+generate_config_radio = st.radio("Do you want to generate a config.ini file?", ("No", "Yes"))
+
+if generate_config_radio == "Yes":
+    # Create a config parser object
+    config = configparser.ConfigParser()
+
+    # Main section
+    config["Main"] = {
+        "Input_FileName": st.session_state.fname
+    }
+
+    if st.session_state.isQCMask:
+        config["QC Test"] = {}
+
+        # Add the contents of the current QC Mask thresholds
+        if "newthresh" in st.session_state:
+            for idx, row in st.session_state.newthresh.iterrows():
+                config["QC Test"][row["Threshold"].replace(" ", "_")] = row["Values"]
+
+
+    # Profile Test section
+    if st.session_state.isProfileMask:
+        config["Profile Test"] = {}
+
+        if st.session_state.update_mask:
+
+            config["Profile Test"]["Change_Range"] = str(st.session_state.ens_range)
+            config["Profile Test"]["Deployment_ensembles"] = str(st.session_state.start_ens)
+            config["Profile Test"]["Recovery_ensembles"] = str(st.session_state.end_ens)
+
+        if st.session_state.update_mask_cutbin:
+            config["Profile Test"]["Beam"] = str(st.session_state.beam + 1)  # Adding 1 since beams are 1-based
+            config["Profile Test"]["cell_to_delete"] = str(st.session_state.extra_cells)
+
+        if st.session_state.isGrid:
+            config["Profile Test"]["Regrid_Depth_cells"] = st.session_state.last_cell  # Bin or Surface
+
+
+    # Velocity Test Section
+    if st.session_state.isVelocityMask:
+        config["Velocity Test"] = {}
+
+        if st.session_state.isMagnet:
+            config["Velocity Test"]["Latitude"] = str(st.session_state.lat)
+            config["Velocity Test"]["Longitude"] = str(st.session_state.lon)
+            config["Velocity Test"]["Depth"] = str(st.session_state.depth)
+            config["Velocity Test"]["Year"] = str(st.session_state.year)
+
+        if st.session_state.isCutoff:
+            config["Velocity Test"]["Max_Zoank"] = str(st.session_state.maxuvel)
+            config["Velocity Test"]["Max_Meridional"] = str(st.session_state.maxvvel)
+            config["Velocity Test"]["Max_Vertical"] = str(st.session_state.maxwvel)
+
+        if st.session_state.isDespike:
+            config["Velocity Test"]["Despike_Kernal_Size"] = str(st.session_state.despike_kernal)
+            config["Velocity Test"]["Despike_Cutoff"] = str(st.session_state.despike_cutoff)
+
+        if st.session_state.isFlatline:
+            config["Velocity Test"]["Flatline_Kernal"] = str(st.session_state.flatline_kernal)
+            config["Velocity Test"]["Flatline_Deviation"] = str(st.session_state.flatline_cutoff)
+
+
+    # Optional section (attributes)
+    config["Optional"] = {}
+    for key, value in st.session_state.attributes.items():
+        config["Optional"][key] = str(value)  # Ensure all values are strings
+
+    # Write config.ini to a temporary file
+    config_filepath = "config.ini"
+    with open(config_filepath, "w") as configfile:
+        config.write(configfile)
+
+    # Allow the user to download the generated config.ini file
+    with open(config_filepath, "rb") as file:
+        st.download_button(
+            label="Download config.ini File",
+            data=file,
+            file_name="config.ini",
         )

@@ -398,6 +398,7 @@ def fileheader(rdi_file):
     bfile, error = safe_open(filename, mode="rb")
     if bfile is None:
         error_code = error.code
+        dummytuple = ([], [], [], [], [], ensemble, error_code)
         return dummytuple
     bfile.seek(0, 0)
     bskip = i = 0
@@ -415,6 +416,7 @@ def fileheader(rdi_file):
         if dbyte is None:
             if i == 0:
                 error_code = error.code
+                dummytuple = ([], [], [], [], [], ensemble, error_code)
                 return dummytuple
             else:
                 break

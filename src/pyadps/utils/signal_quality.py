@@ -81,7 +81,7 @@ def default_mask(flobj, velocity):
     mask = np.zeros((cells, ensembles))
     # Ignore mask for error velocity
     for i in range(beams - 1):
-        mask[abs(velocity[i, :, :]) > 32766] = 1
+        mask[velocity[i, :, :] < -32767] = 1
     return mask
 
 

@@ -195,7 +195,7 @@ if file_type_radio == "NetCDF":
         
         with col1:
             # Display attributes in the first column
-            for key in ["Cruise_No.", "Ship_No.", "Project_No.", "Water_Depth", "Deployment_Depth","Deployment_Date","Recovery_Date"]:
+            for key in ["Cruise_No.", "Ship_Name", "Project_No.", "Water_Depth_m", "Deployment_Depth_m","Deployment_Date","Recovery_Date"]:
                 if key in st.session_state.attributes:
                    st.session_state.attributes[key] = st.text_input(key, value=st.session_state.attributes[key])
                 else:

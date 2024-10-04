@@ -331,7 +331,7 @@ if generate_config_radio == "Yes":
         if st.session_state.isMagnet:
             config["Velocity Test"]["Latitude"] = str(st.session_state.lat)
             config["Velocity Test"]["Longitude"] = str(st.session_state.lon)
-            config["Velocity Test"]["Depth"] = str(st.session_state.depth)
+            config["Velocity Test"]["Depth"] = str(st.session_state.magnetic_dec_depth)
             config["Velocity Test"]["Year"] = str(st.session_state.year)
 
         if st.session_state.isCutoff:

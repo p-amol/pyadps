@@ -227,29 +227,34 @@ with left:
 
 
 
-st.header("Default Mask File", divider="blue")
-
+st.header("Mask File", divider="blue")
 st.write(
+"""
+Displayed the mask file. 
+Ensure to save any necessary changes or apply additional thresholds if needed.
+"""
+)
+
+
+if st.button("Display mask file"):
+    st.header("Default Mask File", divider="blue")
+    st.write(
     """
 ADCP assigns missing values based on thresholds set before deployment.
 These values cannot be recovered and the default 
 """
 )
-if st.button("Display default mask file"):
     fillplot_plotly(st.session_state.orig_mask, colorscale="greys")
 
-######### Section New Mask File ##########
-st.header("Update Mask File", divider="blue")
-st.write(
+
+    st.header("Update Mask File", divider="blue")
+    st.write(
     """
 Update, display and save the updated mask file after applying threshold.
 If thresholds are not saved, default mask file is used. 
 """
 )
 # values, counts = np.unique(mask, return_counts=True)
-
-update_mask_button = st.button("Display updated mask file")
-if update_mask_button:
     fillplot_plotly(st.session_state.mask, colorscale="greys")
 
 col1, col2 = st.columns([1, 1])

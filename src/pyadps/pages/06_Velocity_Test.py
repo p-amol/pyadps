@@ -132,7 +132,7 @@ with st.form(key="magnet_form"):
         )
         st.session_state.lat = lat
         st.session_state.lon = lon
-        st.session_state.depth = depth
+        st.session_state.magnetic_dec_depth = depth
         st.session_state.year = year
         st.session_state.angle = np.trunc(mag[0][0])
         st.session_state.isMagnet = True

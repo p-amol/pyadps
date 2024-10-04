@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 def main():
     st.set_page_config(
         page_title="ADCP Data Processing Software",
@@ -13,22 +14,15 @@ def main():
         },
     )
 
-
     """
-    # **Python ADCP Data Processing Software (PyADPS)**
-    PyADPS is a software for processing RDI Acoustic Doppler Current Profiler (ADCP) PD0 files. Currently the software can process the data from Workhorse and DVS. We are working on including navigation file and multiple file processing.
+    # **Python ADCP Data Processing Software (`pyadps`)**
+    `pyadps` is a software for processing Teledyne RDI Acoustic Doppler Current Profiler (ADCP) PD0 files. Currently the software can process the data from Workhorse ADCPs.
 
     ## Features
 
     * Access RDI ADCP binary files using Python 3
     * Convert RDI binary files to netcdf
     * Process ADCP data 
-
-    ## Quikstart
-    ```python
-    import pyadps
-    pyadps.auto_process("config.ini")
-    ```
 
     ## Contribute
     Issue Tracker: http://github.com/adps/issues
@@ -37,14 +31,12 @@ def main():
     ## Support
     If you are having issues, please let us know.
     We have a mailing list located at: adps-python@google-groups.com
-
-    ## Contact
-    Contact adps@nio.org for any further information.
     
     ## License
     The project is licensed under the MIT license.
 
     """
+
 
 if __name__ == "__main__":
     main()

@@ -8,14 +8,14 @@ def main():
         layout="wide",
         initial_sidebar_state="auto",
         menu_items={
-            "Get Help": "https://www.extremelycoolapp.com/help",
-            "Report a bug": "https://www.extremelycoolapp.com/bug",
-            "About": "# This is a header. This is an *extremely* cool app!",
+            "Get Help": "http://github.com/p-amol/adps",
+            "Report a bug": "http://github.com/adps/issues",
+            "About": "# Python ADCP Data Processing Software (PyADPS)",
         },
     )
 
     """
-    # **Python ADCP Data Processing Software (`pyadps`)**
+    # **Python ADCP Data Processing Software (pyadps)**
     `pyadps` is a software for processing Teledyne RDI Acoustic Doppler Current Profiler (ADCP) PD0 files. Currently the software can process the data from Workhorse ADCPs.
 
     ## Features

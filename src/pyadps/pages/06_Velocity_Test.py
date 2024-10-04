@@ -285,6 +285,7 @@ with col1:
         st.session_state.veltest_velocity = np.copy(st.session_state.dummyvelocity)
         st.session_state.velocity_mask = np.copy(st.session_state.maskd)
         st.session_state.isVelocityMask = True
+        st.write(":green[Mask data saved]")
     else:
         st.write(":red[Data not saved]")
 

@@ -215,8 +215,10 @@ m = 20
 if "update_mask" not in st.session_state:
     st.session_state.update_mask = False
     st.session_state.endpoints = None
+    st.session_state.isTrimEnds = False
 if "update_mask_cutbin" not in st.session_state:
     st.session_state.update_mask_cutbin = False
+    st.session_state.isCutBins = False
 
 ens_range = st.number_input("Change range", x[0], x[-1], 20)
 start_ens = st.slider("Deployment Ensembles", 0, ens_range, 0)
@@ -226,7 +228,7 @@ n = int(ens_range)
 
 if start_ens or end_ens:
     trim_ends(start_ens=start_ens, end_ens=end_ens, ens_range=n)
-    st.session_state.update_mask = False
+    # st.session_state.update_mask = False
 
 update_mask = st.button("Update mask data")
 if update_mask:
@@ -246,6 +248,7 @@ if update_mask:
     )
     st.write(st.session_state.endpoints)
     st.session_state.update_mask = True
+    st.session_state.isTrimEnds = True
 
 if not st.session_state.update_mask:
     st.write(":red[mask data not updated]")
@@ -287,6 +290,7 @@ if update_mask_cutbin:
     st.session_state.maskp = mask
     st.write(":green[mask file updated]")
     st.session_state.update_mask_cutbin = True
+    st.session_state.isCutBins = True
 
 if not st.session_state.update_mask_cutbin:
     st.write(":red[mask file not updated]")

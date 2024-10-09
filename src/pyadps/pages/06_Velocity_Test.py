@@ -170,7 +170,6 @@ if submit_cutoff:
     st.session_state.maxvvel = maxvvel
     st.session_state.maxwvel = maxwvel
 
-
     st.session_state.maskd = velocity_cutoff(
         velocity[0, :, :], st.session_state.maskd, cutoff=maxuvel
     )
@@ -184,7 +183,7 @@ if submit_cutoff:
 
 
 if st.session_state.isCutoff:
-    st.write("Cutoff Applied")
+    st.write(":green[Cutoff Applied]")
     a = {
         "Max. Zonal Velocity": maxuvel,
         "Max. Meridional Velocity": maxvvel,
@@ -220,7 +219,7 @@ if despike_button:
     st.session_state.isDespike = True
 
 if st.session_state.isDespike:
-    st.write("Data Despiked")
+    st.write(":green[Data Despiked]")
     b = {
         "Kernal Size": despike_kernal,
         "Despike Cutoff": despike_cutoff,

@@ -152,6 +152,30 @@ def side_lobe_beam_angle(flobj, vlobj, mask, extra_cells=2):
 def side_lobe_rssi_bump(echo, mask):
     pass
 
+def manual_cut_bins(mask, min_cell, max_cell, min_ensemble, max_ensemble):
+    """
+    Apply manual bin cutting by selecting a specific range of cells and ensembles.
+    
+    Parameters:
+        mask (numpy array): The mask array to modify.
+        min_cell (int): The minimum cell index to mask.
+        max_cell (int): The maximum cell index to mask.
+        min_ensemble (int): The minimum ensemble index to mask.
+        max_ensemble (int): The maximum ensemble index to mask.
+
+    Returns:
+        numpy array: The updated mask with selected areas masked.
+    """
+    # Ensure the indices are within valid range
+    min_cell = max(0, min_cell)
+    max_cell = min(mask.shape[0], max_cell)
+    min_ensemble = max(0, min_ensemble)
+    max_ensemble = min(mask.shape[1], max_ensemble)
+
+    # Apply mask on the selected range
+    mask[min_cell:max_cell, min_ensemble:max_ensemble] = 1
+
+    return mask
 
 # read data
 # filename = "BGS11000.000"

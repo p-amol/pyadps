@@ -321,113 +321,110 @@ if generate_config_radio == "Yes":
     config = configparser.ConfigParser()
 
     # Main section
-    config["Main"] = {"Input_FileName": st.session_state.fname}
-    config["QC Test"] = {"QC_Test": "False"}
-    config["Profile Test"] = {"Profile_Test": "False"}
-    config["Velocity Test"] = {"Velocity_Test": "False"}
+    config["FileSettings"] = {}
+    config["DownloadOptions"] = {}
+    config["QCTest"] = {"qc_test": "False"}
+    config["ProfileTest"] = {"profile_test": "False"}
+    config["VelocityTest"] = {"velocity_test": "False"}
+    config["Optional"] = {"attributes": "False"}
 
-    config["Main"]["Raw_filename"] = "raw"
-    config["Main"]["Processed_filename"] = "processed"
+    config["FileSettings"]["input_file_path"] = ""
+    config["FileSettings"]["input_file_name"] = st.session_state.fname
+    config["FileSettings"]["output_file_path"] = ""
+    config["FileSettings"]["output_file_name_raw"] = ""
+    config["FileSettings"]["output_file_name_processed"] = ""
+    config["FileSettings"]["output_format_raw"] = str(file_type_radio).lower()
+    config["FileSettings"]["output_format_processed"] = str(file_type_radio).lower()
 
-    if file_type_radio == "NetCDF":
-        config["Main"]["Download_Raw_NetCDF_file"] = "True"
-        config["Main"]["Download_Processed_NetCDF_file"] = "True"
-        config["Main"]["Download_Raw_CSV_file"] = "False"
-        config["Main"]["Download_Processed_CSV_file"] = "False"
-    else:
-        config["Main"]["Download_Raw_NetCDF_file"] = "False"
-        config["Main"]["Download_Processed_NetCDF_file"] = "False"
-        config["Main"]["Download_Raw_CSV_file"] = "True"
-        config["Main"]["Download_Processed_CSV_file"] = "True"
+    config["DownloadOptions"]["download_raw"] = "True"
+    config["DownloadOptions"]["download_processed"] = "True"
+    config["DownloadOptions"]["apply_mask"] = "True"
+    config["DownloadOptions"]["download_mask"] = "True"
 
     # QC Test Options
     if st.session_state.isQCMask:
-        config["QC Test"]["QC_Test"] = "True"
+        config["QCTest"]["qc_test"] = "True"
 
         # Add the contents of the current QC Mask thresholds
         if "newthresh" in st.session_state:
             for idx, row in st.session_state.newthresh.iterrows():
-                config["QC Test"][row["Threshold"].replace(" ", "_")] = row["Values"]
+                config["QCTest"][row["Threshold"].replace(" ", "_")] = row["Values"]
 
     # Profile Test Options
     if st.session_state.isProfileMask:
-        config["Profile Test"]["Profile_Test"] = "True"
+        config["ProfileTest"]["profile_test"] = "True"
 
         if st.session_state.isTrimEnds:
-            config["Profile Test"]["Trim_Ends"] = "True"
-            config["Profile Test"]["Trim_Ends_Start_Ensemble"] = str(
+            config["ProfileTest"]["trim_ends"] = "True"
+            config["ProfileTest"]["trim_ends_start_index"] = str(
                 st.session_state.start_ens
             )
-            config["Profile Test"]["Trim_Ends_End_Ensemble"] = str(
-                st.session_state.end_ens
-            )
+            config["ProfileTest"]["trim_ends_end_index"] = str(st.session_state.end_ens)
         else:
-            config["Profile Test"]["Trim_Ends"] = "False"
+            config["ProfileTest"]["trim_ends"] = "False"
 
         if st.session_state.isCutBins:
-            config["Profile Test"]["Cut_Bins"] = "True"
-            config["Profile Test"]["Cut_Bins_Add_Cells"] = str(
+            config["ProfileTest"]["cut_bins"] = "True"
+            config["ProfileTest"]["cut_bins_add_cells"] = str(
                 st.session_state.extra_cells
             )
         else:
-            config["Profile Test"]["Cut_Bins"] = "False"
+            config["ProfileTest"]["cut_bins"] = "False"
 
         if st.session_state.isGrid:
-            config["Profile Test"]["Regrid"] = "True"
-            config["Profile Test"][
+            config["ProfileTest"]["regrid"] = "True"
+            config["ProfileTest"][
                 "Regrid_Option"
             ] = st.session_state.last_cell  # Bin or Surface
         else:
-            config["Profile Test"]["Regrid"] = "False"
+            config["ProfileTest"]["regrid"] = "False"
 
     # Velocity Test Section
     if st.session_state.isVelocityMask:
-        config["Velocity Test"]["Velocity_Test"] = "True"
+        config["VelocityTest"]["velocity_test"] = "True"
 
         if st.session_state.isMagnet:
-            config["Velocity Test"]["Magnetic_Declination"] = str(True)
-            config["Velocity Test"]["Latitude"] = str(st.session_state.lat)
-            config["Velocity Test"]["Longitude"] = str(st.session_state.lon)
-            config["Velocity Test"]["Depth"] = str(st.session_state.magnetic_dec_depth)
-            config["Velocity Test"]["Year"] = str(st.session_state.year)
+            config["VelocityTest"]["magnetic_declination"] = str(True)
+            config["VelocityTest"]["latitude"] = str(st.session_state.lat)
+            config["VelocityTest"]["longitude"] = str(st.session_state.lon)
+            config["VelocityTest"]["depth"] = str(st.session_state.magnetic_dec_depth)
+            config["VelocityTest"]["year"] = str(st.session_state.year)
         else:
-            config["Velocity Test"]["Magnetic_Declination"] = str(False)
+            config["VelocityTest"]["magnetic_declination"] = str(False)
 
         if st.session_state.isCutoff:
-            config["Velocity Test"]["Cutoff"] = str(True)
-            config["Velocity Test"]["Max_Zonal_Velocity"] = str(
-                st.session_state.maxuvel
-            )
-            config["Velocity Test"]["Max_Meridional_Velocity"] = str(
+            config["VelocityTest"]["cutoff"] = str(True)
+            config["VelocityTest"]["max_zonal_velocity"] = str(st.session_state.maxuvel)
+            config["VelocityTest"]["max_meridional_velocity"] = str(
                 st.session_state.maxvvel
             )
-            config["Velocity Test"]["Max_Vertical_Velocity"] = str(
+            config["VelocityTest"]["max_vertical_velocity"] = str(
                 st.session_state.maxwvel
             )
         else:
-            config["Velocity Test"]["Cutoff"] = str(False)
+            config["VelocityTest"]["cutoff"] = str(False)
 
         if st.session_state.isDespike:
-            config["Velocity Test"]["Despike"] = str(True)
-            config["Velocity Test"]["Despike_Kernal_Size"] = str(
+            config["VelocityTest"]["despike"] = str(True)
+            config["VelocityTest"]["despike_Kernal_Size"] = str(
                 st.session_state.despike_kernal
             )
-            config["Velocity Test"]["Despike_Cutoff"] = str(
+            config["VelocityTest"]["despike_Cutoff"] = str(
                 st.session_state.despike_cutoff
             )
         else:
-            config["Velocity Test"]["Despike"] = str(False)
+            config["VelocityTest"]["Despike"] = str(False)
 
         if st.session_state.isFlatline:
-            config["Velocity Test"]["Flatline"] = str(True)
-            config["Velocity Test"]["Flatline_Kernal"] = str(
+            config["VelocityTest"]["flatline"] = str(True)
+            config["VelocityTest"]["flatline_kernal_size"] = str(
                 st.session_state.flatline_kernal
             )
-            config["Velocity Test"]["Flatline_Deviation"] = str(
+            config["VelocityTest"]["flatline_deviation"] = str(
                 st.session_state.flatline_cutoff
             )
         else:
-            config["Velocity Test"]["Flatline"] = str(False)
+            config["VelocityTest"]["flatline"] = str(False)
 
     # Optional section (attributes)
     config["Optional"] = {}

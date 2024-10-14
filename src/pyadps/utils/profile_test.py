@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import streamlit as st
 from matplotlib.widgets import Button, Slider, TextBox
-from pyadps.utils import readrdi as rd
 
+from pyadps.utils import readrdi as rd
 from .plotgen import plotmask, plotvar
 
 
@@ -138,6 +139,7 @@ def side_lobe_beam_angle(flobj, vlobj, mask, extra_cells=2):
     depth = transducer_depth / 10
     valid_depth = depth * np.cos(beam_angle) - bin1dist / 100
     valid_cells = np.trunc(valid_depth * 100 / cell_size) - extra_cells
+    st.write(cells, valid_cells[100], extra_cells)
 
     for i in range(ensembles):
         c = int(valid_cells[i])
@@ -149,3 +151,49 @@ def side_lobe_beam_angle(flobj, vlobj, mask, extra_cells=2):
 
 def side_lobe_rssi_bump(echo, mask):
     pass
+
+def manual_cut_bins(mask, min_cell, max_cell, min_ensemble, max_ensemble):
+    """
+    Apply manual bin cutting by selecting a specific range of cells and ensembles.
+    
+    Parameters:
+        mask (numpy array): The mask array to modify.
+        min_cell (int): The minimum cell index to mask.
+        max_cell (int): The maximum cell index to mask.
+        min_ensemble (int): The minimum ensemble index to mask.
+        max_ensemble (int): The maximum ensemble index to mask.
+
+    Returns:
+        numpy array: The updated mask with selected areas masked.
+    """
+    # Ensure the indices are within valid range
+    min_cell = max(0, min_cell)
+    max_cell = min(mask.shape[0], max_cell)
+    min_ensemble = max(0, min_ensemble)
+    max_ensemble = min(mask.shape[1], max_ensemble)
+
+    # Apply mask on the selected range
+    mask[min_cell:max_cell, min_ensemble:max_ensemble] = 1
+
+    return mask
+
+# read data
+# filename = "BGS11000.000"
+# fl = rd.FixedLeader(filename, run="fortran")
+# vl = rd.VariableLeader(filename, run="fortran")
+# echo = rd.echo(filename, run="fortran")
+# vel = rd.velocity(filename, run="fortran")
+#
+# beam_angle = int(fl.system_configuration()["Beam Angle"])
+# cell_size = fl.field()["Depth Cell Len"]
+# bin1dist = fl.field()["Bin 1 Dist"]
+# cells = fl.field()["Cells"]
+#
+# shape = np.shape(vel[0, :, :])
+# mask = np.zeros(shape)
+# orig_mask = np.copy(mask)
+#
+# mask = trim_ends(vl, mask)
+# mask = side_lobe_beam_angle(fl, vl, mask)
+# plotmask(orig_mask, mask)
+# plotvar(echo, "Echo Intensity", mask)

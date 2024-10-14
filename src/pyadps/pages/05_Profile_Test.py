@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 from plotly_resampler import FigureResampler
-from utils.profile_test import side_lobe_beam_angle
+from utils.profile_test import side_lobe_beam_angle, manual_cut_bins
 from utils.regrid import regrid2d, regrid3d
 from utils.signal_quality import default_mask
 
@@ -296,9 +296,84 @@ if not st.session_state.update_mask_cutbin:
     st.write(":red[mask file not updated]")
 
 
-############ CUT BINS: Manual #################
+########### CUT BINS: Manual #################
 st.header("Cut Bins: Manual", divider="blue")
+# Reset mask
+# Selection of variable (Velocity, Echo Intensity, etc.)
+variable = st.selectbox(
+    "Select Variable to Display",
+    ("Velocity", "Echo Intensity", "Correlation", "Percentage Good")
+)
 
+# Map variable selection to corresponding data
+data_dict = {
+    "Velocity": velocity,
+    "Echo Intensity": echo,
+    "Correlation": correlation,
+    "Percentage Good": pgood,
+}
+
+# User selects beam (1-4)
+beam = st.radio("Select beam", (1, 2, 3, 4), horizontal=True,  key="beam_selection")
+beam_index = beam - 1
+
+# Display the selected variable and beam
+selected_data = data_dict[variable][beam_index, :, :]
+fillplot_plotly(selected_data, title=f"{variable}")
+
+
+with st.form(key="manual_cutbin_form"):
+    st.write("Select the specific range of cells and ensembles to delete")
+
+    # Input for selecting minimum and maximum cells
+    min_cell = st.number_input("Min Cell", 0, int(flobj.field()["Cells"]), 0)
+    max_cell = st.number_input("Max Cell", 0, int(flobj.field()["Cells"]), 10)
+
+    # Input for selecting minimum and maximum ensembles
+    min_ensemble = st.number_input("Min Ensemble", 0, int(flobj.ensembles), 0)
+    max_ensemble = st.number_input("Max Ensemble", 0, int(flobj.ensembles), int(flobj.ensembles))
+
+    # Submit button to apply the mask
+    cut_bins_mask_manual = st.form_submit_button(label="Apply Manual Cut Bins")
+
+    if cut_bins_mask_manual:
+        mask = manual_cut_bins(mask, min_cell, max_cell, min_ensemble, max_ensemble)
+        st.session_state.maskp = mask
+        fillplot_plotly(
+            echo[beam, :, :],
+            title="Echo Intensity (Masked Manually)",
+            maskdata=mask,
+        )
+        fillplot_plotly(mask, colorscale="greys", title="Mask Data")
+
+            
+# Layout with two columns
+col1, col2 = st.columns([2, 1])
+
+with col1:
+            
+    # Button to save mask data after manual cut bins, with unique key
+    update_mask_cutbin = st.button("Update mask file after cutbin Manual", key="update_cutbin_button")
+    if update_mask_cutbin:
+        st.session_state.maskp = mask
+        st.write(":green[mask file updated]")
+        st.session_state.update_mask_cutbin = True
+        st.session_state.isCutBins = True
+
+    if not st.session_state.update_mask_cutbin:
+        st.write(":red[mask file not updated]")
+
+with col2:
+    # Button to reset the mask data, with unique key
+    reset_mask_button = st.button("Reset mask data", key="reset_mask_button")
+    if reset_mask_button:
+        st.session_state.maskp = np.copy(st.session_state.orig_mask)
+        st.write(":green[Mask data is reset to default]")
+        st.session_state.isQCMask = False
+        st.session_state.isProfileMask = False
+        st.session_state.isGrid = False
+        st.session_state.isGridSave = False
+        st.session_state.isVelocityMask = False
 
 ############ REGRID ###########################################
 st.header("Regrid Depth Cells", divider="blue")

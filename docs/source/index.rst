@@ -27,13 +27,12 @@ Dive into the documentation to learn more about `pyadps`:
    doc
    modules
    contact_us
-   about_us
+   
 
 **Stay Connected**
 ------------------
 - **GitHub Repository**: Explore the source code and contribute at `pyadps on GitHub <https://github.com/p-amol/pyadps>`_
 - **Issue Tracker**: Report issues or request features
-- **Mailing List**: Join the discussion at `adps-python@gmail.com`
 
 Explore the sections listed above to get detailed information on using `pyadps` effectively. We hope you find our documentation comprehensive and useful for your oceanographic data processing needs.
 

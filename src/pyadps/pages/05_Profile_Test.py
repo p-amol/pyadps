@@ -346,7 +346,56 @@ with st.form(key="manual_cutbin_form"):
         )
         fillplot_plotly(mask, colorscale="greys", title="Mask Data")
 
-            
+# Adding the new feature: Delete Single Cell or Ensemble
+st.header("Delete Specific Cell or Ensemble")
+
+# Step 1: User chooses between deleting a cell or an ensemble
+delete_option = st.radio("Select option to delete", ("Cell", "Ensemble"), horizontal=True)
+
+# Step 2: Display options based on user's choice
+if delete_option == "Cell":
+    # Option to delete a specific cell across all ensembles
+    with st.form(key="delete_cell_form"):
+        st.write("Select a specific cell to delete across all ensembles")
+        
+        # Input for selecting a single cell
+        cell = st.number_input("Cell", 0, int(flobj.field()["Cells"]), 0, key="single_cell")
+        
+        # Submit button to apply the mask for cell deletion
+        delete_cell = st.form_submit_button(label="Delete Cell")
+
+        if delete_cell:
+            mask[cell, :] = 1  # Mask the entire row for the selected cell
+            st.session_state.maskp = mask
+            fillplot_plotly(
+                echo[beam, :, :],
+                title=f"Echo Intensity (Cell {cell} Deleted Across Ensembles)",
+                maskdata=mask,
+            )
+            fillplot_plotly(mask, colorscale="greys", title="Mask Data")
+
+elif delete_option == "Ensemble":
+    # Option to delete a specific ensemble across all cells
+    with st.form(key="delete_ensemble_form"):
+        st.write("Select a specific ensemble to delete across all cells")
+        
+        # Input for selecting a specific ensemble
+        ensemble = st.number_input("Ensemble", 0, int(flobj.ensembles), 0, key="single_ensemble")
+        
+        # Submit button to apply the mask for ensemble deletion
+        delete_ensemble = st.form_submit_button(label="Delete Ensemble")
+
+        if delete_ensemble:
+            mask[:, ensemble-1] = 1  # Mask the entire column for the selected ensemble
+            st.session_state.maskp = mask
+            fillplot_plotly(
+                echo[beam, :, :],
+                title=f"Echo Intensity (Ensemble {ensemble} Deleted Across Cells)",
+                maskdata=mask,
+            )
+            fillplot_plotly(mask, colorscale="greys", title="Mask Data")
+
+           
 # Layout with two columns
 col1, col2 = st.columns([2, 1])
 

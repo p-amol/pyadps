@@ -21,6 +21,16 @@ from pyadps.utils.velocity_test import (
     velocity_cutoff,
 )
 
+def main():
+    # Get the config file
+    try:
+        filepath = input("Enter config file name: ")
+        if os.path.exists(filepath):
+            autoprocess(filepath)
+        else:
+            print("File not found!")
+    except:
+        print("Error: Unable to process the data.")
 
 def autoprocess(filepath):
     config = configparser.ConfigParser()
@@ -269,12 +279,4 @@ def autoprocess(filepath):
 
 
 if __name__ == "__main__":
-    # Get the config file
-    try:
-        filepath = input("Enter config file name: ")
-        if os.path.exists(filepath):
-            autoprocess(filepath)
-        else:
-            print("File not found!")
-    except:
-        print("Error: Unable to process the data.")
+    main()

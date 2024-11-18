@@ -9,7 +9,7 @@ from streamlit.runtime.state import session_state
 from utils.profile_test import side_lobe_beam_angle
 from utils.signal_quality import default_mask
 from utils.velocity_test import (despike, flatline, magnetic_declination,
-                                 velocity_cutoff)
+                                 velocity_cutoff, wmm2020api, velocity_modifier)
 
 if "flead" not in st.session_state:
     st.write(":red[Please Select Data!]")
@@ -110,6 +110,11 @@ If the magnetic declination is reset, re-run the remaining tests again.
 """
 )
 
+# Selecting the method to calculate magnetic declination.
+method = st.radio("Select a method", ("WMM2020", "API", "Manual"), horizontal=True)
+# method = method - 1
+st.session_state.method = method
+
 if "isMagnetButton" not in st.session_state:
     st.session_state.isMagnetButton = False
 
@@ -119,23 +124,57 @@ def toggle_btns():
 
 
 with st.form(key="magnet_form"):
-    lat = st.number_input("Latitude", -90.0, 90.0, 0.0, step=1.0)
-    lon = st.number_input("Longitude", 0.0, 360.0, 0.1, step=1.0, format="%.4f")
-    depth = st.number_input("Depth", 0, 1000, 0, step=1)
-    year = st.number_input("Year", 1950, 2100, 2024, 1)
+    if st.session_state.method == "WMM2020":
+        st.session_state.isMagnet = False
+        lat = st.number_input("Latitude", -90.0, 90.0, 0.0, step=1.0)
+        lon = st.number_input("Longitude", 0.0, 360.0, 0.1, step=1.0, format="%.4f")
+        depth = st.number_input("Depth", 0, 1000, 0, step=1)
+        year = st.number_input("Year", 1950, 2100, 2024, 1)
+    elif  st.session_state.method == "API":
+        st.session_state.isMagnet = False
+        lat = st.number_input("Latitude", -90.0, 90.0, 0.0, step=1.0)
+        lon = st.number_input("Longitude", 0.0, 360.0, 0.1, step=1.0, format="%.4f")
+        year = st.number_input("Year", 1950, 2100, 2024, 1)
+    else:
+        st.session_state.isMagnet = False
+        mag = [[st.number_input("Declination", -180.0, 180.0, 0.0, 0.1)]]
+    
+    if st.session_state.method == "Manual":
+        button_name = "Accept"
+    else:
+        button_name = "Compute"
+
 
     if st.form_submit_button(
-        "Compute", on_click=toggle_btns, disabled=st.session_state.isMagnetButton
+        button_name, on_click=toggle_btns, disabled=st.session_state.isMagnetButton
     ):
-        st.session_state.dummyvelocity, mag = magnetic_declination(
-            velocity, lat, lon, depth, year
-        )
-        st.session_state.lat = lat
-        st.session_state.lon = lon
-        st.session_state.magnetic_dec_depth = depth
-        st.session_state.year = year
-        st.session_state.angle = np.trunc(mag[0][0])
-        st.session_state.isMagnet = True
+        if st.session_state.method == "WMM2020":
+            try:
+                mag = magnetic_declination(lat, lon, depth, year)
+                st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
+                st.session_state.lat = lat
+                st.session_state.lon = lon
+                st.session_state.magnetic_dec_depth = depth
+                st.session_state.year = year
+                st.session_state.angle = np.trunc(mag[0][0])
+                st.session_state.isMagnet = True
+            except:
+                st.write(":red[Process failed please use other methods: API or  Manual]")
+
+        elif  st.session_state.method == "API":
+            mag = wmm2020api(lat, lon, year)
+            st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
+            st.session_state.lat = lat
+            st.session_state.lon = lon
+            st.session_state.year = year
+            st.session_state.angle = np.trunc(mag[0][0])
+            st.session_state.isMagnet = True
+            
+        else:
+            st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
+            st.session_state.angle = np.trunc(mag[0][0])
+            st.session_state.isMagnet = True
+
 
 if st.session_state.isMagnet:
     st.write(f"Magnetic declination: {st.session_state.angle}\u00b0")

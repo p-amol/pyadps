@@ -1,39 +1,74 @@
 from itertools import groupby
 
+import requests
 import numpy as np
 import scipy as sp
-import wmm2020
 
-
-def magnetic_declination(velocity, lat, lon, depth, year):
+def wmm2020api(lat1, lon1, year):
     """
-    The function uses magnetic declination from wmm2020 to correct
-    the horizontal velocities
+    This function uses the WMM2020 API to retrieve the magnetic field values at a given location
+    The API need latitude, longitude and year to perform the calculation. The key in the function
+    must be updated time to time since the API is subjected to timely updates and the key may change.
 
     Args:
-        velocity (numpy array): velocity(beam, depth, time)
+        Latitude (float)
+        Longitude (float)
+        startYear (int)
+
+    Returns:
+        mag -> magnetic declination at the given location in degree.
+    """
+    baseurl = "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?"
+    key = "zNEw7"
+    resultFormat="json"
+    url = "{}lat1={}&lon1={}&key={}&startYear{}&resultFormat={}".format(baseurl, lat1, lon1, key, year, resultFormat)
+    response = requests.get(url)
+    data = response.json()
+    results = data["result"][0]
+    mag = [[results["declination"]]]
+    
+    return mag
+
+def magnetic_declination(lat, lon, depth, year):
+    """
+    The function  calculates the magnetic declination at a given location and depth.
+    using a local installation of wmm2020 model.
+
+
+    Args:
         lat (parameter, float): Latitude in decimals
         lon (parameter, float): Longitude in decimals
         depth (parameter, float): depth in m
         year (parameter, integer): Year
 
     Returns:
-        velocity (numpy array): Rotated velocity using magnetic declination
         mag: Magnetic declination (degrees)
     """
+    import wmm2020
     mag = wmm2020.wmm(lat, lon, depth, year)
-    mag = np.deg2rad(mag.decl.data)
+    mag = mag.decl.data
+
+    return  mag
+
+def velocity_modifier(velocity, mag):
+    """
+    The function uses magnetic declination from wmm2020 to correct
+    the horizontal velocities
+
+    Args:
+    velocity (numpy array): velocity array
+    mag: magnetic declination  (degrees)
+
+    Returns:
+        velocity (numpy array): Rotated velocity using magnetic declination
+    """
+    mag = np.deg2rad(mag[0][0])
     velocity = np.where(velocity == -32768, np.nan, velocity)
-    velocity[0, :, :] = velocity[0, :, :] * np.cos(mag) + velocity[1, :, :] * np.sin(
-        mag
-    )
-    velocity[1, :, :] = -1 * velocity[0, :, :] * np.sin(mag) + velocity[
-        1, :, :
-    ] * np.cos(mag)
+    velocity[0, :, :] = velocity[0, :, :] * np.cos(mag) + velocity[1, :, :] * np.sin(mag)
+    velocity[1, :, :] = -1 * velocity[0, :, :] * np.sin(mag) + velocity[1, :, :] * np.cos(mag)
     velocity = np.where(velocity == np.nan, -32768, velocity)
 
-    return velocity, np.rad2deg(mag)
-
+    return velocity
 
 def velocity_cutoff(velocity, mask, cutoff=250):
     """

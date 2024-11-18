@@ -38,6 +38,9 @@ tests = ["pytest"]
 run-pyadps = "pyadps.__main__:main"
 run-auto = "pyadps.utils.autoprocess:main"
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.3"
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"

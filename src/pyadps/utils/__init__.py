@@ -9,4 +9,4 @@ from pyadps.utils.regrid import *
 from pyadps.utils.signal_quality import *
 from pyadps.utils.velocity_test import *
 from pyadps.utils.writenc import *
-from pyadps.utils.autoprocess import *
+# from pyadps.utils.autoprocess import *

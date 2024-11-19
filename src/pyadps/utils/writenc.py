@@ -138,7 +138,6 @@ def main(infile, outfile, attributes=None):
         vshape = var.T.shape
         if i == 0:
             ensemble[:] = np.arange(1, vshape[0] + 1, 1)
-            print(ensemble)
         varid[i][0 : vshape[0], 0 : vshape[1], 0 : vshape[2]] = var.T
         
     # Add global attributes if provided

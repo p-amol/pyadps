@@ -800,7 +800,8 @@ def vlead_dict(vid):
 
     counter = 1
     for key, value in vname.items():
-        vlead[key] = getattr(np, value)(vid[:][counter])
+        # vlead[key] = getattr(np, value)(vid[:][counter])
+        vlead[key] = vid[:][counter]
         counter += 1
 
     return vlead

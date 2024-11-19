@@ -96,7 +96,7 @@ def main(infile, outfile, attributes=None):
 
     # Variables
     # Dimension Variables
-    ensemble = outnc.createVariable("ensemble", "u4", ("ensemble",))
+    ensemble = outnc.createVariable("ensemble", "i4", ("ensemble",))
     ensemble.axis = "T"
     cell = outnc.createVariable("cell", "i2", ("cell",))
     cell.axis = "Z"
@@ -120,7 +120,7 @@ def main(infile, outfile, attributes=None):
             varid[i] = outnc.createVariable(
                 item, "i2", ("ensemble", "cell", "beam"), fill_value=-32768
             )
-            varid[i].missing_value = -32768
+            # varid[i].missing_value = -32768
             vel = getattr(rd, item)
             var = vel(infile).data
             # var = rd.variables(infile, item)
@@ -208,6 +208,18 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
         data (numpy array): Velocity (beam, depth, time)
         t0 (string): Time unit and origin
     """
+    fill = -32768
+
+    # Change velocity to cm/s
+    data[data > fill] /= 10 
+
+    # Change depth to positive
+    depth *= -1
+
+    # Reverse the arrays
+    depth = depth[::-1]
+    data = data[:, ::-1, :]
+
     ncfile = nc4.Dataset(outfile, mode="w", format="NETCDF4")
     # Check if depth is scalar or array
     if np.isscalar(depth):
@@ -221,21 +233,22 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
     z = ncfile.createVariable("depth", np.float32, ("depth"))
     z.units = "m"
     z.long_name = "depth"
+    z.positive = "down"
 
     t = ncfile.createVariable("time", np.float32, ("time"))
     t.units = t0
     t.long_name = "time"
 
     # Create 2D variables
-    uvel = ncfile.createVariable("u", np.float32, ("time", "depth"), fill_value=-32768)
+    uvel = ncfile.createVariable("u", np.float32, ("time", "depth"), fill_value=fill)
     uvel.units = "cm/s"
     uvel.long_name = "zonal_velocity"
 
-    vvel = ncfile.createVariable("v", np.float32, ("time", "depth"), fill_value=-32768)
+    vvel = ncfile.createVariable("v", np.float32, ("time", "depth"), fill_value=fill)
     vvel.units = "cm/s"
     vvel.long_name = "meridional_velocity"
 
-    wvel = ncfile.createVariable("w", np.float32, ("time", "depth"), fill_value=-32768)
+    wvel = ncfile.createVariable("w", np.float32, ("time", "depth"), fill_value=fill)
     wvel.units = "cm/s"
     wvel.long_name = "vertical_velocity"
 
@@ -247,7 +260,7 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
 
     nctime = pd2nctime(time, t0)
     # write data
-    z[:] = depth * -1
+    z[:] = depth
     t[:] = nctime
     uvel[:, :] = data[0, :, :].T
     vvel[:, :] = data[1, :, :].T

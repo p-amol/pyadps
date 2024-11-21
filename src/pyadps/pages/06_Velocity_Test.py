@@ -104,8 +104,15 @@ The processing in this page apply only to the velocity data.
 st.header("Magnetic Declination", divider="blue")
 st.write(
     """
-The magnetic declination is obtained from World Magnetic Model 2020 (WMM2020).
+* The magnetic declination is obtained from World Magnetic Model 2020 (WMM2020).
 The python wrapper module `wmm2020` is available from this [Link](https://github.com/space-physics/wmm2020). 
+
+* The API method utilizes the online magnetic declination service provided by the National Geophysical Data Center (NGDC)
+of the National Oceanic and Atmospheric Administration (NOAA) to calculate the magnetic declination. The service is available at this [link](https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml#declination).
+Internet connection is necessary for this method to work.
+
+* In the manual method, the user can directly enter the magnetic declination.
+
 If the magnetic declination is reset, re-run the remaining tests again.
 """
 )
@@ -159,17 +166,20 @@ with st.form(key="magnet_form"):
                 st.session_state.angle = np.trunc(mag[0][0])
                 st.session_state.isMagnet = True
             except:
-                st.write(":red[Process failed please use other methods: API or  Manual]")
+                st.write(":red[Process failed! please use other methods: API or  Manual]")
 
         elif  st.session_state.method == "API":
-            mag = wmm2020api(lat, lon, year)
-            st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
-            st.session_state.lat = lat
-            st.session_state.lon = lon
-            st.session_state.year = year
-            st.session_state.angle = np.trunc(mag[0][0])
-            st.session_state.isMagnet = True
-            
+            try:
+                mag = wmm2020api(lat, lon, year)
+                st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
+                st.session_state.lat = lat
+                st.session_state.lon = lon
+                st.session_state.year = year
+                st.session_state.angle = np.trunc(mag[0][0])
+                st.session_state.isMagnet = True
+            except:
+                st.write(":red[Connection error! please check the internet or use other methods: WMM2020 or  Manual]")
+
         else:
             st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
             st.session_state.angle = np.trunc(mag[0][0])

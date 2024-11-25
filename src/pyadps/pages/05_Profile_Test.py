@@ -79,6 +79,7 @@ def fillplot_plotly(
     data, title="data", maskdata=None, missing=-32768, colorscale="balance"
 ):
     fig = FigureResampler(go.Figure())
+    data = np.int32(data)
     data1 = np.where(data == missing, np.nan, data)
     fig.add_trace(
         go.Heatmap(
@@ -113,6 +114,7 @@ def fillplot_plotly(
 
 def fillselect_plotly(data, title="data", colorscale="balance"):
     fig = FigureResampler(go.Figure())
+    data = np.int32(data)
     data1 = np.where(data == -32768, None, data)
     fig.add_trace(
         go.Heatmap(
@@ -271,13 +273,22 @@ beam = beam - 1
 st.session_state.beam = beam
 fillplot_plotly(echo[beam, :, :], title="Echo Intensity")
 
+orientation = st.session_state.beam_direction
+st.write(f"The orientation is `{orientation}`.")
+water_column_depth = 0
 with st.form(key="cutbin_form"):
     extra_cells = st.number_input("Additional Cells to Delete", 0, 10, 0)
+    if orientation.lower() == 'down':
+        water_column_depth = st.number_input("Enter water column depth (m): ", 0, 15000, 0) 
+
     cut_bins_mask = st.form_submit_button(label="Cut bins")
 
     if cut_bins_mask:
         st.session_state.extra_cells = extra_cells
-        mask = side_lobe_beam_angle(flobj, vlobj, mask, extra_cells=extra_cells)
+        mask = side_lobe_beam_angle(flobj, vlobj, mask, 
+                                    orientation=orientation,
+                                    water_column_depth=water_column_depth,
+                                    extra_cells=extra_cells)
         fillplot_plotly(
             echo[beam, :, :],
             title="Echo Intensity (Masked)",
@@ -432,38 +443,77 @@ st.write(
 When the ADCP buoy has vertical oscillations (greater than depth cell size), 
 the depth bins has to be regridded based on the pressure sensor data. The data
 can be regrided either till the surface or till the last bin. 
-If the `bin` option is selected, ensure that the end data are trimmed.
+If the `Cell` option is selected, ensure that the end data are trimmed.
+Manual option permits choosing the end cell depth.
 """
 )
 
-last_cell = st.radio(
-    "Select the depth of last bin for regridding", ("Bin", "Surface"), horizontal=True
+end_bin_option = st.radio(
+    "Select the depth of last bin for regridding", ("Cell", "Surface", "Manual"), horizontal=True
 )
-st.session_state.last_cell = last_cell
-st.write(last_cell)
-regrid_button = st.button(label="Regrid Data")
+st.session_state.end_bin_option = end_bin_option 
+st.write(f"You have selected: `{end_bin_option}`")
+if end_bin_option == "Manual":
+    mean_depth = np.mean(st.session_state.vlead.vleader["Depth of Transducer"]) / 10
+    mean_depth = round(mean_depth, 2)
 
+    st.write(f"The transducer depth is {mean_depth} m. The value should not exceed the transducer depth")
+    if st.session_state.beam_direction.lower() == "up":
+        boundary = st.number_input("Enter the depth (m):", max_value=int(mean_depth), min_value=0)
+    else:
+        boundary = st.number_input("Enter the depth (m):", min_value=int(mean_depth))
+else:
+    boundary = 0
+
+interpolate = st.radio("Choose interpolation method:", ("nearest", "linear", "cubic"))
+
+regrid_button = st.button(label="Regrid Data")
 
 if regrid_button:
     st.write(st.session_state.endpoints)
     z, st.session_state.velocity_regrid = regrid3d(
-        flobj, vlobj, velocity, -32768, trimends=st.session_state.endpoints
+        flobj, vlobj, velocity, -32768, 
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method=interpolate,
+        boundary_limit=boundary
     )
     st.write(":grey[Regrided velocity ...]")
     z, st.session_state.echo_regrid = regrid3d(
-        flobj, vlobj, echo, -32768, trimends=st.session_state.endpoints
+        flobj, vlobj, echo, -32768, 
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method=interpolate,
+        boundary_limit=boundary
     )
     st.write(":grey[Regrided echo intensity ...]")
     z, st.session_state.correlation_regrid = regrid3d(
-        flobj, vlobj, correlation, -32768, trimends=st.session_state.endpoints
+        flobj, vlobj, correlation, -32768,
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method=interpolate,
+        boundary_limit=boundary
     )
     st.write(":grey[Regrided correlation...]")
     z, st.session_state.pgood_regrid = regrid3d(
-        flobj, vlobj, pgood, -32768, trimends=st.session_state.endpoints
+        flobj, vlobj, pgood, -32768,
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method=interpolate,
+        boundary_limit=boundary
     )
     st.write(":grey[Regrided percent good...]")
     z, st.session_state.mask_regrid = regrid2d(
-        flobj, vlobj, mask, 1, trimends=st.session_state.endpoints
+        flobj, vlobj, mask, 1,
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method="nearest",
+        boundary_limit=boundary
     )
 
     st.session_state.depth = z

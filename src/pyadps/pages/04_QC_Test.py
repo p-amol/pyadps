@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 from plotly_resampler import FigureResampler
+from streamlit.runtime.state import session_state
 from utils.signal_quality import ev_check, false_target, pg_check, qc_check
 
 if "flead" not in st.session_state:
@@ -281,3 +282,28 @@ with col2:
         st.session_state.isProfileMask = False
         st.session_state.isVelocityMask = False
         st.write(":green[Mask data is reset to default]")
+
+
+
+################## Fix Orientation ###################
+st.header("Fix Orientation", divider="blue")
+
+st.session_state.beam_direction = st.session_state.flead.system_configuration()['Beam Direction']
+if st.session_state.beam_direction == 'Up':
+    beamalt = 'Down' 
+else:
+    beamalt = 'Up'
+st.write(f"The current orientation of ADCP is `{st.session_state.beam_direction}`. Use the below option to correct the orientation.")
+
+beamdir_select = st.radio(f'Change orientation to {beamalt}', ['No', 'Yes'])
+if beamdir_select == 'Yes':
+    st.session_state.beam_direction = beamalt
+    st.write(f"The orientation changed to `{st.session_state.beam_direction}`")
+
+################## Pressure Sensor Check ###################
+st.header("Pressure Sensor Check", divider="blue")
+
+
+
+
+

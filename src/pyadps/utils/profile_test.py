@@ -127,7 +127,7 @@ def trim_ends(vlobj, mask, method="Manual"):
     return mask
 
 
-def side_lobe_beam_angle(flobj, vlobj, mask, extra_cells=2):
+def side_lobe_beam_angle(flobj, vlobj, mask, orientation='default', water_column_depth=0, extra_cells=2):
     beam_angle = int(flobj.system_configuration()["Beam Angle"])
     cell_size = flobj.field()["Depth Cell Len"]
     bin1dist = flobj.field()["Bin 1 Dist"]
@@ -135,9 +135,18 @@ def side_lobe_beam_angle(flobj, vlobj, mask, extra_cells=2):
     ensembles = flobj.ensembles
     transducer_depth = vlobj.vleader["Depth of Transducer"]
 
+    if orientation.lower() == "default":
+        orientation = flobj.system_configuration()['Beam Direction']
+
+    if orientation.lower() == "up":
+        sgn = -1
+        water_column_depth = 0
+    else:
+        sgn = 1
+
     beam_angle = np.deg2rad(beam_angle)
     depth = transducer_depth / 10
-    valid_depth = depth * np.cos(beam_angle) - bin1dist / 100
+    valid_depth = (water_column_depth - sgn*depth) * np.cos(beam_angle) - sgn*bin1dist / 100
     valid_cells = np.trunc(valid_depth * 100 / cell_size) - extra_cells
 
     for i in range(ensembles):

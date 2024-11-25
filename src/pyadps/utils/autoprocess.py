@@ -259,7 +259,7 @@ def autoprocess(filepath):
         filename = config.get("FileSettings", "output_file_name_raw")
         output_file_path = os.path.join(filepath, filename)
         if isAttributes:
-            wr.main(full_input_file_path, output_file_path, attributes=attributes)
+            wr.rawnc(full_input_file_path, output_file_path, attributes=attributes)
 
         print("Raw file written.")
 

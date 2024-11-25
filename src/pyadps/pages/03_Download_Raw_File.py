@@ -51,9 +51,9 @@ def file_write(path, add_attributes=True):
     st.session_state.rawfilename = tempdirname.name + "/rawfile.nc"
     
     if add_attributes:
-        wr.main(path, st.session_state.rawfilename, attributes=st.session_state.attributes)
+        wr.rawnc(path, st.session_state.rawfilename, attributes=st.session_state.attributes)
     else:
-        wr.main(path, st.session_state.rawfilename)
+        wr.rawnc(path, st.session_state.rawfilename)
 
 @st.cache_data
 def file_write_vlead(path, add_attributes=True):

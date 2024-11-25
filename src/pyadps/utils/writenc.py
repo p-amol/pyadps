@@ -68,9 +68,9 @@ def flead_ncatt(fl_obj, ncfile_id, ens=0):
             setattr(ncfile_id, format_key, format(value))
 
 
-def main(infile, outfile, attributes=None):
+def rawnc(infile, outfile, attributes=None):
     """
-    Main function to create netcdf file. Stores 3-D data types like
+    rawnc is a function to create netcdf file. Stores 3-D data types like
     velocity, echo, correlation, and percent good.
 
     Args:

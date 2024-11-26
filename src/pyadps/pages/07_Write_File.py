@@ -113,6 +113,7 @@ def fillplot_plotly(
         yaxis=dict(showline=True, mirror=True),
         title_text=title,
     )
+    fig.update_yaxes(autorange="reversed")
     st.plotly_chart(fig)
 
 
@@ -375,7 +376,7 @@ if generate_config_radio == "Yes":
             config["ProfileTest"]["regrid"] = "True"
             config["ProfileTest"][
                 "Regrid_Option"
-            ] = st.session_state.last_cell  # Bin or Surface
+            ] = st.session_state.end_bin_option
         else:
             config["ProfileTest"]["regrid"] = "False"
 

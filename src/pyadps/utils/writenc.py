@@ -211,14 +211,16 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
     fill = -32768
 
     # Change velocity to cm/s
+    data = data.astype(np.float64)
     data[data > fill] /= 10 
 
     # Change depth to positive
-    depth *= -1
+    depth = abs(depth)
 
-    # Reverse the arrays
-    depth = depth[::-1]
-    data = data[:, ::-1, :]
+    # Reverse the arrays if depth in descending order
+    if np.all(depth[:-1] >= depth[1:]):
+        depth = depth[::-1]
+        data = data[:, ::-1, :]
 
     ncfile = nc4.Dataset(outfile, mode="w", format="NETCDF4")
     # Check if depth is scalar or array

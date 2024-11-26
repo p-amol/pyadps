@@ -146,7 +146,7 @@ def side_lobe_beam_angle(flobj, vlobj, mask, orientation='default', water_column
 
     beam_angle = np.deg2rad(beam_angle)
     depth = transducer_depth / 10
-    valid_depth = (water_column_depth - sgn*depth) * np.cos(beam_angle) - sgn*bin1dist / 100
+    valid_depth = (water_column_depth - sgn*depth) * np.cos(beam_angle) + sgn*bin1dist / 100
     valid_cells = np.trunc(valid_depth * 100 / cell_size) - extra_cells
 
     for i in range(ensembles):

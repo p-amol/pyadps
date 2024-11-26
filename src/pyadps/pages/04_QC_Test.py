@@ -135,11 +135,25 @@ plot_noise(dep=dn, rec=rn)
 ################## QC Test ###################
 
 st.header("Quality Control Tests", divider="blue")
+st.write("")
 
 left, right = st.columns([1, 1])
 with left:
-    st.write("Thresholds used during deployment")
+    st.write(""" Teledyne RDI recommends these quality control tests, 
+                 some of which can be configured before deployment. 
+                 The pre-deployment values configured for the ADCP are listed 
+                 in the table below. The noise-floor identification graph above 
+                 can assist in determining the echo intensity threshold. 
+                 For more information about these tests, 
+                 refer to *Acoustic Doppler Current Profiler Principles of 
+                 Operation: A Practical Primer* by Teledyne RDI.""")
     fdata = st.session_state.flead.field()
+    st.divider()
+    st.write(":blue-background[Additional Information:]")
+    st.write(f"Number of Pings per Ensemble: `{fdata["Pings"]}`")
+    st.write(f"Number of Beams: `{fdata["Beams"]}`")
+    st.divider()
+    st.write(":red-background[Thresholds used during deployment:]")
     thresh = pd.DataFrame(
         [
             ["Correlation", fdata["Correlation Thresh"]],
@@ -223,7 +237,7 @@ with left:
         st.session_state.mask = mask
 
     if st.session_state.isThresh:
-        st.write("Current Thresholds")
+        st.write(":green-background[Current Thresholds]")
         st.write(st.session_state.newthresh)
 
 
@@ -238,7 +252,7 @@ Ensure to save any necessary changes or apply additional thresholds if needed.
 
 
 if st.button("Display mask file"):
-    st.header("Default Mask File", divider="blue")
+    st.subheader("Default Mask File")
     st.write(
     """
 ADCP assigns missing values based on thresholds set before deployment.
@@ -248,7 +262,7 @@ These values cannot be recovered and the default
     fillplot_plotly(st.session_state.orig_mask, colorscale="greys")
 
 
-    st.header("Update Mask File", divider="blue")
+    st.subheader("Update Mask File")
     st.write(
     """
 Update, display and save the updated mask file after applying threshold.
@@ -258,8 +272,36 @@ If thresholds are not saved, default mask file is used.
 # values, counts = np.unique(mask, return_counts=True)
     fillplot_plotly(st.session_state.mask, colorscale="greys")
 
-col1, col2 = st.columns([1, 1])
+############## SENSOR HEALTH ######################
+st.header("Sensor Health", divider="blue")
+st.write("The following details can be used to determine whether the additional sensors are functioning properly.")
+# ################## Pressure Sensor Check ###################
+# st.subheader("Pressure Sensor Check", divider="orange")
+#
+# st.subheader("Temperature Sensor Check", divider="orange")
+#
+# st.subheader("Tilt Sensor Check", divider="orange")
+################## Fix Orientation ###################
+st.subheader("Fix Orientation", divider="orange")
 
+st.session_state.beam_direction = st.session_state.flead.system_configuration()['Beam Direction']
+if st.session_state.beam_direction == 'Up':
+    beamalt = 'Down' 
+else:
+    beamalt = 'Up'
+st.write(f"The current orientation of ADCP is `{st.session_state.beam_direction}`. Use the below option to correct the orientation.")
+
+beamdir_select = st.radio(f'Change orientation to {beamalt}', ['No', 'Yes'])
+if beamdir_select == 'Yes':
+    st.session_state.beam_direction = beamalt
+    st.write(f"The orientation changed to `{st.session_state.beam_direction}`")
+
+
+
+
+################## Save Button #############
+st.header("Save Data", divider="blue")
+col1, col2 = st.columns([1, 1])
 with col1:
     save_mask_button = st.button(label="Save Mask Data")
 
@@ -285,23 +327,6 @@ with col2:
 
 
 
-################## Fix Orientation ###################
-st.header("Fix Orientation", divider="blue")
-
-st.session_state.beam_direction = st.session_state.flead.system_configuration()['Beam Direction']
-if st.session_state.beam_direction == 'Up':
-    beamalt = 'Down' 
-else:
-    beamalt = 'Up'
-st.write(f"The current orientation of ADCP is `{st.session_state.beam_direction}`. Use the below option to correct the orientation.")
-
-beamdir_select = st.radio(f'Change orientation to {beamalt}', ['No', 'Yes'])
-if beamdir_select == 'Yes':
-    st.session_state.beam_direction = beamalt
-    st.write(f"The orientation changed to `{st.session_state.beam_direction}`")
-
-################## Pressure Sensor Check ###################
-st.header("Pressure Sensor Check", divider="blue")
 
 
 

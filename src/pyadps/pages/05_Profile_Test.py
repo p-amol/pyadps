@@ -99,7 +99,7 @@ def fillplot_plotly(
                 colorscale="gray",
                 hoverongaps=False,
                 showscale=False,
-                opacity=0.5,
+                opacity=0.7,
             )
         )
     fig.update_layout(
@@ -333,6 +333,7 @@ selected_data = data_dict[variable][beam_index, :, :]
 fillplot_plotly(selected_data, title=f"{variable}")
 
 
+st.subheader("Mask Selected Regions")
 with st.form(key="manual_cutbin_form"):
     st.write("Select the specific range of cells and ensembles to delete")
 
@@ -358,7 +359,7 @@ with st.form(key="manual_cutbin_form"):
         fillplot_plotly(mask, colorscale="greys", title="Mask Data")
 
 # Adding the new feature: Delete Single Cell or Ensemble
-st.header("Delete Specific Cell or Ensemble")
+st.subheader("Delete Specific Cell or Ensemble")
 
 # Step 1: User chooses between deleting a cell or an ensemble
 delete_option = st.radio("Select option to delete", ("Cell", "Ensemble"), horizontal=True)
@@ -448,11 +449,18 @@ Manual option permits choosing the end cell depth.
 """
 )
 
-end_bin_option = st.radio(
-    "Select the depth of last bin for regridding", ("Cell", "Surface", "Manual"), horizontal=True
-)
+if st.session_state.beam_direction.lower() == "up":
+    end_bin_option = st.radio(
+        "Select the depth of last bin for regridding", ("Cell", "Surface", "Manual"), horizontal=True
+    )
+else:
+    end_bin_option = st.radio(
+        "Select the depth of last bin for regridding", ("Cell", "Manual"), horizontal=True
+    )
+
 st.session_state.end_bin_option = end_bin_option 
 st.write(f"You have selected: `{end_bin_option}`")
+
 if end_bin_option == "Manual":
     mean_depth = np.mean(st.session_state.vlead.vleader["Depth of Transducer"]) / 10
     mean_depth = round(mean_depth, 2)

@@ -284,7 +284,7 @@ st.write("The following details can be used to determine whether the additional 
 ################## Fix Orientation ###################
 st.subheader("Fix Orientation", divider="orange")
 
-st.session_state.beam_direction = st.session_state.flead.system_configuration()['Beam Direction']
+
 if st.session_state.beam_direction == 'Up':
     beamalt = 'Down' 
 else:

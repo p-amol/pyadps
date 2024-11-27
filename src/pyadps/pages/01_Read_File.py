@@ -110,6 +110,7 @@ if uploaded_file is not None:
     correlation = ds.correlation.data
     echo = ds.echo.data
     pgood = ds.percentgood.data
+    beamdir = ds.fixedleader.system_configuration()['Beam Direction']
 
     st.session_state.fname = uploaded_file.name
     st.session_state.head = ds.fileheader
@@ -119,6 +120,7 @@ if uploaded_file is not None:
     st.session_state.echo = ds.echo.data
     st.session_state.correlation = ds.correlation.data
     st.session_state.pgood = ds.percentgood.data
+    st.session_state.beam_direction = beamdir
 
     # st.session_state.flead = flead
     # st.session_state.vlead = vlead

@@ -273,6 +273,12 @@ beam = beam - 1
 st.session_state.beam = beam
 fillplot_plotly(echo[beam, :, :], title="Echo Intensity")
 
+if hasattr(st.session_state, "beam_direction"):
+    pass
+else:
+    temp_direction = st.session_state.flead.system_configuration()['Beam Direction']
+    st.session_state.beam_direction = temp_direction
+
 orientation = st.session_state.beam_direction
 st.write(f"The orientation is `{orientation}`.")
 water_column_depth = 0

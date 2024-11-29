@@ -46,24 +46,27 @@ def read_file(filepath):
     st.session_state.ds = ds
 
 @st.cache_data
-def file_write(path, add_attributes=True):
+def file_write(path, axis_option, add_attributes=True):
     tempdirname = tempfile.TemporaryDirectory(delete=False)
     st.session_state.rawfilename = tempdirname.name + "/rawfile.nc"
     
     if add_attributes:
-        wr.rawnc(path, st.session_state.rawfilename, attributes=st.session_state.attributes)
+        wr.rawnc(path, st.session_state.rawfilename, st.session_state.date, axis_option, attributes=st.session_state.attributes)
     else:
-        wr.rawnc(path, st.session_state.rawfilename)
+        wr.rawnc(path, st.session_state.rawfilename, st.session_state.date,axis_option)
 
 @st.cache_data
-def file_write_vlead(path, add_attributes=True):
+def file_write_vlead(path, axis_option, add_attributes=True):
     tempvardirname = tempfile.TemporaryDirectory(delete=False)
     st.session_state.vleadfilename = tempvardirname.name + "/vlead.nc"
     
     if add_attributes:
-        wr.vlead_nc(path, st.session_state.vleadfilename, attributes=st.session_state.attributes)
+        wr.vlead_nc(path, st.session_state.vleadfilename, st.session_state.date, axis_option, attributes=st.session_state.attributes)
     else:
-        wr.vlead_nc(path, st.session_state.vleadfilename)
+        wr.vlead_nc(path, st.session_state.vleadfilename, st.session_state.date, axis_option)
+
+if "axis_option" not in st.session_state:
+    st.session_state.axis_option = "ensemble"  # Default value
 
 # UI for attribute selection
 st.header("NetCDF File", divider="blue")
@@ -97,13 +100,23 @@ if add_attributes == "Yes":
         st.session_state.attributes['Comments'] = st.text_area("Comments")
 
     st.write("Attributes will be added to the NetCDF file once you submit.")
-    
+
+# Dropdown for axis_option
+axis_option = st.selectbox(
+    "Select x-axis option:",
+    options=["ensemble", "time"],
+    index=0  # Default to "ensemble"
+)
+
+# Ensure it is passed correctly
+st.session_state.axis_option = axis_option
+
 # Buttons to generate files
 download_button = st.button("Generate Raw NetCDF File")
 download_var_button = st.button("Generate Raw Variable Leader NetCDF File")
 
 if download_button:
-    file_write(st.session_state.fpath, add_attributes == "Yes")
+    file_write(st.session_state.fpath,   st.session_state.axis_option , add_attributes == "Yes")
     st.write(st.session_state.rawfilename)
     with open(st.session_state.rawfilename, "rb") as file:
         st.download_button(
@@ -113,7 +126,7 @@ if download_button:
         )
 
 if download_var_button:
-    file_write_vlead(st.session_state.fpath, add_attributes == "Yes")
+    file_write_vlead(st.session_state.fpath,  st.session_state.axis_option, add_attributes == "Yes")
     st.write(st.session_state.vleadfilename)
     with open(st.session_state.vleadfilename, "rb") as file:
         st.download_button(

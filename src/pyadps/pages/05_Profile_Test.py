@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 from plotly_resampler import FigureResampler
-from utils.profile_test import side_lobe_beam_angle
+from utils.profile_test import side_lobe_beam_angle, manual_cut_bins
 from utils.regrid import regrid2d, regrid3d
 from utils.signal_quality import default_mask
 
@@ -79,6 +79,7 @@ def fillplot_plotly(
     data, title="data", maskdata=None, missing=-32768, colorscale="balance"
 ):
     fig = FigureResampler(go.Figure())
+    data = np.int32(data)
     data1 = np.where(data == missing, np.nan, data)
     fig.add_trace(
         go.Heatmap(
@@ -98,7 +99,7 @@ def fillplot_plotly(
                 colorscale="gray",
                 hoverongaps=False,
                 showscale=False,
-                opacity=0.5,
+                opacity=0.7,
             )
         )
     fig.update_layout(
@@ -113,6 +114,7 @@ def fillplot_plotly(
 
 def fillselect_plotly(data, title="data", colorscale="balance"):
     fig = FigureResampler(go.Figure())
+    data = np.int32(data)
     data1 = np.where(data == -32768, None, data)
     fig.add_trace(
         go.Heatmap(
@@ -215,8 +217,10 @@ m = 20
 if "update_mask" not in st.session_state:
     st.session_state.update_mask = False
     st.session_state.endpoints = None
+    st.session_state.isTrimEnds = False
 if "update_mask_cutbin" not in st.session_state:
     st.session_state.update_mask_cutbin = False
+    st.session_state.isCutBins = False
 
 ens_range = st.number_input("Change range", x[0], x[-1], 20)
 start_ens = st.slider("Deployment Ensembles", 0, ens_range, 0)
@@ -226,7 +230,7 @@ n = int(ens_range)
 
 if start_ens or end_ens:
     trim_ends(start_ens=start_ens, end_ens=end_ens, ens_range=n)
-    st.session_state.update_mask = False
+    # st.session_state.update_mask = False
 
 update_mask = st.button("Update mask data")
 if update_mask:
@@ -246,6 +250,7 @@ if update_mask:
     )
     st.write(st.session_state.endpoints)
     st.session_state.update_mask = True
+    st.session_state.isTrimEnds = True
 
 if not st.session_state.update_mask:
     st.write(":red[mask data not updated]")
@@ -268,13 +273,22 @@ beam = beam - 1
 st.session_state.beam = beam
 fillplot_plotly(echo[beam, :, :], title="Echo Intensity")
 
+orientation = st.session_state.beam_direction
+st.write(f"The orientation is `{orientation}`.")
+water_column_depth = 0
 with st.form(key="cutbin_form"):
     extra_cells = st.number_input("Additional Cells to Delete", 0, 10, 0)
+    if orientation.lower() == 'down':
+        water_column_depth = st.number_input("Enter water column depth (m): ", 0, 15000, 0) 
+
     cut_bins_mask = st.form_submit_button(label="Cut bins")
 
     if cut_bins_mask:
         st.session_state.extra_cells = extra_cells
-        mask = side_lobe_beam_angle(flobj, vlobj, mask, extra_cells=extra_cells)
+        mask = side_lobe_beam_angle(flobj, vlobj, mask, 
+                                    orientation=orientation,
+                                    water_column_depth=water_column_depth,
+                                    extra_cells=extra_cells)
         fillplot_plotly(
             echo[beam, :, :],
             title="Echo Intensity (Masked)",
@@ -287,14 +301,140 @@ if update_mask_cutbin:
     st.session_state.maskp = mask
     st.write(":green[mask file updated]")
     st.session_state.update_mask_cutbin = True
+    st.session_state.isCutBins = True
 
 if not st.session_state.update_mask_cutbin:
     st.write(":red[mask file not updated]")
 
 
-############ CUT BINS: Manual #################
+########### CUT BINS: Manual #################
 st.header("Cut Bins: Manual", divider="blue")
+# Reset mask
+# Selection of variable (Velocity, Echo Intensity, etc.)
+variable = st.selectbox(
+    "Select Variable to Display",
+    ("Velocity", "Echo Intensity", "Correlation", "Percentage Good")
+)
 
+# Map variable selection to corresponding data
+data_dict = {
+    "Velocity": velocity,
+    "Echo Intensity": echo,
+    "Correlation": correlation,
+    "Percentage Good": pgood,
+}
+
+# User selects beam (1-4)
+beam = st.radio("Select beam", (1, 2, 3, 4), horizontal=True,  key="beam_selection")
+beam_index = beam - 1
+
+# Display the selected variable and beam
+selected_data = data_dict[variable][beam_index, :, :]
+fillplot_plotly(selected_data, title=f"{variable}")
+
+
+st.subheader("Mask Selected Regions")
+with st.form(key="manual_cutbin_form"):
+    st.write("Select the specific range of cells and ensembles to delete")
+
+    # Input for selecting minimum and maximum cells
+    min_cell = st.number_input("Min Cell", 0, int(flobj.field()["Cells"]), 0)
+    max_cell = st.number_input("Max Cell", 0, int(flobj.field()["Cells"]), 10)
+
+    # Input for selecting minimum and maximum ensembles
+    min_ensemble = st.number_input("Min Ensemble", 0, int(flobj.ensembles), 0)
+    max_ensemble = st.number_input("Max Ensemble", 0, int(flobj.ensembles), int(flobj.ensembles))
+
+    # Submit button to apply the mask
+    cut_bins_mask_manual = st.form_submit_button(label="Apply Manual Cut Bins")
+
+    if cut_bins_mask_manual:
+        mask = manual_cut_bins(mask, min_cell, max_cell, min_ensemble, max_ensemble)
+        st.session_state.maskp = mask
+        fillplot_plotly(
+            echo[beam, :, :],
+            title="Echo Intensity (Masked Manually)",
+            maskdata=mask,
+        )
+        fillplot_plotly(mask, colorscale="greys", title="Mask Data")
+
+# Adding the new feature: Delete Single Cell or Ensemble
+st.subheader("Delete Specific Cell or Ensemble")
+
+# Step 1: User chooses between deleting a cell or an ensemble
+delete_option = st.radio("Select option to delete", ("Cell", "Ensemble"), horizontal=True)
+
+# Step 2: Display options based on user's choice
+if delete_option == "Cell":
+    # Option to delete a specific cell across all ensembles
+    with st.form(key="delete_cell_form"):
+        st.write("Select a specific cell to delete across all ensembles")
+        
+        # Input for selecting a single cell
+        cell = st.number_input("Cell", 0, int(flobj.field()["Cells"]), 0, key="single_cell")
+        
+        # Submit button to apply the mask for cell deletion
+        delete_cell = st.form_submit_button(label="Delete Cell")
+
+        if delete_cell:
+            mask[cell, :] = 1  # Mask the entire row for the selected cell
+            st.session_state.maskp = mask
+            fillplot_plotly(
+                echo[beam, :, :],
+                title=f"Echo Intensity (Cell {cell} Deleted Across Ensembles)",
+                maskdata=mask,
+            )
+            fillplot_plotly(mask, colorscale="greys", title="Mask Data")
+
+elif delete_option == "Ensemble":
+    # Option to delete a specific ensemble across all cells
+    with st.form(key="delete_ensemble_form"):
+        st.write("Select a specific ensemble to delete across all cells")
+        
+        # Input for selecting a specific ensemble
+        ensemble = st.number_input("Ensemble", 0, int(flobj.ensembles), 0, key="single_ensemble")
+        
+        # Submit button to apply the mask for ensemble deletion
+        delete_ensemble = st.form_submit_button(label="Delete Ensemble")
+
+        if delete_ensemble:
+            mask[:, ensemble-1] = 1  # Mask the entire column for the selected ensemble
+            st.session_state.maskp = mask
+            fillplot_plotly(
+                echo[beam, :, :],
+                title=f"Echo Intensity (Ensemble {ensemble} Deleted Across Cells)",
+                maskdata=mask,
+            )
+            fillplot_plotly(mask, colorscale="greys", title="Mask Data")
+
+           
+# Layout with two columns
+col1, col2 = st.columns([2, 1])
+
+with col1:
+            
+    # Button to save mask data after manual cut bins, with unique key
+    update_mask_cutbin = st.button("Update mask file after cutbin Manual", key="update_cutbin_button")
+    if update_mask_cutbin:
+        st.session_state.maskp = mask
+        st.write(":green[mask file updated]")
+        st.session_state.update_mask_cutbin = True
+        st.session_state.isCutBins = True
+
+    if not st.session_state.update_mask_cutbin:
+        st.write(":red[mask file not updated]")
+
+with col2:
+    # Button to reset the mask data, with unique key
+    reset_mask_button = st.button("Reset mask data", key="reset_mask_button")
+    if reset_mask_button:
+        st.session_state.maskp = np.copy(st.session_state.orig_mask)
+        st.write(":green[Mask data is reset to default]")
+        st.session_state.isQCMask = False
+        st.session_state.isProfileMask = False
+        st.session_state.isGrid = False
+        st.session_state.isGridSave = False
+        st.session_state.isVelocityMask = False
 
 ############ REGRID ###########################################
 st.header("Regrid Depth Cells", divider="blue")
@@ -304,38 +444,84 @@ st.write(
 When the ADCP buoy has vertical oscillations (greater than depth cell size), 
 the depth bins has to be regridded based on the pressure sensor data. The data
 can be regrided either till the surface or till the last bin. 
-If the `bin` option is selected, ensure that the end data are trimmed.
+If the `Cell` option is selected, ensure that the end data are trimmed.
+Manual option permits choosing the end cell depth.
 """
 )
 
-last_cell = st.radio(
-    "Select the depth of last bin for regridding", ("Bin", "Surface"), horizontal=True
-)
-st.session_state.last_cell = last_cell
-st.write(last_cell)
-regrid_button = st.button(label="Regrid Data")
+if st.session_state.beam_direction.lower() == "up":
+    end_bin_option = st.radio(
+        "Select the depth of last bin for regridding", ("Cell", "Surface", "Manual"), horizontal=True
+    )
+else:
+    end_bin_option = st.radio(
+        "Select the depth of last bin for regridding", ("Cell", "Manual"), horizontal=True
+    )
 
+st.session_state.end_bin_option = end_bin_option 
+st.write(f"You have selected: `{end_bin_option}`")
+
+if end_bin_option == "Manual":
+    mean_depth = np.mean(st.session_state.vlead.vleader["Depth of Transducer"]) / 10
+    mean_depth = round(mean_depth, 2)
+
+    st.write(f"The transducer depth is {mean_depth} m. The value should not exceed the transducer depth")
+    if st.session_state.beam_direction.lower() == "up":
+        boundary = st.number_input("Enter the depth (m):", max_value=int(mean_depth), min_value=0)
+    else:
+        boundary = st.number_input("Enter the depth (m):", min_value=int(mean_depth))
+else:
+    boundary = 0
+
+interpolate = st.radio("Choose interpolation method:", ("nearest", "linear", "cubic"))
+
+regrid_button = st.button(label="Regrid Data")
 
 if regrid_button:
     st.write(st.session_state.endpoints)
     z, st.session_state.velocity_regrid = regrid3d(
-        flobj, vlobj, velocity, -32768, trimends=st.session_state.endpoints
+        flobj, vlobj, velocity, -32768, 
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method=interpolate,
+        boundary_limit=boundary
     )
     st.write(":grey[Regrided velocity ...]")
     z, st.session_state.echo_regrid = regrid3d(
-        flobj, vlobj, echo, -32768, trimends=st.session_state.endpoints
+        flobj, vlobj, echo, -32768, 
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method=interpolate,
+        boundary_limit=boundary
     )
     st.write(":grey[Regrided echo intensity ...]")
     z, st.session_state.correlation_regrid = regrid3d(
-        flobj, vlobj, correlation, -32768, trimends=st.session_state.endpoints
+        flobj, vlobj, correlation, -32768,
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method=interpolate,
+        boundary_limit=boundary
     )
     st.write(":grey[Regrided correlation...]")
     z, st.session_state.pgood_regrid = regrid3d(
-        flobj, vlobj, pgood, -32768, trimends=st.session_state.endpoints
+        flobj, vlobj, pgood, -32768,
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method=interpolate,
+        boundary_limit=boundary
     )
     st.write(":grey[Regrided percent good...]")
     z, st.session_state.mask_regrid = regrid2d(
-        flobj, vlobj, mask, 1, trimends=st.session_state.endpoints
+        flobj, vlobj, mask, 1,
+        trimends=st.session_state.endpoints, 
+        end_bin_option=st.session_state.end_bin_option, 
+        orientation=st.session_state.beam_direction,
+        method="nearest",
+        boundary_limit=boundary
     )
 
     st.session_state.depth = z

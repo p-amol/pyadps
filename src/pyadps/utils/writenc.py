@@ -68,9 +68,9 @@ def flead_ncatt(fl_obj, ncfile_id, ens=0):
             setattr(ncfile_id, format_key, format(value))
 
 
-def main(infile, outfile, attributes=None):
+def rawnc(infile, outfile, time, axis_option=None, attributes=None, t0="hours since 2000-01-01"):
     """
-    Main function to create netcdf file. Stores 3-D data types like
+    rawnc is a function to create netcdf file. Stores 3-D data types like
     velocity, echo, correlation, and percent good.
 
     Args:
@@ -90,14 +90,33 @@ def main(infile, outfile, attributes=None):
     beam_list = flead.fleader["Beams"]
 
     # Dimensions
-    outnc.createDimension("ensemble", None)
+    # Define the primary axis based on axis_option
+    if axis_option == "ensemble":
+        outnc.createDimension("ensemble", None)
+        primary_axis = "ensemble"
+        ensemble = outnc.createVariable("ensemble", "i4", ("ensemble",))
+        ensemble.axis = "T"
+    elif axis_option == "time":
+        tsize = len(time)
+        outnc.createDimension("time", tsize)
+        primary_axis = "time"
+        time_var = outnc.createVariable("time", "i4", ("time",))
+        time_var.axis = "T"
+        time_var.units = t0
+        time_var.long_name = "time"
+
+        # Convert time_data to numerical format
+        nctime = pd2nctime(time, t0)
+        time_var[:] = nctime
+
+    else:
+        raise ValueError(f"Invalid axis_option: {axis_option}.")
+
     outnc.createDimension("cell", max(cell_list))
     outnc.createDimension("beam", max(beam_list))
 
     # Variables
     # Dimension Variables
-    ensemble = outnc.createVariable("ensemble", "u4", ("ensemble",))
-    ensemble.axis = "T"
     cell = outnc.createVariable("cell", "i2", ("cell",))
     cell.axis = "Z"
     beam = outnc.createVariable("beam", "i2", ("beam",))
@@ -118,9 +137,9 @@ def main(infile, outfile, attributes=None):
     for i, item in enumerate(varlist):
         if item == "Velocity":
             varid[i] = outnc.createVariable(
-                item, "i2", ("ensemble", "cell", "beam"), fill_value=-32768
+                item, "i2", (primary_axis, "cell", "beam"), fill_value=-32768
             )
-            varid[i].missing_value = -32768
+            # varid[i].missing_value = -32768
             vel = getattr(rd, item)
             var = vel(infile).data
             # var = rd.variables(infile, item)
@@ -129,7 +148,7 @@ def main(infile, outfile, attributes=None):
             # Unsigned integers might be assigned for future netcdf versions
             format_item = item.replace(" ", "")  # For percent good
             varid[i] = outnc.createVariable(
-                format_item, "i2", ("ensemble", "cell", "beam")
+                format_item, "i2", (primary_axis, "cell", "beam")
             )
             datatype = getattr(rd, format_item)
             var = np.array(datatype(infile).data, dtype="int16")
@@ -137,7 +156,13 @@ def main(infile, outfile, attributes=None):
 
         vshape = var.T.shape
         if i == 0:
-            ensemble[:] = np.arange(1, vshape[0] + 1, 1)
+            if primary_axis == "time":
+                time[:] = np.arange(1, vshape[0] + 1, 1)
+            elif primary_axis == "ensemble":
+                ensemble[:] = np.arange(1, vshape[0] + 1, 1)
+            else:
+                raise ValueError(f"Invalid axis_option: {axis_option}.")
+
         varid[i][0 : vshape[0], 0 : vshape[1], 0 : vshape[2]] = var.T
         
     # Add global attributes if provided
@@ -152,7 +177,7 @@ def main(infile, outfile, attributes=None):
     outnc.close()
 
 
-def vlead_nc(infile, outfile, attributes=None):
+def vlead_nc(infile, outfile, time, axis_option=None, attributes=None, t0="hours since 2000-01-01"):
     """
     Function to create ncfile containing Variable Leader.
 
@@ -163,12 +188,29 @@ def vlead_nc(infile, outfile, attributes=None):
     outnc = nc4.Dataset(outfile, "w", format="NETCDF4")
 
     # Dimensions
-    outnc.createDimension("ensemble", None)
+    # Define the primary axis based on axis_option
+    if axis_option == "ensemble":
+        outnc.createDimension("ensemble", None)
+        primary_axis = "ensemble"
+        ensemble = outnc.createVariable("ensemble", "i4", ("ensemble",))
+        ensemble.axis = "T"
+    elif axis_option == "time":
+        tsize = len(time)
+        outnc.createDimension("time", tsize)
+        primary_axis = "time"
+        time_var = outnc.createVariable("time", "i4", ("time",))
+        time_var.axis = "T"
+        time_var.units = t0
+        time_var.long_name = "time"
+
+        # Convert time_data to numerical format
+        nctime = pd2nctime(time, t0)
+        time_var[:] = nctime
+
+    else:
+        raise ValueError(f"Invalid axis_option: {axis_option}.")
 
     # Variables
-    # Dimension Variables
-    ensemble = outnc.createVariable("ensemble", "i4", ("ensemble",))
-    ensemble.axis = "T"
 
     vlead = rd.VariableLeader(infile)
     vdict = vlead.vleader
@@ -179,12 +221,17 @@ def vlead_nc(infile, outfile, attributes=None):
     for key, values in vdict.items():
         format_item = key.replace(" ", "_")
         varid[i] = outnc.createVariable(
-            format_item, "i4", "ensemble", fill_value=-32768
+            format_item, "i4", primary_axis, fill_value=-32768
         )
         var = values
         vshape = var.shape
         if i == 0:
-            ensemble[:] = np.arange(1, vshape[0] + 1, 1)
+            if primary_axis == "time":
+                time[:] = np.arange(1, vshape[0] + 1, 1)
+            elif primary_axis == "ensemble":
+                ensemble[:] = np.arange(1, vshape[0] + 1, 1)
+            else:
+                raise ValueError(f"Invalid axis_option: {axis_option}.")
 
         varid[i][0 : vshape[0]] = var
         i += 1
@@ -208,6 +255,20 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
         data (numpy array): Velocity (beam, depth, time)
         t0 (string): Time unit and origin
     """
+    fill = -32768
+
+    # Change velocity to cm/s
+    data = data.astype(np.float64)
+    data[data > fill] /= 10 
+
+    # Change depth to positive
+    depth = abs(depth)
+
+    # Reverse the arrays if depth in descending order
+    if np.all(depth[:-1] >= depth[1:]):
+        depth = depth[::-1]
+        data = data[:, ::-1, :]
+
     ncfile = nc4.Dataset(outfile, mode="w", format="NETCDF4")
     # Check if depth is scalar or array
     if np.isscalar(depth):
@@ -221,21 +282,22 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
     z = ncfile.createVariable("depth", np.float32, ("depth"))
     z.units = "m"
     z.long_name = "depth"
+    z.positive = "down"
 
     t = ncfile.createVariable("time", np.float32, ("time"))
     t.units = t0
     t.long_name = "time"
 
     # Create 2D variables
-    uvel = ncfile.createVariable("u", np.float32, ("time", "depth"), fill_value=-32768)
+    uvel = ncfile.createVariable("u", np.float32, ("time", "depth"), fill_value=fill)
     uvel.units = "cm/s"
     uvel.long_name = "zonal_velocity"
 
-    vvel = ncfile.createVariable("v", np.float32, ("time", "depth"), fill_value=-32768)
+    vvel = ncfile.createVariable("v", np.float32, ("time", "depth"), fill_value=fill)
     vvel.units = "cm/s"
     vvel.long_name = "meridional_velocity"
 
-    wvel = ncfile.createVariable("w", np.float32, ("time", "depth"), fill_value=-32768)
+    wvel = ncfile.createVariable("w", np.float32, ("time", "depth"), fill_value=fill)
     wvel.units = "cm/s"
     wvel.long_name = "vertical_velocity"
 
@@ -247,7 +309,7 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
 
     nctime = pd2nctime(time, t0)
     # write data
-    z[:] = depth * -1
+    z[:] = depth
     t[:] = nctime
     uvel[:, :] = data[0, :, :].T
     vvel[:, :] = data[1, :, :].T

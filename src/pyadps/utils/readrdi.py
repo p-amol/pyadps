@@ -326,7 +326,7 @@ class FileHeader:
         """
         file_stats = os.stat(self.filename)
         sys_file_size = file_stats.st_size
-        cal_file_size = sum(self.bytes) + 2 * len(self.bytes)
+        cal_file_size = sum((self.bytes).astype(int)) + 2 * len(self.bytes)
 
         check = dict()
 
@@ -800,7 +800,8 @@ def vlead_dict(vid):
 
     counter = 1
     for key, value in vname.items():
-        vlead[key] = getattr(np, value)(vid[:][counter])
+        # vlead[key] = getattr(np, value)(vid[:][counter])
+        vlead[key] = vid[:][counter]
         counter += 1
 
     return vlead

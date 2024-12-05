@@ -11,8 +11,8 @@ copyright = '2024, p-amol'
 author = 'p-amol'
 
 # -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 extensions = [
     'sphinx.ext.duration',
     'sphinx.ext.doctest',
@@ -26,6 +26,7 @@ extensions = [
 autoapi_type = "python"
 autoapi_add_toctree_entry = False
 autoapi_dirs = ['../../src']
+autodoc_mock_imports = ['numpy', 'pandas', 'matplotlib']
 templates_path = ['_templates']
 exclude_patterns = []
 

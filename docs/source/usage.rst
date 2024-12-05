@@ -9,8 +9,8 @@ You can create a Python environment using tools like ``venv`` or
 1. Using ``venv`` (Built-in Python Tool)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Step 1: Install Python version 3.12 (if not already installed)**
 
+**Step 1: Install Python version 3.12 (if not already installed)**
 Ensure you have Python installed. You can download the latest version
 from `python.org <https://www.python.org/downloads/>`__.
 

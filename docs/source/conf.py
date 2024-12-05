@@ -30,6 +30,10 @@ autodoc_mock_imports = ['numpy', 'pandas', 'matplotlib', 'pyadps']
 templates_path = ['_templates']
 exclude_patterns = []
 
+# Myst-NB configuration
+jupyter_execute_notebooks = "off"  # Do not execute cells
+execution_excludepatterns = ["**.ipynb"]  # Prevent execution for specific files (if needed)
+
 
 
 # -- Options for HTML output -------------------------------------------------

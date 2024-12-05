@@ -26,7 +26,7 @@ extensions = [
 autoapi_type = "python"
 autoapi_add_toctree_entry = False
 autoapi_dirs = ['../../src']
-autodoc_mock_imports = ['numpy', 'pandas', 'matplotlib']
+autodoc_mock_imports = ['numpy', 'pandas', 'matplotlib', 'pyadps']
 templates_path = ['_templates']
 exclude_patterns = []
 

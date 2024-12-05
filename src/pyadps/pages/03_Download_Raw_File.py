@@ -51,9 +51,9 @@ def file_write(path, axis_option, add_attributes=True):
     st.session_state.rawfilename = tempdirname.name + "/rawfile.nc"
     
     if add_attributes:
-        wr.rawnc(path, st.session_state.rawfilename, st.session_state.date, axis_option, attributes=st.session_state.attributes)
+        wr.rawnc(path, st.session_state.rawfilename, st.session_state.date1, axis_option, attributes=st.session_state.attributes)
     else:
-        wr.rawnc(path, st.session_state.rawfilename, st.session_state.date,axis_option)
+        wr.rawnc(path, st.session_state.rawfilename, st.session_state.date1,axis_option)
 
 @st.cache_data
 def file_write_vlead(path, axis_option, add_attributes=True):
@@ -61,9 +61,9 @@ def file_write_vlead(path, axis_option, add_attributes=True):
     st.session_state.vleadfilename = tempvardirname.name + "/vlead.nc"
     
     if add_attributes:
-        wr.vlead_nc(path, st.session_state.vleadfilename, st.session_state.date, axis_option, attributes=st.session_state.attributes)
+        wr.vlead_nc(path, st.session_state.vleadfilename, st.session_state.date2, axis_option, attributes=st.session_state.attributes)
     else:
-        wr.vlead_nc(path, st.session_state.vleadfilename, st.session_state.date, axis_option)
+        wr.vlead_nc(path, st.session_state.vleadfilename, st.session_state.date2, axis_option)
 
 if "axis_option" not in st.session_state:
     st.session_state.axis_option = "ensemble"  # Default value

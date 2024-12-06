@@ -166,6 +166,10 @@ date_df = pd.DataFrame(
 )
 
 st.session_state.date = pd.to_datetime(date_df)
+st.session_state.date1 = pd.to_datetime(date_df)
+st.session_state.date2 = pd.to_datetime(date_df)
+
+
 
 ######### MASK DATA ##############
 # The velocity data has missing values due to the cutoff

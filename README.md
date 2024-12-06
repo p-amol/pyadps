@@ -44,7 +44,7 @@ Ensure you have Python installed. You can download the latest version from [pyth
 cd /path/to/your/project
 ```
 
-- Run the following command to create a virtual environment 
+- Run the following command to create a virtual environment
 (replace adpsenv with your preferred environment name):
 
 ```bash

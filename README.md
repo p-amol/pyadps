@@ -1,8 +1,20 @@
 # pyadps
 
-`pyadps` is a Python package for processing moored Acoustic Doppler Current Profiler (ADCP) data. It provides various functionalities such as data reading, quality control tests, NetCDF file creation, and visualization.
+`pyadps` is a Python package for processing moored Acoustic Doppler
+Current Profiler (ADCP) data. It provides various functionalities
+such as data reading, quality control tests, NetCDF file creation,
+and visualization.
 
-This software offers both a graphical interface (`Streamlit`) for those new to Python and direct Python package access for experienced users. Please note that `pyadps` is primarily designed for Teledyne RDI workhorse ADCPs. Other company's ADCP files are not compatible, and while some other RDI models may work, they might require additional considerations.
+This software offers both a graphical interface (`Streamlit`) for
+those new to Python and direct Python package access for experienced
+users. Please note that `pyadps` is primarily designed for Teledyne
+RDI workhorse ADCPs. Other company's ADCP files are not compatible,
+and while some other RDI models may work, they might require additional
+considerations.
+
+- Documentation: <https://pyadps.readthedocs.io>
+- Source code: <https://github.com/p-amol/pyadps>
+- Bug reports: <https://github.com/p-amol/pyadps/issues>
 
 ## Table of Contents
 
@@ -12,8 +24,10 @@ This software offers both a graphical interface (`Streamlit`) for those new to P
 
 ## Installation
 
-We recommend installing the package within a virtual environment. At present, the package is compatible exclusively with Python version 3.12.
-You can create a Python environment using tools like `venv` or `conda`. Below are instructions for both methods.
+We recommend installing the package within a virtual environment.
+At present, the package is compatible exclusively with Python version 3.12.
+You can create a Python environment using tools like `venv` or `conda`.
+Below are instructions for both methods.
 
 ### 1. Using `venv` (Built-in Python Tool)
 
@@ -30,7 +44,8 @@ Ensure you have Python installed. You can download the latest version from [pyth
 cd /path/to/your/project
 ```
 
-- Run the following command to create a virtual environment (replace adpsenv with your preferred environment name):
+- Run the following command to create a virtual environment 
+(replace adpsenv with your preferred environment name):
 
 ```bash
 python -m venv adpsenv
@@ -50,7 +65,8 @@ adpsenv\Scripts\activate
 source adpsenv/bin/activate
 ```
 
-You’ll see the environment name in your terminal prompt indicating the environment is active.
+You’ll see the environment name in your terminal prompt
+indicating the environment is active.
 
 #### Step 4: Install Dependencies
 
@@ -79,19 +95,21 @@ First, you need to have Conda installed on your system. You can either install:
 
 #### Step 2: Create a Conda Environment with Python 3.12
 
-Once Conda is installed, open a terminal or command prompt and run the following to create a new environment (replace `adpsenv` with your preferred environment name):
+Once Conda is installed, open a terminal or command prompt and run
+the following to create a new environment (replace `adpsenv` with
+your preferred environment name):
 
 ```bash
 conda create --name adpsenv python=3.12
 ```
 
-#### Step 3: Activate the Environment
+#### Step 3: Activate the Conda Environment
 
 ```bash
 conda activate adpsenv
 ```
 
-#### Step 4: Install Dependencies
+#### Step 4: Install pyadps Dependencies
 
 You can install packages with pip inside Conda environments.
 
@@ -99,11 +117,11 @@ You can install packages with pip inside Conda environments.
 pip install pyadps
 ```
 
-#### Step 5: Deactivate the Environment
+#### Step 5: Deactivate the Conda Environment
 
-When done, deactivate the environment by running:
+When done working in the environment, deactivate the environment by running:
 
-```
+```bash
 conda deactivate
 ```
 

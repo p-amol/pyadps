@@ -89,7 +89,7 @@ def velocity_cutoff(velocity, mask, cutoff=250):
     return mask
 
 
-def despike(velocity, mask, kernal_size=13, cutoff=150):
+def despike(velocity, mask, kernal_size=13, cutoff=3):
     """
     Function to remove anomalous spikes in the data over a period of time.
     A median filter is used to despike the data.
@@ -97,19 +97,24 @@ def despike(velocity, mask, kernal_size=13, cutoff=150):
     Args:
         velocity (numpy array, integer): Velocity(depth, time) in mm/s
         mask (numpy array, integer): Mask file
-        kernal_size (paramater, integer): Number of ensembles over which the spike has to be checked
-        cutoff (parameter, integer): [TODO:description]
+        kernal_size (paramater, integer): Window size for rolling median filter 
+        cutoff (parameter, integer): Number of standard deviations to identify spikes
 
     Returns:
         mask
     """
-    cutoff = cutoff * 10
     velocity = np.where(velocity == -32768, np.nan, velocity)
     shape = np.shape(velocity)
     for j in range(shape[0]):
+        # Apply median filter
         filt = sp.signal.medfilt(velocity[j, :], kernal_size)
+        # Calculate absolute deviation from the rolling median 
         diff = np.abs(velocity[j, :] - filt)
-        mask[j, :] = np.where(diff < cutoff, mask[j, :], 1)
+        # Calculate threshold for spikes based on standard deviation
+        std_dev = np.nanstd(diff)
+        spike_threshold = cutoff*std_dev
+        # Apply mask after identifying spikes
+        mask[j, :] = np.where(diff < spike_threshold, mask[j, :], 1)
     return mask
 
 

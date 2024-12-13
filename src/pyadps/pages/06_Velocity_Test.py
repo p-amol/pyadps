@@ -243,10 +243,21 @@ if st.session_state.isCutoff:
 
 ############## DESPIKE DATA #################
 st.header("Despike Data", divider="blue")
+st.write("""A rolling median filter is applied to remove spikes from the data.
+The kernal size determines the number of ensembles (time interval) for the filter window.
+The standard deviation specifies the maximum allowable deviation to remove the spike.""")
+
+# time_interval = pd.Timedelta(st.session_state.date[-1] - st.session_state.date[0]).seconds/(3600*st.session_state.head.ensembles)
+
+st.write("Time interval: ", st.session_state.date[1] - st.session_state.date[0])
+
 despike_kernal = st.number_input(
-    "Enter Despike Kernal Size for Median Filter", 0, 1000, 5, 1
+    "Enter Despike Kernal Size for Median Filter", 0, st.session_state.head.ensembles, 5, 1
 )
-despike_cutoff = st.number_input("Enter Despike Cutoff (mm/s)", 0, 1000, 150, 1)
+
+
+
+despike_cutoff = st.number_input("Standard Deviation Cutoff for Spike Removal", 0.1, 10.0, 3.0, 0.1)
 despike_button = st.button("Despike")
 if despike_button:
 
@@ -276,10 +287,21 @@ if st.session_state.isDespike:
     st.write(b)
 
 st.header("Remove Flatline", divider="blue")
+
+st.write("""
+Flatline removal detects segments of data where values remain constant over 
+a specified interval. The kernel size defines the number of consecutive 
+ensembles (time intervals) considered in the check, while the threshold sets 
+the maximum allowable variation.
+""")
+
+st.write("Time interval: ", st.session_state.date[1] - st.session_state.date[0])
+
 flatline_kernal = st.number_input("Enter Flatline Kernal Size", 0, 100, 13, 1)
-flatline_cutoff = st.number_input("Enter Flatline deviation", 0, 100, 1, 1)
+flatline_cutoff = st.number_input("Enter Flatline deviation (mm/s)", 0, 100, 1, 1)
 
 flatline_button = st.button("Remove Flatline")
+
 
 if flatline_button:
     st.session_state.flatline_kernal = flatline_kernal

@@ -435,7 +435,7 @@ def flead_dict(fid, dim=2):
         "False Target Thresh": "int64",
         "Spare 1": "int64",
         "Transmit Lag Dist": "int64",
-        "CPU Serial No": "int64",
+        "CPU Serial No": "int128",
         "System Bandwidth": "int64",
         "System Power": "int64",
         "Spare 2": "int64",
@@ -447,9 +447,9 @@ def flead_dict(fid, dim=2):
     counter = 1
     for key, value in fname.items():
         if dim == 2:
-            flead[key] = getattr(np, value)(fid[:][counter])
+            flead[key] = np.uint64(fid[:][counter])
         elif dim == 1:
-            flead[key] = getattr(np, value)(fid[counter])
+            flead[key] = np.uint64(fid[counter])
         else:
             print("ERROR: Higher dimensions not allowed")
             sys.exit()
@@ -505,6 +505,7 @@ class FixedLeader:
         )
         self.warning = pyreadrdi.ErrorCode.get_message(self.error)
 
+        self.data = np.uint64(self.data)
         self.fleader = flead_dict(self.data)
         self._initialize_from_dict(DotDict(json_file_path="flmeta.json"))
 

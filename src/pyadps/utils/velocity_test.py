@@ -29,26 +29,27 @@ def wmm2020api(lat1, lon1, year):
     
     return mag
 
-def magnetic_declination(lat, lon, depth, year):
-    """
-    The function  calculates the magnetic declination at a given location and depth.
-    using a local installation of wmm2020 model.
+# Commentin magnetic_declination model since the method is no longer using.
+# def magnetic_declination(lat, lon, depth, year):
+#     """
+#     The function  calculates the magnetic declination at a given location and depth.
+#     using a local installation of wmm2020 model.
 
 
-    Args:
-        lat (parameter, float): Latitude in decimals
-        lon (parameter, float): Longitude in decimals
-        depth (parameter, float): depth in m
-        year (parameter, integer): Year
+#     Args:
+#         lat (parameter, float): Latitude in decimals
+#         lon (parameter, float): Longitude in decimals
+#         depth (parameter, float): depth in m
+#         year (parameter, integer): Year
 
-    Returns:
-        mag: Magnetic declination (degrees)
-    """
-    import wmm2020
-    mag = wmm2020.wmm(lat, lon, depth, year)
-    mag = mag.decl.data
+#     Returns:
+#         mag: Magnetic declination (degrees)
+#     """
+#     import wmm2020
+#     mag = wmm2020.wmm(lat, lon, depth, year)
+#     mag = mag.decl.data
 
-    return  mag
+#     return  mag
 
 def velocity_modifier(velocity, mag):
     """

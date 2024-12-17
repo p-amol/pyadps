@@ -313,12 +313,41 @@ with col1:
         st.session_state.isGridSave = False
         st.session_state.isVelocityMask = False
         st.write(":green[Mask file saved]")
+        # Table summarizing changes
+        changes_summary = pd.DataFrame(
+            [
+                ["Quality Control Tests", "True" if st.session_state.isThresh else "False"],
+                ["Fix Orientation",  st.session_state.beam_direction],
+            ],
+            columns=["Test", "Status"],
+        )
+
+        # Define a mapping function for styling
+        def status_color_map(value):
+            if value == "True":
+                return "background-color: green; color: white"
+            elif value == "False":
+                return "background-color: red; color: white"
+            elif value == "Up":
+                return "background-color: blue; color: white"
+            elif value == "Down":
+                return "background-color: orange; color: white"
+            else:
+                return ""
+
+        # Apply styles using Styler.apply
+        styled_table = changes_summary.style.set_properties(**{"text-align": "center"})
+        styled_table = styled_table.map(status_color_map, subset=["Status"])
+
+        # Display the styled table
+        st.write(styled_table.to_html(), unsafe_allow_html=True)
     else:
         st.write(":red[Mask data not saved]")
 with col2:
     reset_mask_button = st.button("Reset mask Data")
     if reset_mask_button:
         st.session_state.mask = np.copy(st.session_state.orig_mask)
+        st.session_state.isThresh = False
         st.session_state.isQCMask = False
         st.session_state.isGrid = False
         st.session_state.isProfileMask = False

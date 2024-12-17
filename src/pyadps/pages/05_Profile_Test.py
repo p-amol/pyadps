@@ -1,5 +1,5 @@
 import numpy as np
-# import pandas as pd
+import pandas as pd
 # import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
@@ -255,6 +255,10 @@ if update_mask:
 if not st.session_state.update_mask:
     st.write(":red[mask data not updated]")
 
+# Track button clicks
+if "cutBinsManual" not in st.session_state:
+    st.session_state.cutBinsManual = False
+
 
 ############  CUT BINS (SIDE LOBE) ############################
 st.header("Cut Bins: Side Lobe Contamination", divider="blue")
@@ -339,7 +343,7 @@ with st.form(key="manual_cutbin_form"):
 
     # Input for selecting minimum and maximum cells
     min_cell = st.number_input("Min Cell", 0, int(flobj.field()["Cells"]), 0)
-    max_cell = st.number_input("Max Cell", 0, int(flobj.field()["Cells"]), 10)
+    max_cell = st.number_input("Max Cell", 0, int(flobj.field()["Cells"]), int(flobj.field()["Cells"]))
 
     # Input for selecting minimum and maximum ensembles
     min_ensemble = st.number_input("Min Ensemble", 0, int(flobj.ensembles), 0)
@@ -419,7 +423,8 @@ with col1:
         st.session_state.maskp = mask
         st.write(":green[mask file updated]")
         st.session_state.update_mask_cutbin = True
-        st.session_state.isCutBins = True
+        #st.session_state.isCutBins = True
+        st.session_state.cutBinsManual = True
 
     if not st.session_state.update_mask_cutbin:
         st.write(":red[mask file not updated]")
@@ -561,6 +566,32 @@ with col1:
         st.session_state.isProfileMask = True
         st.session_state.isVelocityMask = False
         st.write(":green[Mask data saved]")
+        # Table summarizing changes
+        changes_summary = pd.DataFrame(
+            [
+                ["Trim Ends", "True" if st.session_state.isTrimEnds else "False"],
+                ["Cut Bins: Side Lobe Contamination", "True" if st.session_state.isCutBins else "False"],
+                ["Cut Bins: Manual", "True" if st.session_state.cutBinsManual else "False"],
+                ["Regrid Depth Cells", "True" if st.session_state.isGrid else "False"],
+            ],
+            columns=["Parameter", "Status"],
+        )
+
+        # Define a mapping function for styling
+        def status_color_map(value):
+            if value == "True":
+                return "background-color: green; color: white"
+            elif value == "False":
+                return "background-color: red; color: white"
+            else:
+                return ""
+
+        # Apply styles using Styler.apply
+        styled_table = changes_summary.style.set_properties(**{"text-align": "center"})
+        styled_table = styled_table.map(status_color_map, subset=["Status"])
+
+        # Display the styled table
+        st.write(styled_table.to_html(), unsafe_allow_html=True)
     else:
         st.write(":red[Mask data not saved]")
 with col2:
@@ -573,3 +604,6 @@ with col2:
         st.session_state.isGrid = False
         st.session_state.isGridSave = False
         st.session_state.isVelocityMask = False
+        st.session_state.isTrimEnds = False
+        st.session_state.isCutBins = False
+        st.session_state.cutBinsManual = False

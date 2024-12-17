@@ -125,9 +125,14 @@ st.session_state.method = method
 if "isMagnetButton" not in st.session_state:
     st.session_state.isMagnetButton = False
 
+# Track button clicks
+if "isButtonClicked" not in st.session_state:
+    st.session_state.isButtonClicked = False
+
 
 def toggle_btns():
     st.session_state.isMagnetButton = not st.session_state.isMagnetButton
+    st.session_state.isButtonClicked = not st.session_state.isButtonClicked
 
 
 with st.form(key="magnet_form"):
@@ -151,7 +156,6 @@ with st.form(key="magnet_form"):
     else:
         button_name = "Compute"
 
-
     if st.form_submit_button(
         button_name, on_click=toggle_btns, disabled=st.session_state.isMagnetButton
     ):
@@ -165,6 +169,7 @@ with st.form(key="magnet_form"):
                 st.session_state.year = year
                 st.session_state.angle = np.trunc(mag[0][0])
                 st.session_state.isMagnet = True
+                st.session_state.isButtonClicked = True
             except:
                 st.write(":red[Process failed! please use other methods: API or  Manual]")
 
@@ -177,6 +182,7 @@ with st.form(key="magnet_form"):
                 st.session_state.year = year
                 st.session_state.angle = np.trunc(mag[0][0])
                 st.session_state.isMagnet = True
+                st.session_state.isButtonClicked = True
             except:
                 st.write(":red[Connection error! please check the internet or use other methods: WMM2020 or  Manual]")
 
@@ -184,6 +190,7 @@ with st.form(key="magnet_form"):
             st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
             st.session_state.angle = np.trunc(mag[0][0])
             st.session_state.isMagnet = True
+            st.session_state.isButtonClicked = True
 
 
 if st.session_state.isMagnet:
@@ -197,6 +204,7 @@ if st.button(
 ):
     st.session_state.dummyvelocity = np.copy(velocity)
     st.session_state.isMagnet = False
+    st.session_state.isButtonClicked = False 
 
 ############# Velocity Cutoffs #################
 st.header("Velocity Cutoffs", divider="blue")
@@ -346,6 +354,7 @@ def reset_data():
     st.session_state.isCutoff = False
     st.session_state.isDespike = False
     st.session_state.isFlatline = False
+    st.session_state.isButtonClicked = False 
 
 
 col1, col2 = st.columns([1, 1])
@@ -356,6 +365,32 @@ with col1:
         st.session_state.velocity_mask = np.copy(st.session_state.maskd)
         st.session_state.isVelocityMask = True
         st.write(":green[Mask data saved]")
+                # Status Summary Table
+        status_summary = pd.DataFrame(
+            [
+                ["Magnetic Declination", "True" if st.session_state.isButtonClicked  else "False"],
+                ["Velocity Cutoffs", "True" if st.session_state.isCutoff else "False"],
+                ["Despike Data", "True" if st.session_state.isDespike else "False"],
+                ["Remove Flatline", "True" if st.session_state.isFlatline else "False"],
+            ],
+            columns=["Test", "Status"],
+        )
+
+        # Define a mapping function for styling
+        def status_color_map(value):
+            if value == "True":
+                return "background-color: green; color: white"
+            elif value == "False":
+                return "background-color: red; color: white"
+            else:
+                return ""
+
+        # Apply styles using Styler.apply
+        styled_table = status_summary.style.set_properties(**{"text-align": "center"})
+        styled_table = styled_table.map(status_color_map, subset=["Status"])
+
+        # Display the styled table
+        st.write(styled_table.to_html(), unsafe_allow_html=True)
     else:
         st.write(":red[Data not saved]")
 

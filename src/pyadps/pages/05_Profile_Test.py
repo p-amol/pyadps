@@ -271,7 +271,7 @@ the relation between beam angle and the thickness of the contaminated layer.
 )
 
 # Reset mask
-mask = st.session_state.maskp
+mask = np.copy(st.session_state.maskp)
 beam = st.radio("Select beam", (1, 2, 3, 4), horizontal=True)
 beam = beam - 1
 st.session_state.beam = beam

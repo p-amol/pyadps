@@ -710,7 +710,7 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
         fbyteskip = None
         for count, item in enumerate(idarray[i]):
             if item in (128, 129):
-                fbyteskip = offset[1][count]
+                fbyteskip = offset[0][count]
         if fbyteskip == None:
             error = ErrorCode.ID_NOT_FOUND
             ensemble = i
@@ -942,7 +942,7 @@ def datatype(
     fbyteskip = None
     for count, item in enumerate(idarray[0][:]):
         if item in vid:
-            fbyteskip = offset[1][count]
+            fbyteskip = offset[0][count]
             break
     if fbyteskip is None:
         print(

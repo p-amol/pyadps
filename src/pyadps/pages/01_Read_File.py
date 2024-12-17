@@ -8,6 +8,9 @@ import utils.writenc as wr
 from streamlit.runtime.state import session_state
 from utils.signal_quality import default_mask
 
+# To make the page wider if the user presses the reload button.
+st.set_page_config(layout="wide")
+
 """
 Streamlit page to load ADCP binary file and display File Header
 and Fixed Leader data
@@ -134,6 +137,9 @@ if uploaded_file is not None:
 elif "flead" in st.session_state:
     st.write("You selected `%s`" % st.session_state.fname)
 else:
+    # reset the cache and resources if the user press reload button.
+    st.cache_data.clear()
+    st.cache_resource.clear()
     st.stop()
 
 ########## TIME AXIS ##############

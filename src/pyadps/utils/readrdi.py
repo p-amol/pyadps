@@ -447,9 +447,15 @@ def flead_dict(fid, dim=2):
     counter = 1
     for key, value in fname.items():
         if dim == 2:
-            flead[key] = np.uint64(fid[:][counter])
+            if key == "CPU Serial No":
+                flead[key] = np.uint64(fid[:][counter])
+            else:
+                flead[key] = np.int64(fid[:][counter])
         elif dim == 1:
-            flead[key] = np.uint64(fid[counter])
+            if key == "CPU Serial No":
+                flead[key] = np.uint64(fid[counter])
+            else:
+                flead[key] = np.int64(fid[counter])
         else:
             print("ERROR: Higher dimensions not allowed")
             sys.exit()

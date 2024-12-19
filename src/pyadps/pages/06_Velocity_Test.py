@@ -114,6 +114,11 @@ st.write(
 of the National Oceanic and Atmospheric Administration (NOAA) to calculate the magnetic declination. The service is available at this [link](https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml#declination).
 Internet connection is necessary for this method to work.
 
+* According to the year, different models are used for calculating magnetic declination.
+    * From 2019 till date, WMM2020 (World Magnetic Model) 
+    * From 2000 to 2018 EMM (Enhanced Magnetic Model)
+    * Before 1999 IGRF (International Geomagnetic Reference Field)
+
 * In the manual method, the user can directly enter the magnetic declination.
 
 If the magnetic declination is reset, re-run the remaining tests again.
@@ -150,7 +155,7 @@ with st.form(key="magnet_form"):
         st.session_state.isMagnet = False
         lat = st.number_input("Latitude", -90.0, 90.0, 0.0, step=1.0)
         lon = st.number_input("Longitude", 0.0, 360.0, 0.1, step=1.0, format="%.4f")
-        year = st.number_input("Year", 1950, 2100, 2024, 1)
+        year = st.number_input("Year", 1950, 2024, 2024, 1)
     else:
         st.session_state.isMagnet = False
         mag = [[st.number_input("Declination", -180.0, 180.0, 0.0, 0.1)]]
@@ -184,15 +189,16 @@ with st.form(key="magnet_form"):
                 st.session_state.lat = lat
                 st.session_state.lon = lon
                 st.session_state.year = year
-                st.session_state.angle = np.trunc(mag[0][0])
+                # st.session_state.angle = np.trunc(mag[0][0])
+                st.session_state.angle = np.round(mag[0][0], decimals=3 )
                 st.session_state.isMagnet = True
                 st.session_state.isButtonClicked = True
             except:
-                st.write(":red[Connection error! please check the internet or use other methods: WMM2020 or  Manual]")
+                st.write(":red[Connection error! please check the internet or use manual method]")
 
         else:
             st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
-            st.session_state.angle = np.trunc(mag[0][0])
+            st.session_state.angle = np.round(mag[0][0], decimals=3 )
             st.session_state.isMagnet = True
             st.session_state.isButtonClicked = True
 

@@ -18,10 +18,21 @@ def wmm2020api(lat1, lon1, year):
     Returns:
         mag -> magnetic declination at the given location in degree.
     """
-    baseurl = "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?"
+    baseurl_wmm = "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?"
+    baseurl_igrf = "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?"
+    baseurl_emm = "https://emmcalc.geomag.info/?magneticcomponent=d&"
     key = "zNEw7"
     resultFormat="json"
-    url = "{}lat1={}&lon1={}&key={}&startYear{}&resultFormat={}".format(baseurl, lat1, lon1, key, year, resultFormat)
+    if year >= 2019:
+        baseurl = baseurl_wmm
+        model = "WMM"
+    elif year >= 2000:
+        baseurl = baseurl_emm
+        model = "EMM"
+    elif year >= 1590:
+        baseurl = baseurl_igrf
+        model = "IGRF"
+    url = "{}model={}&lat1={}&lon1={}&key={}&startYear={}&resultFormat={}".format(baseurl, model, lat1, lon1, key, year, resultFormat)
     response = requests.get(url)
     data = response.json()
     results = data["result"][0]

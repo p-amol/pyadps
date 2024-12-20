@@ -1,6 +1,7 @@
 import os
 import tempfile
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 import utils.readrdi as rd
@@ -268,10 +269,18 @@ if flead_check_button:
 
 flead_button = st.button("Fixed Leader")
 if flead_button:
+    # Pandas array should have all elements with same data type.
+    # Except Sl. no., which is np.uint64, rest are np.int64. 
+    # Convert all datatype to uint64
+    fl_dict = st.session_state.flead.field().items()
+    new_dict = {}
+    for key, value in fl_dict:
+        new_dict[key] = value.astype(np.uint64)
+
     df = pd.DataFrame(
         {
-            "Fields": st.session_state.flead.field().keys(),
-            "Values": st.session_state.flead.field().values(),
+            "Fields": new_dict.keys(),
+            "Values": new_dict.values(),
         }
     )
     st.dataframe(df, use_container_width=True)

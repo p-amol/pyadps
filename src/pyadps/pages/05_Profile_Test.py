@@ -290,7 +290,7 @@ with st.form(key="cutbin_form"):
 
     if cut_bins_mask:
         st.session_state.extra_cells = extra_cells
-        mask = side_lobe_beam_angle(ds, mask,
+        st.session_state.mask_temp = side_lobe_beam_angle(ds, mask,
                                     orientation=orientation,
                                     water_column_depth=water_column_depth,
                                     extra_cells=extra_cells)

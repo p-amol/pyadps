@@ -6,7 +6,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 from plotly_resampler import FigureResampler
 from streamlit.runtime.state import session_state
-from utils.signal_quality import ev_check, false_target, pg_check, qc_check
+from utils.signal_quality import ev_check, false_target, pg_check, echo_check, correlation_check
 
 if "flead" not in st.session_state:
     st.write(":red[Please Select Data!]")
@@ -34,6 +34,7 @@ if "isThresh" not in st.session_state:
     st.session_state.isThresh = False
 
 # Load data
+ds = st.session_state.ds
 flobj = st.session_state.flead
 vlobj = st.session_state.vlead
 velocity = st.session_state.velocity
@@ -229,11 +230,11 @@ with left:
         st.session_state.isThresh = True
         # st.write(st.session_state.newthresh)
 
-        mask = pg_check(pgood, mask, pgt, threebeam=option)
-        mask = qc_check(correlation, mask, ct)
-        mask = qc_check(echo, mask, et)
-        mask = ev_check(velocity[3, :, :], mask, evt)
-        mask = false_target(echo, mask, ft, threebeam=True)
+        mask = pg_check(ds, mask, pgt, threebeam=option)
+        mask = correlation_check(ds, mask, ct)
+        mask = echo_check(ds, mask, et)
+        mask = ev_check(ds, mask, evt)
+        mask = false_target(ds, mask, ft, threebeam=True)
         st.session_state.mask = mask
 
     if st.session_state.isThresh:

@@ -271,7 +271,8 @@ the relation between beam angle and the thickness of the contaminated layer.
 )
 
 # Reset mask
-mask = np.copy(st.session_state.maskp)
+#mask = np.copy(st.session_state.maskp)
+mask = st.session_state.maskp
 beam = st.radio("Select beam", (1, 2, 3, 4), horizontal=True)
 beam = beam - 1
 st.session_state.beam = beam
@@ -483,7 +484,7 @@ interpolate = st.radio("Choose interpolation method:", ("nearest", "linear", "cu
 regrid_button = st.button(label="Regrid Data")
 
 if regrid_button:
-    st.write(st.session_state.endpoints)
+ #   st.write(st.session_state.endpoints)
     z, st.session_state.velocity_regrid = regrid3d(
         flobj, vlobj, velocity, -32768, 
         trimends=st.session_state.endpoints, 

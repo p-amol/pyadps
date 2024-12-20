@@ -6,7 +6,7 @@ import pandas as pd
 import pyadps.utils.writenc as wr
 from pyadps.utils import readrdi
 from pyadps.utils.profile_test import side_lobe_beam_angle
-from pyadps.utils.regrid import regrid2d, regrid3d
+from pyadps.utils.profile_test import regrid2d, regrid3d
 from pyadps.utils.signal_quality import (
     default_mask,
     ev_check,
@@ -17,7 +17,8 @@ from pyadps.utils.signal_quality import (
 from pyadps.utils.velocity_test import (
     despike,
     flatline,
-    magnetic_declination,
+    wmm2020api,
+    velocity_modifier,
     velocity_cutoff,
 )
 
@@ -139,9 +140,10 @@ def autoprocess(filepath):
             magdep = config.getfloat("VelocityTest", "depth")
             magyear = config.getfloat("VelocityTest", "year")
 
-            velocity, mag = magnetic_declination(
-                velocity, maglat, maglon, magdep, magyear
-            )
+            
+            mag = wmm2020api(maglat, maglon, magyear)
+            velocity = velocity_modifier(velocity, mag)
+
             print(f"Magnetic Declination applied. The value is {mag[0]} degrees.")
 
         isCutOff = config.getboolean("VelocityTest", "cutoff")

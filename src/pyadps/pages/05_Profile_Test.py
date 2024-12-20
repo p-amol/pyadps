@@ -6,7 +6,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 from plotly_resampler import FigureResampler
 from utils.profile_test import side_lobe_beam_angle, manual_cut_bins
-from utils.regrid import regrid2d, regrid3d
+from utils.profile_test import regrid2d, regrid3d
 from utils.signal_quality import default_mask
 
 if "flead" not in st.session_state:

@@ -1,22 +1,19 @@
-import sys
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pyadps.utils.readrdi as rd
-from pyadps.utils.cutbin import CutBins
-from pyadps.utils.plotgen import plotmask, plotvar
+from pyadps.utils.plotgen import CutBins
 from pyadps.utils.profile_test import side_lobe_beam_angle, trim_ends
-from pyadps.utils.regrid import regrid2d, regrid3d
+from pyadps.utils.profile_test import regrid2d, regrid3d
 from pyadps.utils.signal_quality import (default_mask, ev_check, false_target,
                                          pg_check, qc_check, qc_prompt)
-from pyadps.utils.velocity_test import (despike, flatline,
-                                        magnetic_declination, velocity_cutoff)
+from pyadps.utils.velocity_test import (despike, flatline, velocity_modifier,
+                                        wmm2020api, velocity_cutoff)
 
 plt.style.use("seaborn-v0_8-darkgrid")
 
 
 # Read data
-filename = "/home/amol/Desktop/BGS11000.000"
+filename = "./src/pyadps/utils/metadata/demo.000"
 ds = rd.ReadFile(filename)
 fl = ds.fixedleader
 vl = ds.variableleader
@@ -107,7 +104,8 @@ if affirm.lower() == "y":
     year = input("Year: ")
     year = int(year)
 
-    velocity = magnetic_declination(vel, lat, lon, depth, year)
+    mag = wmm2020api(lat, lon, year)
+    vel = velocity_modifier(vel, mag)
 
 affirm = input("Apply velocity thresholds [y/n]: ")
 if affirm.lower() == "y":

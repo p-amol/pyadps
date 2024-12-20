@@ -5,7 +5,7 @@ from pyadps.utils.plotgen import CutBins
 from pyadps.utils.profile_test import side_lobe_beam_angle, trim_ends
 from pyadps.utils.profile_test import regrid2d, regrid3d
 from pyadps.utils.signal_quality import (default_mask, ev_check, false_target,
-                                         pg_check, qc_check, qc_prompt)
+                                         pg_check, correlation_check, echo_check, qc_prompt)
 from pyadps.utils.velocity_test import (despike, flatline, velocity_modifier,
                                         wmm2020api, velocity_cutoff)
 
@@ -31,7 +31,7 @@ cells = fl.field()["Cells"]
 # sys.exit()
 
 # Original mask created from velocity
-mask = default_mask(fl, vel)
+mask = default_mask(ds)
 orig_mask = np.copy(mask)
 
 # Default threshold
@@ -53,22 +53,22 @@ ft = qc_prompt(fl, "False Target Thresh")
 # Apply threshold
 values, counts = np.unique(mask, return_counts=True)
 print(values, counts, np.round(counts * 100 / np.sum(counts)))
-mask = pg_check(pgood, mask, pgt)
-mask = qc_check(cor, mask, ct)
-mask = qc_check(echo, mask, et)
-mask = ev_check(vel[3, :, :], mask, evt)
-mask = false_target(echo, mask, ft, threebeam=True)
+mask = pg_check(ds, mask, pgt)
+mask = correlation_check(ds, mask, ct)
+mask = echo_check(ds, mask, et)
+mask = ev_check(ds, mask, evt)
+mask = false_target(ds, mask, ft, threebeam=True)
 
 
 ########## PROFILE TEST #########
 
 affirm = input("Would you like to trim the ends? [y/n]: ")
 if affirm.lower() == "y":
-    mask = trim_ends(vl, mask)
+    mask = trim_ends(ds, mask)
 
 affirm = input("Would you remove the surface backscatter bins? [y/n]: ")
 if affirm.lower() == "y":
-    mask = side_lobe_beam_angle(fl, vl, mask)
+    mask = side_lobe_beam_angle(ds, mask)
 
 affirm = input("Would you like to manually select and mask data?")
 if affirm.lower() == "y":
@@ -78,11 +78,11 @@ if affirm.lower() == "y":
 
 affirm = input("Regrid the data based on pressure sensor? [y/n]:")
 if affirm.lower() == "y":
-    z, vel = regrid3d(fl, vl, vel, -32768)
-    z, echo_reg = regrid3d(fl, vl, echo, -32768)
-    z, correlation_reg = regrid3d(fl, vl, cor, -32768)
-    z, percentgood_reg = regrid3d(fl, vl, pgood, -32768)
-    z, mask = regrid2d(fl, vl, mask, -32768)
+    z, vel = regrid3d(ds, vel, -32768)
+    z, echo_reg = regrid3d(ds, echo, -32768)
+    z, correlation_reg = regrid3d(ds, cor, -32768)
+    z, percentgood_reg = regrid3d(ds, pgood, -32768)
+    z, mask = regrid2d(ds, mask, -32768)
 
 # affirm = input("Display original and revised mask files? [y/n]:")
 # if affirm.lower() == "y":

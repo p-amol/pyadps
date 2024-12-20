@@ -12,7 +12,8 @@ from pyadps.utils.signal_quality import (
     ev_check,
     false_target,
     pg_check,
-    qc_check,
+    correlation_check,
+    echo_check,
 )
 from pyadps.utils.velocity_test import (
     despike,
@@ -57,7 +58,7 @@ def autoprocess(filepath):
     fdata = flobj.fleader
     vdata = vlobj.vleader
 
-    mask = default_mask(flobj, velocity)
+    mask = default_mask(ds)
     print("Default Mask created.")
     x = np.arange(0, ensembles, 1)
     y = np.arange(0, cells, 1)
@@ -74,11 +75,11 @@ def autoprocess(filepath):
         is3Beam = config.getboolean("QCTest", "three_beam")
         pgt = config.getint("QCTest", "percentage_good")
 
-        mask = pg_check(pgood, mask, pgt, threebeam=is3Beam)
-        mask = qc_check(correlation, mask, ct)
-        mask = qc_check(echo, mask, et)
-        mask = ev_check(velocity[3, :, :], mask, evt)
-        mask = false_target(echo, mask, ft, threebeam=True)
+        mask = pg_check(ds, mask, pgt, threebeam=is3Beam)
+        mask = correlation_check(ds, mask, ct)
+        mask = echo_check(ds, mask, et)
+        mask = ev_check(ds, mask, evt)
+        mask = false_target(ds, mask, ft, threebeam=True)
         print("QC Test complete.")
 
     endpoints = None
@@ -103,7 +104,7 @@ def autoprocess(filepath):
         isCutBins = config.getboolean("ProfileTest", "cut_bins")
         if isCutBins:
             add_cells = config.getint("ProfileTest", "cut_bins_add_cells")
-            mask = side_lobe_beam_angle(flobj, vlobj, mask, extra_cells=add_cells)
+            mask = side_lobe_beam_angle(ds, mask, extra_cells=add_cells)
 
             print("Cutbins complete.")
 
@@ -111,21 +112,18 @@ def autoprocess(filepath):
         if isRegrid:
             print("File regridding started. This will take a few seconds ...")
             regrid_option = config.get("ProfileTest", "regrid_option")
-            z, velocity = regrid3d(
-                flobj,
-                vlobj,
-                velocity,
-                -32768,
-                trimends=endpoints,
-            )
-            z, echo = regrid3d(flobj, vlobj, echo, -32768, trimends=endpoints)
-            z, correlation = regrid3d(
-                flobj, vlobj, correlation, -32768, trimends=endpoints
-            )
-            z, pgood = regrid3d(flobj, vlobj, pgood, -32768, trimends=endpoints)
-            z, mask = regrid2d(flobj, vlobj, mask, 1, trimends=endpoints)
+            z, velocity = regrid3d(ds, velocity, -32768, trimends=endpoints)
+            print("Velocity regrid complete.")
+            z, echo = regrid3d(ds, echo, -32768, trimends=endpoints)
+            print("Echo Intensity regrid complete.")
+            z, correlation = regrid3d(ds, correlation, -32768, trimends=endpoints)
+            print("Correltion regrid complete.")
+            z, pgood = regrid3d(ds, pgood, -32768, trimends=endpoints)
+            print("Percent Good regrid complete.")
+            z, mask = regrid2d(ds, mask, 1, trimends=endpoints)
+            print("Mask regrid complete.")
             depth = z
-            print("Regrid Complete.")
+            print("Regrided All Data!")
 
         print("Profile Test complete.")
 

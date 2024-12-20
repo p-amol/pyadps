@@ -4,8 +4,6 @@ import tempfile
 import pandas as pd
 import streamlit as st
 import utils.readrdi as rd
-import utils.writenc as wr
-from streamlit.runtime.state import session_state
 from utils.signal_quality import default_mask
 
 # To make the page wider if the user presses the reload button.
@@ -186,9 +184,7 @@ st.session_state.date2 = pd.to_datetime(date_df)
 # WARNING: Never Change `st.session_state.orig_mask` in the code!
 #
 if "orig_mask" not in st.session_state:
-    st.session_state.orig_mask = default_mask(
-        st.session_state.flead, st.session_state.velocity
-    )
+    st.session_state.orig_mask = default_mask(st.session_state.ds)
 
 # Checks if the following quality checks are carried out
 st.session_state.isQCMask = False

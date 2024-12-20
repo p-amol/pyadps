@@ -47,7 +47,7 @@ if st.session_state.isQCMask:
 else:
     st.write(":orange[Creating a new mask file ...]")
 
-mask = st.session_state.maskp
+mask = np.copy(st.session_state.maskp)
 
 # Load data
 flobj = st.session_state.flead
@@ -237,7 +237,7 @@ if update_mask:
     if start_ens > 0:
         mask[:, :start_ens] = 1
 
-    if end_ens < x[-1]:
+    if end_ens <= x[-1]:
         mask[:, end_ens:] = 1
 
     st.session_state.ens_range = ens_range
@@ -271,7 +271,7 @@ the relation between beam angle and the thickness of the contaminated layer.
 )
 
 # Reset mask
-mask = np.copy(st.session_state.maskp)
+
 beam = st.radio("Select beam", (1, 2, 3, 4), horizontal=True)
 beam = beam - 1
 st.session_state.beam = beam
@@ -289,7 +289,7 @@ with st.form(key="cutbin_form"):
 
     if cut_bins_mask:
         st.session_state.extra_cells = extra_cells
-        mask = side_lobe_beam_angle(flobj, vlobj, mask, 
+        st.session_state.mask_temp = side_lobe_beam_angle(flobj, vlobj, mask, 
                                     orientation=orientation,
                                     water_column_depth=water_column_depth,
                                     extra_cells=extra_cells)
@@ -302,6 +302,7 @@ with st.form(key="cutbin_form"):
 
 update_mask_cutbin = st.button("Update mask file after cutbin")
 if update_mask_cutbin:
+    mask = st.session_state.mask_temp
     st.session_state.maskp = mask
     st.write(":green[mask file updated]")
     st.session_state.update_mask_cutbin = True

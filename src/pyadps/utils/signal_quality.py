@@ -53,20 +53,102 @@ def qc_check(var, mask, cutoff=0):
     return mask
 
 
-cor_check = qc_check
-echo_check = qc_check
+def correlation_check(ds, mask, cutoff=64):
+    """
+    Perform an correlation check on the provided variable and update the 
+    mask to mark valid and invalid values based on a cutoff threshold.
+
+    Parameters
+    ----------
+    ds : pyadps.dataset
+        The input pyadps dataframe containing correlation data to be checked.
+        Accepts 2-D or 3-D masks.
+    mask : numpy.ndarray
+        An integer array of the same shape as `var`, where `1` indicates invalid 
+        data or masked data and `0` indicates valid data.
+    cutoff : float, optional
+        The threshold value for echo intensity. Any value in `ds.correlation.data` below 
+        this cutoff will be considered invalid and marked as `1` in the mask. 
+        Default is 64.
+
+    Returns
+    -------
+    numpy.ndarray
+        An updated integer mask array of the same shape as `var`, with `1` 
+        indicating invalid or masked data (within the cutoff limit) and `0` indicating 
+        valid.
+
+    Notes
+    -----
+    - The function modifies the `mask` based on the cutoff condition. Valid 
+      values in `var` retain their corresponding mask value as `0`, while 
+      invalid values or previously masked elements are marked as `1`.
+      operations.
+
+    Example
+    -------
+    >>> import pyadps
+    >>> ds = pyadps.Readfile('dummy.000')
+    >>> outmask = correlation_check(ds, mask, cutoff=9999)
+    """
+    correlation = ds.correlation.data
+    mask = qc_check(correlation, mask, cutoff=cutoff)
+    return mask
+
+def echo_check(ds, mask, cutoff=40):
+    """
+    Perform an echo intensity check on the provided variable and update the 
+    mask to mark valid and invalid values based on a cutoff threshold.
+
+    Parameters
+    ----------
+    ds : pyadps.dataset
+        The input pyadps dataframe containing echo intensity data to be checked.
+        Accepts 2-D or 3-D masks.
+    mask : numpy.ndarray
+        An integer array of the same shape as `var`, where `1` indicates invalid 
+        data or masked data and `0` indicates valid data.
+    cutoff : float, optional
+        The threshold value for echo intensity. Any value in `ds.echo.data` below 
+        this cutoff will be considered invalid and marked as `1` in the mask. 
+        Default is 40.
+
+    Returns
+    -------
+    numpy.ndarray
+        An updated integer mask array of the same shape as `var`, with `1` 
+        indicating invalid or masked data (within the cutoff limit) and `0` indicating 
+        valid.
+
+    Notes
+    -----
+    - The function modifies the `mask` based on the cutoff condition. Valid 
+      values in `var` retain their corresponding mask value as `0`, while 
+      invalid values or previously masked elements are marked as `1`.
+    - Ensure that `var` and `mask` are compatible in shape for element-wise 
+      operations.
+
+    Example
+    -------
+    >>> import pyadps
+    >>> ds = pyadps.Readfile('dummy.000')
+    >>> outmask = echo_check(ds, mask, cutoff=9999)
+    """
+
+    echo = ds.echo.data
+    mask = qc_check(echo, mask, cutoff=cutoff)
+    return mask
 
 
-def ev_check(var, mask, cutoff=9999):
+def ev_check(ds, mask, cutoff=9999):
     """
     Perform an error velocity check on the provided variable and update the 
     mask to mark valid and invalid values based on a cutoff threshold.
 
     Parameters
     ----------
-    var : numpy.ndarray
-        The input array containing error velocity data to be checked.
-        Accepts 2-D or 3-D masks.
+    ds : pyadps.dataset
+        The input pyadps dataframe containing error velocity data to be checked.
     mask : numpy.ndarray
         An integer array of the same shape as `var`, where `1` indicates invalid 
         data or masked data and `0` indicates valid data.
@@ -94,10 +176,10 @@ def ev_check(var, mask, cutoff=9999):
     -------
     >>> import pyadps
     >>> ds = pyadps.Readfile('dummy.000')
-    >>> var = ds.velocity.data[3, :, :]
-    >>> outmask = ev_check(var, mask, cutoff=9999)
+    >>> outmask = ev_check(ds, mask, cutoff=9999)
     """
 
+    var = ds.velocity.data[3, :, :]
     shape = np.shape(var)
     var = abs(var)
     if len(shape) == 2:
@@ -109,15 +191,15 @@ def ev_check(var, mask, cutoff=9999):
     return mask
 
 
-def pg_check(pgood, mask, cutoff=0, threebeam=True):
+def pg_check(ds, mask, cutoff=0, threebeam=True):
     """
     Perform a percent-good check on the provided data and update the mask 
     to mark valid and invalid values based on a cutoff threshold.
 
     Parameters
     ----------
-    pgood : numpy.ndarray
-        The input array containing percent-good data, where values range from 
+    ds : pyadps.dataset 
+        The input pyadps dataframe containing percent-good data, where values range from 
         0 to 100 (maximum percent good).
     mask : numpy.ndarray
         An integer array of the same shape as `pgood`, where `1` indicates 
@@ -150,10 +232,10 @@ def pg_check(pgood, mask, cutoff=0, threebeam=True):
     -------
     >>> import pyadps
     >>> ds = pyadps.Readfile('dummy.000')
-    >>> var = ds.percentgood.data
-    >>> outmask = pg_check(var, mask, cutoff=50, threebeam=True)
+    >>> outmask = pg_check(ds, mask, cutoff=50, threebeam=True)
     """
 
+    pgood = ds.percentgood.data
     if threebeam:
         pgood1 = pgood[0, :, :] + pgood[3, :, :]
     else:
@@ -163,7 +245,7 @@ def pg_check(pgood, mask, cutoff=0, threebeam=True):
     return mask
 
 
-def false_target(echo, mask, cutoff=255, threebeam=True):
+def false_target(ds, mask, cutoff=255, threebeam=True):
     """
     Apply a false target detection algorithm based on echo intensity values. 
     This function identifies invalid or false targets in the data and updates 
@@ -171,8 +253,8 @@ def false_target(echo, mask, cutoff=255, threebeam=True):
 
     Parameters
     ----------
-    echo : numpy.ndarray
-        The input array containing echo intensity values, which are used to 
+    ds : pyadps.dataset 
+        The input pyadps dataframe containing echo intensity values, which are used to 
         detect false targets.
     mask : numpy.ndarray
         An integer array of the same shape as `echo`, where `1` indicates 
@@ -205,9 +287,10 @@ def false_target(echo, mask, cutoff=255, threebeam=True):
     -------
     >>> import pyadps
     >>> ds = pyadps.Readfile('dummy.000')
-    >>> var = ds.echo.data
     >>> mask = false_target(echo, mask, cutoff=255)
     """
+
+    echo = ds.echo.data
 
     shape = np.shape(echo)
     for i in range(shape[1]):
@@ -225,22 +308,16 @@ def false_target(echo, mask, cutoff=255, threebeam=True):
     return mask
 
 
-def default_mask(flobj, velocity):
+def default_mask(ds):
     """
     Create a default 2-D mask file based on the velocity data.
     This function generates a mask where values are marked as valid or invalid 
-    based on the velocity data and the properties like beams and cells from the `flobj`.
+    based on the missing values from the velocity data.
 
     Parameters
     ----------
-    flobj : FixedLeader
-        An instance of the FixedLeader class containing metadata and configuration 
-        used for generating the mask. This object is typically responsible for 
-        holding the number of cells and beams.
-    velocity : numpy.ndarray
-        The velocity data to be used for generating the mask. This array typically 
-        contains measurements of velocity from an ADCP or similar instrument. The data
-        may already be flagged as bad by the ADCP while collecting the data.
+    ds : pyadps.dataset
+         A pyadps data frame is used to extract velocity and dimensions for the mask.
 
     Returns
     -------
@@ -252,17 +329,16 @@ def default_mask(flobj, velocity):
     -----
     - The function uses the velocity data along with the information from the 
       Fixed Leader object to determine which values are valid and which are invalid.
-    - Ensure that the shape of the `velocity` array is compatible with the mask 
-      generation logic.
 
     Example
     -------
     >>> import pyadps
-    >>> ds = ds.ReadFile('demo.000')
-    >>> flobj = ds.fixedleader 
-    >>> velocity = ds.velocity.data
-    >>> mask = default_mask(flobj, velocity)
+    >>> ds = pyadps.ReadFile('demo.000')
+    >>> mask = pyadps.default_mask(ds)
     """
+
+    flobj = ds.fixedleader
+    velocity = ds.velocity.data
 
     cells = flobj.field()["Cells"]
     beams = flobj.field()["Beams"]
@@ -274,7 +350,7 @@ def default_mask(flobj, velocity):
     return mask
 
 
-def qc_prompt(flobj, name, data=None):
+def qc_prompt(ds, name, data=None):
     """
     Prompt the user to confirm or adjust the quality control threshold for a specific 
     parameter based on predefined ranges. The function provides an interactive interface 
@@ -312,15 +388,15 @@ def qc_prompt(flobj, name, data=None):
     -------
     >>> import pyadps
     >>> ds = ds.ReadFile('demo.000')
-    >>> flobj = ds.fixedleader 
     >>> name = "Echo Intensity Thresh"
-    >>> threshold = qc_prompt(flobj, name, data)
+    >>> threshold = qc_prompt(ds, name, data)
     The default threshold for echo intensity thresh is 0
     Would you like to change the threshold [y/n]: y
     Would you like to check the noise floor [y/n]: y
     Threshold changed to 50
     """
 
+    flobj = ds.fixedleader
     cutoff = 0
     if name == "Echo Intensity Thresh":
         cutoff = 0

@@ -50,6 +50,7 @@ else:
 mask = np.copy(st.session_state.maskp)
 
 # Load data
+ds = st.session_state.ds
 flobj = st.session_state.flead
 vlobj = st.session_state.vlead
 velocity = st.session_state.velocity
@@ -289,7 +290,7 @@ with st.form(key="cutbin_form"):
 
     if cut_bins_mask:
         st.session_state.extra_cells = extra_cells
-        st.session_state.mask_temp = side_lobe_beam_angle(flobj, vlobj, mask, 
+        mask = side_lobe_beam_angle(ds, mask,
                                     orientation=orientation,
                                     water_column_depth=water_column_depth,
                                     extra_cells=extra_cells)
@@ -486,7 +487,7 @@ regrid_button = st.button(label="Regrid Data")
 if regrid_button:
     st.write(st.session_state.endpoints)
     z, st.session_state.velocity_regrid = regrid3d(
-        flobj, vlobj, velocity, -32768, 
+        ds, velocity, -32768, 
         trimends=st.session_state.endpoints, 
         end_bin_option=st.session_state.end_bin_option, 
         orientation=st.session_state.beam_direction,
@@ -495,7 +496,7 @@ if regrid_button:
     )
     st.write(":grey[Regrided velocity ...]")
     z, st.session_state.echo_regrid = regrid3d(
-        flobj, vlobj, echo, -32768, 
+        ds, echo, -32768, 
         trimends=st.session_state.endpoints, 
         end_bin_option=st.session_state.end_bin_option, 
         orientation=st.session_state.beam_direction,
@@ -504,7 +505,7 @@ if regrid_button:
     )
     st.write(":grey[Regrided echo intensity ...]")
     z, st.session_state.correlation_regrid = regrid3d(
-        flobj, vlobj, correlation, -32768,
+        ds, correlation, -32768,
         trimends=st.session_state.endpoints, 
         end_bin_option=st.session_state.end_bin_option, 
         orientation=st.session_state.beam_direction,
@@ -513,7 +514,7 @@ if regrid_button:
     )
     st.write(":grey[Regrided correlation...]")
     z, st.session_state.pgood_regrid = regrid3d(
-        flobj, vlobj, pgood, -32768,
+        ds, pgood, -32768,
         trimends=st.session_state.endpoints, 
         end_bin_option=st.session_state.end_bin_option, 
         orientation=st.session_state.beam_direction,
@@ -522,7 +523,7 @@ if regrid_button:
     )
     st.write(":grey[Regrided percent good...]")
     z, st.session_state.mask_regrid = regrid2d(
-        flobj, vlobj, mask, 1,
+        ds, mask, 1,
         trimends=st.session_state.endpoints, 
         end_bin_option=st.session_state.end_bin_option, 
         orientation=st.session_state.beam_direction,

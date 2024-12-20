@@ -3,7 +3,7 @@ import scipy as sp
 from .plotgen import PlotEnds 
 
 
-def trim_ends(vlobj, mask, method="Manual"):
+def trim_ends(ds, mask, method="Manual"):
     """
     Trim the ends of the data based on the provided method (e.g., manual selection) 
     to remove invalid or irrelevant data points during deployment and recovery
@@ -12,10 +12,10 @@ def trim_ends(vlobj, mask, method="Manual"):
 
     Parameters
     ----------
-    vlobj : VariableLeader
-        An instance of the VariableLeader class containing metadata and configuration 
-        data for the variable leader. This includes the depth of the transducer and 
-        other relevant information for trimming the data.
+    ds : pyadps.dataset
+        The pyadps dataframe is loaded to obtain the data from the variable leader.
+        This includes the depth of the transducer and other relevant information 
+        for trimming the data.
     mask : numpy.ndarray
         A mask array of the same shape as the data, where `1` indicates invalid data 
         and `0` indicates valid data. The function modifies the mask based on the trimming 
@@ -43,12 +43,11 @@ def trim_ends(vlobj, mask, method="Manual"):
     -------
     >>> import pyadps
     >>> ds = pyadps.ReadFile("demo.000")
-    >>> flobj = ds.fixedleader
-    >>> vlobj = ds.variableleader
-    >>> mask = pyadps.signal_quality.default_mask(flobj, ds.velocity.data)
-    >>> updated_mask = trim_ends(vlobj, mask, method="Manual")
+    >>> mask = pyadps.default_mask(ds)
+    >>> updated_mask = trim_ends(ds, mask, method="Manual")
     """
 
+    vlobj = ds.variableleader
     transducer_depth = vlobj.vleader["Depth of Transducer"]
     # pressure = vlobj.vleader["Pressure"]
     if method == "Manual":
@@ -63,7 +62,7 @@ def trim_ends(vlobj, mask, method="Manual"):
     return mask
 
 
-def side_lobe_beam_angle(flobj, vlobj, mask, orientation='default', water_column_depth=0, extra_cells=2):
+def side_lobe_beam_angle(ds, mask, orientation='default', water_column_depth=0, extra_cells=2):
     """
     Mask the data contaminated due to surface/bottom backscatter based on the 
     side lobe beam angle. This function can correct the orientation of the beam 
@@ -72,12 +71,10 @@ def side_lobe_beam_angle(flobj, vlobj, mask, orientation='default', water_column
 
     Parameters
     ----------
-    flobj : FixedLeader
-        An instance of the FixedLeader class containing metadata and configuration 
-        data for the fixed leader.
-    vlobj : VariableLeader
-        An instance of the VariableLeader class containing metadata and configuration 
-        data for the variable leader.
+    ds : pyadps.dataset
+        The pyadps dataframe is loaded to obtain the data from the fixed and variable leader.
+        This includes the depth of the transducer and other relevant information 
+        for trimming the data.
     mask : numpy.ndarray
         A mask array where invalid or false data points are marked. The mask is updated 
         based on the calculated side lobe beam angles.
@@ -99,24 +96,25 @@ def side_lobe_beam_angle(flobj, vlobj, mask, orientation='default', water_column
 
     Notes
     -----
-    - The function uses the `flobj` and `vlobj` to retrieve the necessary information 
+    - The function uses the fixedleader and variableleader to retrieve the necessary information 
       for the beam angle calculation. The `mask` array is updated based on these calculations.
     - The `orientation` parameter allows for adjustments to account for upward or downward 
       looking ADCPs.
-    - The `water_column_depth` and `extra_cells` parameters allow for fine-tuning the 
-      calculation to accommodate different environmental conditions and data collection settings.
+    - The `water_column_depth` permits detecting the bottom of the ocean for downward looking
+      ADCP. 
+    - The `extra_cells` parameter adds additional cells in addition to those masked by beam angle
+      calculation.
 
     Example
     -------
     >>> import pyadps
     >>> ds = pyadps.ReadFile("demo.000")
-    >>> flobj = ds.fixedleader
-    >>> vlobj = ds.variableleader
-    >>> mask = pyadps.signal_quality.default_mask(flobj, ds.velocity.data)
-    >>> updated_mask = trim_ends(vlobj, mask, method="Manual")
-    >>> updated_mask = side_lobe_beam_angle(flobj, vlobj, mask, orientation='downward', water_column_depth=50, extra_cells=3)
+    >>> mask = pyadps.default_mask(ds)
+    >>> updated_mask = side_lobe_beam_angle(ds, mask, orientation='downward', water_column_depth=50, extra_cells=3)
     """
 
+    flobj = ds.fixedleader
+    vlobj = ds.variableleader
     beam_angle = int(flobj.system_configuration()["Beam Angle"])
     cell_size = flobj.field()["Depth Cell Len"]
     bin1dist = flobj.field()["Bin 1 Dist"]
@@ -177,8 +175,7 @@ def manual_cut_bins(mask, min_cell, max_cell, min_ensemble, max_ensemble):
 
 
 def regrid2d(
-    flobj,
-    vlobj,
+    ds,
     data,
     fill_value,
     end_bin_option="cell",
@@ -192,13 +189,10 @@ def regrid2d(
 
     Parameters:
     -----------
-    flobj : object
-        The fixed leader object that contains information 
-        about the fixed leader data.
-        
-    vlobj : object
-        The variable leader object that contains information 
-        about the variable leader data.
+    ds : pyadps.dataset
+        The pyadps dataframe is loaded to obtain the data from the fixed and variable leader.
+        This includes the depth of the transducer and other relevant information 
+        for trimming the data.
         
     data : array-like
         The 2D data array to be regridded.
@@ -252,6 +246,8 @@ def regrid2d(
     - The `boundary_limit` parameter helps restrict regridding to depths above or below a certain threshold.
     """
    
+    flobj = ds.fixedleader
+    vlobj = ds.variableleader
     # Get values and convert to 'm'
     bin1dist = flobj.field()["Bin 1 Dist"] / 100
     transdepth = vlobj.vleader["Depth of Transducer"] / 10
@@ -338,8 +334,7 @@ def regrid2d(
 
 
 def regrid3d(
-    flobj,
-    vlobj,
+    ds,
     data,
     fill_value,
     end_bin_option="cell",
@@ -353,13 +348,10 @@ def regrid3d(
 
     Parameters:
     -----------
-    flobj : object
-        The fixed leader object that contains information 
-        about the fixed leader data.
-        
-    vlobj : object
-        The variable leader object that contains information 
-        about the variable leader data.
+    ds : pyadps.dataset
+        The pyadps dataframe is loaded to obtain the data from the fixed and variable leader.
+        This includes the depth of the transducer and other relevant information 
+        for trimming the data.
         
     data : array-like
         The 3D data array to be regridded, with dimensions 
@@ -378,7 +370,7 @@ def regrid3d(
                       Use boundary_limit option to provide the value. 
         Otherwise, a specific numerical depth value can be provided.
         
-    trimends : tuple of floats, optional, default=None
+    trimends : tuple of integer, optional, default=None
         If provided, defines the ensemble range (start, end) for 
         calculating the maximum/minimum transducer depth. 
         Helps avoiding the deployment or retrieval data.
@@ -416,10 +408,10 @@ def regrid3d(
     - This function is an extension of 2D regridding to handle the time dimension or other additional axes in the data.
     """
 
+    flobj = ds.fixedleader
     beams = flobj.field()["Beams"]
     z, data_dummy = regrid2d(
-        flobj,
-        vlobj,
+        ds,
         data[0, :, :],
         fill_value,
         end_bin_option=end_bin_option,
@@ -435,8 +427,7 @@ def regrid3d(
 
     for i in range(beams - 1):
         z, data_dummy = regrid2d(
-            flobj,
-            vlobj,
+            ds,
             data[i + 1, :, :],
             fill_value,
             end_bin_option=end_bin_option,

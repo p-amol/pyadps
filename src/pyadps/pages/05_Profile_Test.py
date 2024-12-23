@@ -42,7 +42,7 @@ if st.session_state.isQCMask:
             st.session_state.maskp = st.session_state.qc_mask
         else:
             st.session_state.maskp = st.session_state.profile_mask
-    else:
+    elif("isTrimEnds" not in st.session_state):
         st.session_state.maskp = st.session_state.qc_mask
 else:
     st.write(":orange[Creating a new mask file ...]")

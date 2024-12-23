@@ -237,8 +237,9 @@ download_button = st.button("Generate Processed files")
 if download_button:
     st.session_state.processed_filename = file_write()
     st.write(":grey[Processed file created. Click the download button.]")
-    st.write(st.session_state.processed_filename)
+#    st.write(st.session_state.processed_filename)
     depth = np.trunc(st.session_state.final_depth)
+    final_mask = st.session_state.final_mask
 
     if file_type_radio == "NetCDF":
         if add_attr_button and st.session_state.attributes:
@@ -246,6 +247,7 @@ if download_button:
             wr.finalnc(
                 st.session_state.processed_filename,
                 depth,
+                final_mask,
                 st.session_state.date,
                 st.session_state.write_velocity,
                 attributes=st.session_state.attributes,  # Pass edited attributes
@@ -255,16 +257,17 @@ if download_button:
             wr.finalnc(
                 st.session_state.processed_filename,
                 depth,
+                final_mask,
                 st.session_state.date,
                 st.session_state.write_velocity,
             )
 
-    with open(st.session_state.processed_filename, "rb") as file:
-        st.download_button(
-            label="Download NetCDF File",
-            data=file,
-            file_name="processed_file.nc",
-        )
+        with open(st.session_state.processed_filename, "rb") as file:
+            st.download_button(
+                label="Download NetCDF File",
+                data=file,
+                file_name="processed_file.nc",
+            )
 
     if file_type_radio == "CSV":
         udf = pd.DataFrame(
@@ -285,23 +288,31 @@ if download_button:
         ucsv = udf.to_csv().encode("utf-8")
         vcsv = vdf.to_csv().encode("utf-8")
         wcsv = wdf.to_csv().encode("utf-8")
+        csv_mask = pd.DataFrame(st.session_state.final_mask.T).to_csv().encode("utf-8")
         st.download_button(
-            label="Download Zonal Velocity File",
+            label="Download Zonal Velocity File (CSV)",
             data=ucsv,
             file_name="zonal_velocity.csv",
             mime="text/csf",
         )
         st.download_button(
-            label="Download Meridional Velocity File",
+            label="Download Meridional Velocity File (CSV)",
             data=vcsv,
             file_name="meridional_velocity.csv",
             mime="text/csf",
         )
         st.download_button(
-            label="Download Vertical Velocity File",
+            label="Download Vertical Velocity File (CSV)",
             data=vcsv,
             file_name="vertical_velocity.csv",
             mime="text/csf",
+        )
+
+        st.download_button(
+        label="Download Final Mask (CSV)",
+        data=csv_mask,
+        file_name="final_mask.csv",
+        mime="text/csv",
         )
 
 

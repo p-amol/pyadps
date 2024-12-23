@@ -308,7 +308,7 @@ def finalnc(outfile, depth, final_mask, time, data, t0="hours since 2000-01-01",
     evel.units = "cm/s"
     evel.long_name = "error_velocity"
 
-    mvel = ncfile.createVariable("Final_mask", np.float32, ("time", "depth"), fill_value=fill)
+    mvel = ncfile.createVariable("mask", np.float32, ("time", "depth"), fill_value=fill)
     mvel.long_name = "Velocity Mask (1: bad value, 0: good value)"
 
     nctime = pd2nctime(time, t0)

@@ -244,7 +244,7 @@ def vlead_nc(infile, outfile, time, axis_option=None, attributes=None, t0="hours
     outnc.close()
 
 
-def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=None):
+def finalnc(outfile, depth, final_mask, time, data, t0="hours since 2000-01-01", attributes=None):
     """
     Function to create the processed NetCDF file.
 
@@ -268,6 +268,7 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
     if np.all(depth[:-1] >= depth[1:]):
         depth = depth[::-1]
         data = data[:, ::-1, :]
+        final_mask = final_mask[::-1, :]
 
     ncfile = nc4.Dataset(outfile, mode="w", format="NETCDF4")
     # Check if depth is scalar or array
@@ -307,6 +308,9 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
     evel.units = "cm/s"
     evel.long_name = "error_velocity"
 
+    mvel = ncfile.createVariable("Final_mask", np.float32, ("time", "depth"), fill_value=fill)
+    mvel.long_name = "Velocity Mask (1: bad value, 0: good value)"
+
     nctime = pd2nctime(time, t0)
     # write data
     z[:] = depth
@@ -315,10 +319,13 @@ def finalnc(outfile, depth, time, data, t0="hours since 2000-01-01", attributes=
     vvel[:, :] = data[1, :, :].T
     wvel[:, :] = data[2, :, :].T
     evel[:, :] = data[3, :, :].T
+    mvel[:, :] = final_mask.T
     
     # Add global attributes if provided
     if attributes:
         for key, value in attributes.items():
             setattr(ncfile, key, str(value))  # Store attributes as strings
+    
+    ncfile.mask_applied = "True"
 
     ncfile.close()

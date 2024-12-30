@@ -1,9 +1,10 @@
 import numpy as np
 import scipy as sp
+from pyadps.utils.readrdi import ReadFile
 from .plotgen import PlotEnds 
 
 
-def trim_ends(ds, mask, method="Manual"):
+def trim_ends(ds, mask, transducer_depth=None, delta=20, method="Manual"):
     """
     Trim the ends of the data based on the provided method (e.g., manual selection) 
     to remove invalid or irrelevant data points during deployment and recovery
@@ -47,11 +48,16 @@ def trim_ends(ds, mask, method="Manual"):
     >>> updated_mask = trim_ends(ds, mask, method="Manual")
     """
 
-    vlobj = ds.variableleader
-    transducer_depth = vlobj.vleader["Depth of Transducer"]
-    # pressure = vlobj.vleader["Pressure"]
+    if isinstance(ds, ReadFile):
+        vlobj = ds.variableleader
+        transducer_depth = vlobj.vleader["Depth of Transducer"]
+    elif isinstance(ds, np.ndarray) and ds.ndim == 1:
+        transducer_depth = ds
+    else:
+        raise ValueError("Input must be a 1-D numpy array or a PyADPS instance")
+
     if method == "Manual":
-        out = PlotEnds(transducer_depth, delta=20)
+        out = PlotEnds(transducer_depth, delta=delta)
         out.show()
         if out.start_ens > 0:
             mask[:, 0 : out.start_ens] = 1
@@ -62,7 +68,17 @@ def trim_ends(ds, mask, method="Manual"):
     return mask
 
 
-def side_lobe_beam_angle(ds, mask, orientation='default', water_column_depth=0, extra_cells=2):
+def side_lobe_beam_angle(
+        ds, 
+        mask, 
+        orientation='default', 
+        water_column_depth=0, 
+        extra_cells=2,
+        cells=None,
+        cell_size=None,
+        bin1dist=None,
+        beam_angle=None
+        ):
     """
     Mask the data contaminated due to surface/bottom backscatter based on the 
     side lobe beam angle. This function can correct the orientation of the beam 
@@ -71,10 +87,15 @@ def side_lobe_beam_angle(ds, mask, orientation='default', water_column_depth=0, 
 
     Parameters
     ----------
-    ds : pyadps.dataset
+    ds : pyadps.dataset or np.ndarray
         The pyadps dataframe is loaded to obtain the data from the fixed and variable leader.
         This includes the depth of the transducer and other relevant information 
         for trimming the data.
+
+        If numpy.ndarray is loaded, the value should contain the transducer_depth.
+        In such cases provide cells, cell_size, and bin 1 distance.
+        Orientiation should be either 'up' or 'down' and not 'default'.
+
     mask : numpy.ndarray
         A mask array where invalid or false data points are marked. The mask is updated 
         based on the calculated side lobe beam angles.
@@ -87,6 +108,12 @@ def side_lobe_beam_angle(ds, mask, orientation='default', water_column_depth=0, 
         calculations. Default is 0.
     extra_cells : int, optional
         The number of extra cells to consider when calculating the beam angle. Default is 2.
+    cells: int, optional
+        Number of cells
+    cell_size: int, optional
+        Cell size or depth cell length in cm
+    beam_angle: int, optional
+        Beam angle in degrees
 
     Returns
     -------
@@ -110,30 +137,41 @@ def side_lobe_beam_angle(ds, mask, orientation='default', water_column_depth=0, 
     >>> import pyadps
     >>> ds = pyadps.ReadFile("demo.000")
     >>> mask = pyadps.default_mask(ds)
-    >>> updated_mask = side_lobe_beam_angle(ds, mask, orientation='downward', water_column_depth=50, extra_cells=3)
+    >>> updated_mask = side_lobe_beam_angle(ds, mask, orientation='down', water_column_depth=50, extra_cells=3)
+
+    >>> transducer_depth = ds.variableleader.transducer_depth
+    >>> cells = ds.fixedleader.cells
+    >>> cell_size = ds.fixedleader.depth_cell_length
+    >>> new_mask = side_lobe_beam_angle(transducer_depth, orientation='up', cells=cells, cell_size=cell_size, bin1dist=bindist) 
     """
-
-    flobj = ds.fixedleader
-    vlobj = ds.variableleader
-    beam_angle = int(flobj.system_configuration()["Beam Angle"])
-    cell_size = flobj.field()["Depth Cell Len"]
-    bin1dist = flobj.field()["Bin 1 Dist"]
-    cells = flobj.field()["Cells"]
-    ensembles = flobj.ensembles
-    transducer_depth = vlobj.vleader["Depth of Transducer"]
-
-    if orientation.lower() == "default":
-        orientation = flobj.system_configuration()['Beam Direction']
+    if isinstance(ds, ReadFile) or ds.__class__.__name__ == "ReadFile":
+        flobj = ds.fixedleader
+        vlobj = ds.variableleader
+        beam_angle = int(flobj.system_configuration()["Beam Angle"])
+        cell_size = flobj.field()["Depth Cell Len"]
+        bin1dist = flobj.field()["Bin 1 Dist"]
+        cells = flobj.field()["Cells"]
+        ensembles = flobj.ensembles
+        transducer_depth = vlobj.vleader["Depth of Transducer"]
+        if orientation.lower() == "default":
+            orientation = flobj.system_configuration()['Beam Direction']
+    elif isinstance(ds, np.ndarray) and np.squeeze(ds).ndim == 1:
+        transducer_depth = ds
+        ensembles = np.size(ds)
+    else:
+        raise ValueError("Input must be a 1-D numpy array or a PyADPS instance")
 
     if orientation.lower() == "up":
         sgn = -1
         water_column_depth = 0
-    else:
+    elif orientation.lower() == "down":
         sgn = 1
+    else:
+        raise ValueError("Orientation should be either `up` or `down`")
 
     beam_angle = np.deg2rad(beam_angle)
     depth = transducer_depth / 10
-    valid_depth = (water_column_depth - sgn*depth) * np.cos(beam_angle) + sgn*bin1dist / 100
+    valid_depth = (water_column_depth - sgn*depth) * np.cos(beam_angle) + sgn * bin1dist / 100
     valid_cells = np.trunc(valid_depth * 100 / cell_size) - extra_cells
 
     for i in range(ensembles):
@@ -183,16 +221,24 @@ def regrid2d(
     method="nearest",
     orientation="default",
     boundary_limit=0,
+    cells=None,
+    cell_size=None,
+    bin1dist=None
 ):
     """
     Regrids 2D data onto a new grid based on specified parameters.
 
     Parameters:
     -----------
-    ds : pyadps.dataset
-        The pyadps dataframe is loaded to obtain the data from the fixed and variable leader.
-        This includes the depth of the transducer and other relevant information 
+    ds : pyadps.dataset or numpy.ndarray
+        If pyadps dataframe is loaded, the data from the fixed and variable leader
+        is automatically obtained. This includes the depth of the transducer and other relevant information 
         for trimming the data.
+
+        If numpy.ndarray is loaded, the value should contain the transducer_depth.
+        In such cases provide cells, cell_size, and bin 1 distance.
+        Orientiation should be either 'up' or 'down' and not 'default'.
+
         
     data : array-like
         The 2D data array to be regridded.
@@ -232,6 +278,16 @@ def regrid2d(
     boundary_limit : float, optional, default=0
         The limit for the boundary depth. This restricts the grid regridding to depths beyond the specified limit.
         
+    cells: int, optional
+        Number of cells
+        
+    cell_size: int, optional
+        Cell size or depth cell length in cm
+        
+    bin1dist: int, optional
+        Distance from the first bin in cm
+        
+
     Returns:
     --------
     z: regridded depth
@@ -246,27 +302,49 @@ def regrid2d(
     - The `boundary_limit` parameter helps restrict regridding to depths above or below a certain threshold.
     """
    
-    flobj = ds.fixedleader
-    vlobj = ds.variableleader
-    # Get values and convert to 'm'
-    bin1dist = flobj.field()["Bin 1 Dist"] / 100
-    transdepth = vlobj.vleader["Depth of Transducer"] / 10
-    depth_interval = flobj.field()["Depth Cell Len"] / 100
-    bins = flobj.field()["Cells"]
-    ensembles = flobj.ensembles
+    if isinstance(ds, ReadFile) or ds.__class__.__name__ == "ReadFile":
+        flobj = ds.fixedleader
+        vlobj = ds.variableleader
+        # Get values and convert to 'm'
+        bin1dist = flobj.field()["Bin 1 Dist"] / 100
+        transdepth = vlobj.vleader["Depth of Transducer"] / 10
+        cell_size = flobj.field()["Depth Cell Len"] / 100
+        cells = flobj.field()["Cells"]
+        ensembles = flobj.ensembles
+        if orientation.lower() == "default":
+            orientation = flobj.system_configuration()['Beam Direction']
 
-    if orientation.lower() == "default":
-        orientation = flobj.system_configuration()['Beam Direction']
+    elif isinstance(ds, np.ndarray) and np.squeeze(ds).ndim == 1:
+        transdepth = ds/10
+        ensembles = np.size(ds)
+
+        if cells is None:
+            raise ValueError("Input must include number of cells.")
+
+        if cell_size is None:
+            raise ValueError("Input must include cell size.")
+        else:
+            cell_size = cell_size/100
+
+        if bin1dist is None:
+            raise ValueError("Input must include bin 1 distance.")
+        else:
+            bin1dist = bin1dist/100
+
+        if orientation.lower() != "up" and orientation.lower() != "down":
+            raise ValueError("Orientation must be `up` or `down`.")
+    else:
+        raise ValueError("Input must be a 1-D numpy array or a PyADPS instance")
 
     if orientation.lower() == "up":
-        sgn = -1 
+        sgn = -1
     else:
         sgn = 1
 
     # Create a regular grid
 
     # Find depth of first cell
-    depth = transdepth + sgn*bin1dist
+    depth = transdepth + sgn * bin1dist
 
     # Find the maximum and minimum depth for first cell for upward 
     # looking ADCP (minimum and maximum for downward looking)
@@ -279,19 +357,19 @@ def regrid2d(
 
     # FIRST CELL
     # Convert the first cell depth to the first regular grid depth 
-    depthfirstcell = max_depth - max_depth % depth_interval
+    depthfirstcell = max_depth - max_depth % cell_size
 
     # LAST CELL
     # Convert the last cell depth to last regular grid depth 
     if end_bin_option.lower() == "surface":
         # Added one additional negative cell to accomodate 0 m.
-        depthlastcell = sgn * depth_interval
+        depthlastcell = sgn * cell_size
     elif end_bin_option.lower() == "cell":
-        min_depth_regrid = min_depth - sgn*min_depth % depth_interval
-        depthlastcell = min_depth_regrid  + sgn* (bins+1) * depth_interval
+        min_depth_regrid = min_depth - sgn*min_depth % cell_size
+        depthlastcell = min_depth_regrid  + sgn* (cells+1) * cell_size
         # Check if this is required. Use 'surface' option
         if depthlastcell < 0:
-            depthlastcell = sgn*depth_interval 
+            depthlastcell = sgn*cell_size 
     elif end_bin_option.lower() == "manual":
         if sgn < 0 and boundary_limit > depthfirstcell:
             print("ERROR: For upward looking ADCP, boundary limit should be less than transducer depth")
@@ -306,19 +384,20 @@ def regrid2d(
         return
   
     # Negative used for upward and positive for downward.
-    z = np.arange(sgn * depthfirstcell, sgn * depthlastcell, depth_interval)
+    print(depthfirstcell, depthlastcell, cell_size, sgn)
+    z = np.arange(sgn * depthfirstcell, sgn * depthlastcell, cell_size)
     regbins = len(z)
 
     regridded_data = np.zeros((regbins, ensembles))
 
     # Create original depth array
     for i, d in enumerate(depth):
-        n = d + sgn*depth_interval * bins
+        n = d + sgn*cell_size * cells
         # np.arange may include unexpected elements due to floating-point 
         # precision issues at the stopping point. Changed to np.linspace.
         #
-        # depth_bins = np.arange(sgn*d, sgn*n, depth_interval)
-        depth_bins = np.linspace(sgn*d, sgn*n, bins)
+        # depth_bins = np.arange(sgn*d, sgn*n, cell_size)
+        depth_bins = np.linspace(sgn*d, sgn*n, cells)
         f = sp.interpolate.interp1d(
             depth_bins,
             data[:, i],
@@ -342,6 +421,10 @@ def regrid3d(
     method="nearest",
     orientation="up",
     boundary_limit=0,
+    cells=None,
+    cell_size=None,
+    bin1dist=None,
+    beams=None
 ):
     """
     Regrids 3D data onto a new grid based on specified parameters.
@@ -392,6 +475,20 @@ def regrid3d(
     boundary_limit : float, optional, default=0
         The limit for the boundary depth. This restricts the grid regridding to depths beyond the specified limit.
         
+    cells: int, optional
+        Number of cells
+        
+    cell_size: int, optional
+        Cell size or depth cell length in cm
+        
+    bin1dist: int, optional
+        Distance from the first bin in cm
+        
+    beams: int, optional
+        Number of beams
+
+        
+
     Returns:
     --------
     z : array-like
@@ -408,8 +505,15 @@ def regrid3d(
     - This function is an extension of 2D regridding to handle the time dimension or other additional axes in the data.
     """
 
-    flobj = ds.fixedleader
-    beams = flobj.field()["Beams"]
+    if isinstance(ds, ReadFile):
+        flobj = ds.fixedleader
+        beams = flobj.field()["Beams"]
+    elif isinstance(ds, np.ndarray) and ds.ndim == 1:
+        if beams is None:
+            raise ValueError("Input must include number of beams.")
+    else:
+        raise ValueError("Input must be a 1-D numpy array or a PyADPS instance")
+
     z, data_dummy = regrid2d(
         ds,
         data[0, :, :],
@@ -419,6 +523,9 @@ def regrid3d(
         method=method,
         orientation=orientation,
         boundary_limit=boundary_limit,
+        cells=cells,
+        cell_size=cell_size,
+        bin1dist=bin1dist
     )
 
     newshape = np.shape(data_dummy)
@@ -435,6 +542,9 @@ def regrid3d(
             method=method,
             orientation=orientation,
             boundary_limit=boundary_limit,
+            cells=cells,
+            cell_size=cell_size,
+            bin1dist=bin1dist
         )
         regridded_data[i + 1, :, :] = data_dummy
 

@@ -1,5 +1,6 @@
 import numpy as np
 from pyadps.utils.plotgen import PlotNoise
+from pyadps.utils.readrdi import ReadFile
 
 
 def qc_check(var, mask, cutoff=0):
@@ -316,8 +317,9 @@ def default_mask(ds):
 
     Parameters
     ----------
-    ds : pyadps.dataset
+    ds : pyadps.dataset or numpy.ndarray
          A pyadps data frame is used to extract velocity and dimensions for the mask.
+         If numpy.ndarray, enter the values for beams, cells and ensembles.
 
     Returns
     -------
@@ -336,13 +338,20 @@ def default_mask(ds):
     >>> ds = pyadps.ReadFile('demo.000')
     >>> mask = pyadps.default_mask(ds)
     """
+    if isinstance(ds, ReadFile) or ds.__class__.__name__ == "ReadFile":
+        flobj = ds.fixedleader
+        velocity = ds.velocity.data
+        cells = flobj.field()["Cells"]
+        beams = flobj.field()["Beams"]
+        ensembles = flobj.ensembles
+    elif isinstance(ds, np.ndarray) and ds.ndim == 3:
+        velocity = ds
+        beams = ds.shape[0]
+        cells = ds.shape[1]
+        ensembles = ds.shape[2] 
+    else:
+        raise ValueError("Input must be a 3-D numpy array or a PyADPS instance")
 
-    flobj = ds.fixedleader
-    velocity = ds.velocity.data
-
-    cells = flobj.field()["Cells"]
-    beams = flobj.field()["Beams"]
-    ensembles = flobj.ensembles
     mask = np.zeros((cells, ensembles))
     # Ignore mask for error velocity
     for i in range(beams - 1):
@@ -387,7 +396,7 @@ def qc_prompt(ds, name, data=None):
     Example
     -------
     >>> import pyadps
-    >>> ds = ds.ReadFile('demo.000')
+    >>> ds = pyadps.ReadFile('demo.000')
     >>> name = "Echo Intensity Thresh"
     >>> threshold = qc_prompt(ds, name, data)
     The default threshold for echo intensity thresh is 0

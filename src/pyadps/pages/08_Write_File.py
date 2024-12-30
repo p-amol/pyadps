@@ -57,7 +57,7 @@ else:
         st.session_state.final_pgood = st.session_state.pgood
 
 
-if "depth" not in st.session_state:
+if "depth_axis" not in st.session_state:
     st.session_state.isGrid = False
 
 
@@ -74,7 +74,8 @@ if not st.session_state.isGrid:
     st.write(
         "Data not regrided. Using the mean transducer depth to calculate the depth axis."
     )
-    mean_depth = np.mean(st.session_state.vlead.vleader["Depth of Transducer"]) / 10
+    # mean_depth = np.mean(st.session_state.vlead.vleader["Depth of Transducer"]) / 10
+    mean_depth = np.mean(st.session_state.depth)/10
     mean_depth = np.trunc(mean_depth)
     st.write(f"Mean depth of the transducer is `{mean_depth}`")
     cells = st.session_state.flead.field()["Cells"]
@@ -83,9 +84,9 @@ if not st.session_state.isGrid:
     max_depth = mean_depth - bin1dist
     min_depth = max_depth - cells * cell_size
     z = np.arange(-1 * max_depth, -1 * min_depth, cell_size)
-    st.session_state.final_depth = z
+    st.session_state.final_depth_axis = z
 else:
-    st.session_state.final_depth = st.session_state.depth
+    st.session_state.final_depth_axis = st.session_state.depth_axis
 
 
 # Functions for plotting
@@ -121,7 +122,7 @@ def call_plot(varname, beam, mask=False):
     if varname == "Velocity":
         fillplot_plotly(
             st.session_state.date,
-            st.session_state.final_depth,
+            st.session_state.final_depth_axis,
             st.session_state.final_velocity[beam - 1, :, :],
             st.session_state.final_mask,
             title=varname,
@@ -130,7 +131,7 @@ def call_plot(varname, beam, mask=False):
     elif varname == "Echo":
         fillplot_plotly(
             st.session_state.date,
-            st.session_state.final_depth,
+            st.session_state.final_depth_axis,
             st.session_state.final_echo[beam - 1, :, :],
             st.session_state.final_mask,
             title=varname,
@@ -139,7 +140,7 @@ def call_plot(varname, beam, mask=False):
     elif varname == "Correlation":
         fillplot_plotly(
             st.session_state.date,
-            st.session_state.final_depth,
+            st.session_state.final_depth_axis,
             st.session_state.final_correlation[beam - 1, :, :],
             st.session_state.final_mask,
             title=varname,
@@ -148,7 +149,7 @@ def call_plot(varname, beam, mask=False):
     elif varname == "Percent Good":
         fillplot_plotly(
             st.session_state.date,
-            st.session_state.final_depth,
+            st.session_state.final_depth_axis,
             st.session_state.final_pgood[beam - 1, :, :],
             st.session_state.final_mask,
             title=varname,
@@ -238,7 +239,7 @@ if download_button:
     st.session_state.processed_filename = file_write()
     st.write(":grey[Processed file created. Click the download button.]")
 #    st.write(st.session_state.processed_filename)
-    depth = np.trunc(st.session_state.final_depth)
+    depth_axis = np.trunc(st.session_state.final_depth_axis)
     final_mask = st.session_state.final_mask
 
     if file_type_radio == "NetCDF":
@@ -246,7 +247,7 @@ if download_button:
             # Generate file with attributes
             wr.finalnc(
                 st.session_state.processed_filename,
-                depth,
+                depth_axis,
                 final_mask,
                 st.session_state.date,
                 st.session_state.write_velocity,
@@ -256,7 +257,7 @@ if download_button:
             # Generate file without attributes
             wr.finalnc(
                 st.session_state.processed_filename,
-                depth,
+                depth_axis,
                 final_mask,
                 st.session_state.date,
                 st.session_state.write_velocity,
@@ -273,17 +274,17 @@ if download_button:
         udf = pd.DataFrame(
             st.session_state.write_velocity[0, :, :].T,
             index=st.session_state.date,
-            columns=-1 * depth,
+            columns=-1 * depth_axis,
         )
         vdf = pd.DataFrame(
             st.session_state.write_velocity[1, :, :].T,
             index=st.session_state.date,
-            columns=-1 * depth,
+            columns=-1 * depth_axis,
         )
         wdf = pd.DataFrame(
             st.session_state.write_velocity[2, :, :].T,
             index=st.session_state.date,
-            columns=-1 * depth,
+            columns=-1 * depth_axis,
         )
         ucsv = udf.to_csv().encode("utf-8")
         vcsv = vdf.to_csv().encode("utf-8")

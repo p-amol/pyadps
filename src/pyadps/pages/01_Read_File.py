@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 import utils.readrdi as rd
 from utils.signal_quality import default_mask
+from utils.readrdi import ReadFile
 
 # To make the page wider if the user presses the reload button.
 st.set_page_config(layout="wide")
@@ -123,6 +124,12 @@ if uploaded_file is not None:
     st.session_state.correlation = ds.correlation.data
     st.session_state.pgood = ds.percentgood.data
     st.session_state.beam_direction = beamdir
+    st.session_state.depth = ds.variableleader.depth_of_transducer.data
+    st.session_state.isDepthModified = False
+    st.session_state.temperature = ds.variableleader.temperature
+    st.session_state.isTemperatureModified = False
+    st.session_state.salt = ds.variableleader.salinity
+    st.session_state.isSalinityModified = False
 
     # st.session_state.flead = flead
     # st.session_state.vlead = vlead
@@ -173,6 +180,7 @@ date_df = pd.DataFrame(
 st.session_state.date = pd.to_datetime(date_df)
 st.session_state.date1 = pd.to_datetime(date_df)
 st.session_state.date2 = pd.to_datetime(date_df)
+st.session_state.ensemble_axis = np.arange(0, st.session_state.head.ensembles, 1)
 
 
 
@@ -185,7 +193,8 @@ st.session_state.date2 = pd.to_datetime(date_df)
 # WARNING: Never Change `st.session_state.orig_mask` in the code!
 #
 if "orig_mask" not in st.session_state:
-    st.session_state.orig_mask = default_mask(st.session_state.ds)
+    ds = st.session_state.ds
+    st.session_state.orig_mask = default_mask(ds)
 
 # Checks if the following quality checks are carried out
 st.session_state.isQCMask = False

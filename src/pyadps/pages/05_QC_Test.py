@@ -58,6 +58,35 @@ def fillplot_plotly(data, colorscale="balance"):
     )
     st.plotly_chart(fig)
 
+@st.cache_data
+def lineplot(data, title, slope=None, xaxis="time"):
+    if xaxis == "time":
+        xdata = st.session_state.date
+    else:
+        xdata = st.session_state.ensemble_axis
+    scatter_trace = go.Scatter(
+                                x=xdata,
+                                y=data,
+                                mode='markers',
+                                name=title,
+                                marker=dict(color='blue', size=10)  # Customize marker color and size
+                                )
+    # Create the slope line trace
+    if slope is not None:
+        line_trace = go.Scatter(
+                                x=xdata,
+                                y=slope,
+                                mode='lines',
+                                name='Slope Line',
+                                line=dict(color='red', width=2, dash='dash')  # Dashed red line
+                                )
+        fig = go.Figure(data=[scatter_trace, line_trace])
+    else:
+        fig = go.Figure(data=[scatter_trace])
+
+
+    st.plotly_chart(fig)
+
 
 @st.cache_data
 def plot_noise(dep=0, rec=-1):
@@ -273,15 +302,7 @@ If thresholds are not saved, default mask file is used.
 # values, counts = np.unique(mask, return_counts=True)
     fillplot_plotly(st.session_state.mask, colorscale="greys")
 
-############## SENSOR HEALTH ######################
-st.header("Sensor Health", divider="blue")
-st.write("The following details can be used to determine whether the additional sensors are functioning properly.")
-# ################## Pressure Sensor Check ###################
-# st.subheader("Pressure Sensor Check", divider="orange")
-#
-# st.subheader("Temperature Sensor Check", divider="orange")
-#
-# st.subheader("Tilt Sensor Check", divider="orange")
+
 ################## Fix Orientation ###################
 st.subheader("Fix Orientation", divider="orange")
 

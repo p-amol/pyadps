@@ -50,7 +50,7 @@ else:
     st.write(":orange[Creating a new mask file ...]")
 
 # Creating a local copy of the mask.
-mask = np.copy(st.session_state.maskp) 
+mask = np.copy(st.session_state.maskp)
 
 # Load data
 ds = st.session_state.ds
@@ -63,9 +63,14 @@ pgood = st.session_state.pgood
 fdata = flobj.fleader
 vdata = vlobj.vleader
 
-# Settingup parameters for plotting graphs.
+# Setting up parameters for plotting graphs.
 ensembles = st.session_state.head.ensembles
 cells = flobj.field()["Cells"]
+beams = flobj.field()["Beams"]
+cell_size = flobj.field()["Depth Cell Len"]
+bin1dist = flobj.field()["Bin 1 Dist"]
+beam_angle = int(flobj.system_configuration()["Beam Angle"])
+
 x = np.arange(0, ensembles, 1)
 y = np.arange(0, cells, 1)
 
@@ -103,7 +108,7 @@ def fillplot_plotly(
                 colorscale="gray",
                 hoverongaps=False,
                 showscale=False,
-                opacity=0.4,
+                opacity=0.7,
             )
         )
     fig.update_layout(
@@ -304,10 +309,22 @@ with tab2:
     with left2:
         if cut_bins_mask:
             st.session_state.extra_cells = extra_cells
-            st.session_state.mask_temp = side_lobe_beam_angle(ds, mask,
-                                        orientation=orientation,
-                                        water_column_depth=water_column_depth,
-                                        extra_cells=extra_cells)
+            if st.session_state.isDepthModified:
+                transdepth = st.session_state.depth
+                st.session_state.mask_temp = side_lobe_beam_angle(transdepth, mask,
+                                            orientation=orientation,
+                                            water_column_depth=water_column_depth,
+                                            extra_cells=extra_cells,
+                                            cells=cells,
+                                            cell_size=cell_size,
+                                            bin1dist=bin1dist,
+                                            beam_angle=beam_angle
+                                                                )
+            else:
+                st.session_state.mask_temp = side_lobe_beam_angle(ds, mask,
+                                            orientation=orientation,
+                                            water_column_depth=water_column_depth,
+                                            extra_cells=extra_cells)
             fillplot_plotly(
                 echo[beam, :, :],
                 title="Echo Intensity (Masked)",
@@ -499,56 +516,77 @@ with tab4:
 
         regrid_button = st.button(label="Regrid Data")
         if regrid_button:
-            print(type(ds), ds)
-            # st.write(st.session_state.endpoints)
+            transdepth = st.session_state.depth
             z, st.session_state.velocity_regrid = regrid3d(
-                ds, velocity, -32768, 
+                transdepth, velocity, -32768, 
                 trimends=st.session_state.endpoints, 
                 end_bin_option=st.session_state.end_bin_option, 
                 orientation=st.session_state.beam_direction,
                 method=interpolate,
-                boundary_limit=boundary
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+                beams=beams
             )
             st.write(":grey[Regrided velocity ...]")
             z, st.session_state.echo_regrid = regrid3d(
-                ds, echo, -32768, 
+                transdepth, echo, -32768, 
                 trimends=st.session_state.endpoints, 
                 end_bin_option=st.session_state.end_bin_option, 
                 orientation=st.session_state.beam_direction,
                 method=interpolate,
-                boundary_limit=boundary
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+                beams=beams
             )
             st.write(":grey[Regrided echo intensity ...]")
             z, st.session_state.correlation_regrid = regrid3d(
-                ds, correlation, -32768,
+                transdepth, correlation, -32768, 
                 trimends=st.session_state.endpoints, 
                 end_bin_option=st.session_state.end_bin_option, 
                 orientation=st.session_state.beam_direction,
                 method=interpolate,
-                boundary_limit=boundary
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+                beams=beams
             )
             st.write(":grey[Regrided correlation...]")
             z, st.session_state.pgood_regrid = regrid3d(
-                ds, pgood, -32768,
+                transdepth, pgood, -32768, 
                 trimends=st.session_state.endpoints, 
                 end_bin_option=st.session_state.end_bin_option, 
                 orientation=st.session_state.beam_direction,
                 method=interpolate,
-                boundary_limit=boundary
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+                beams=beams
             )
             st.write(":grey[Regrided percent good...]")
+
             z, st.session_state.mask_regrid = regrid2d(
-                ds, mask, 1,
+                transdepth, mask, 1,
                 trimends=st.session_state.endpoints, 
                 end_bin_option=st.session_state.end_bin_option, 
                 orientation=st.session_state.beam_direction,
                 method="nearest",
-                boundary_limit=boundary
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist
             )
 
-            st.session_state.depth = z
-
             st.write(":grey[Regrided mask...]")
+
+            st.session_state.depth_axis = z
+            st.write(":grey[New depth axis created...]")
+
             st.write(":green[All data regrided!]")
 
             st.write("No. of grid depth bins before regridding: ", np.shape(velocity)[1])

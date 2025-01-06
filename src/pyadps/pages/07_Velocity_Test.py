@@ -8,7 +8,7 @@ from plotly_resampler import FigureResampler
 from streamlit.runtime.state import session_state
 from utils.profile_test import side_lobe_beam_angle
 from utils.signal_quality import default_mask
-from utils.velocity_test import (despike, flatline, #magnetic_declination,
+from utils.velocity_test import (despike, flatline, magdec, #magnetic_declination,
                                  velocity_cutoff, wmm2020api, velocity_modifier)
 
 if "flead" not in st.session_state:
@@ -100,309 +100,337 @@ The processing in this page apply only to the velocity data.
 """
 )
 
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Magnetic Declination","Velocity Cutoffs","Despike Data","Remove Flatline","Save & Reset Data"])
+
 ############ Magnetic Declination ##############
-#  Commenting the wmm2020 c based model if needed can be implemented.
+with tab1:
+    #  Commenting the wmm2020 c based model if needed can be implemented.
 
-# * The magnetic declination is obtained from World Magnetic Model 2020 (WMM2020).
-# The python wrapper module `wmm2020` is available from this [Link](https://github.com/space-physics/wmm2020). 
+    # * The magnetic declination is obtained from World Magnetic Model 2020 (WMM2020).
+    # The python wrapper module `wmm2020` is available from this [Link](https://github.com/space-physics/wmm2020). 
 
-st.header("Magnetic Declination", divider="blue")
-st.write(
+    st.header("Magnetic Declination", divider="blue")
+    st.write(
+        """
+    * The pygeomag method uses a python library [pygeomag](https://github.com/boxpet/pygeomag.git) for calculating the magnetic declination.
+        * It can work from 2010 till date.
+    * The API method utilizes the online magnetic declination service provided by the National Geophysical Data Center (NGDC)
+    of the National Oceanic and Atmospheric Administration (NOAA) to calculate the magnetic declination. The service is available at this [link](https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml#declination).
+    Internet connection is necessary for this method to work.
+
+    * According to the year, different models are used for calculating magnetic declination.
+        * From 2025 till date, WMM2025 (World Magnetic Model) 
+        * From 2019 to 2024 IGRF (International Geomagnetic Reference Field)
+        * From 2000 to 2018 EMM (Enhanced Magnetic Model)
+        * Before 1999 IGRF
+
+    * In the manual method, the user can directly enter the magnetic declination.
+
+    If the magnetic declination is reset, re-run the remaining tests again.
     """
+    )
 
-* The API method utilizes the online magnetic declination service provided by the National Geophysical Data Center (NGDC)
-of the National Oceanic and Atmospheric Administration (NOAA) to calculate the magnetic declination. The service is available at this [link](https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml#declination).
-Internet connection is necessary for this method to work.
+    # Selecting the method to calculate magnetic declination.
+    # method = st.radio("Select a method", ("WMM2020", "API", "Manual"), horizontal=True)
+    method = st.radio("Select a method", ("pygeomag", "API", "Manual"), horizontal=True)
+    # method = method - 1
+    st.session_state.method = method
 
-* According to the year, different models are used for calculating magnetic declination.
-    * From 2019 till date, WMM2020 (World Magnetic Model) 
-    * From 2000 to 2018 EMM (Enhanced Magnetic Model)
-    * Before 1999 IGRF (International Geomagnetic Reference Field)
+    if "isMagnetButton" not in st.session_state:
+        st.session_state.isMagnetButton = False
 
-* In the manual method, the user can directly enter the magnetic declination.
-
-If the magnetic declination is reset, re-run the remaining tests again.
-"""
-)
-
-# Selecting the method to calculate magnetic declination.
-# method = st.radio("Select a method", ("WMM2020", "API", "Manual"), horizontal=True)
-method = st.radio("Select a method", ("API", "Manual"), horizontal=True)
-# method = method - 1
-st.session_state.method = method
-
-if "isMagnetButton" not in st.session_state:
-    st.session_state.isMagnetButton = False
-
-# Track button clicks
-if "isButtonClicked" not in st.session_state:
-    st.session_state.isButtonClicked = False
+    # Track button clicks
+    if "isButtonClicked" not in st.session_state:
+        st.session_state.isButtonClicked = False
 
 
-def toggle_btns():
-    st.session_state.isMagnetButton = not st.session_state.isMagnetButton
-    st.session_state.isButtonClicked = not st.session_state.isButtonClicked
+    def toggle_btns():
+        st.session_state.isMagnetButton = not st.session_state.isMagnetButton
+        st.session_state.isButtonClicked = not st.session_state.isButtonClicked
 
 
-with st.form(key="magnet_form"):
-    # if st.session_state.method == "WMM2020":
-    #     st.session_state.isMagnet = False
-    #     lat = st.number_input("Latitude", -90.0, 90.0, 0.0, step=1.0)
-    #     lon = st.number_input("Longitude", 0.0, 360.0, 0.1, step=1.0, format="%.4f")
-    #     depth = st.number_input("Depth", 0, 1000, 0, step=1)
-    #     year = st.number_input("Year", 1950, 2100, 2024, 1)
-    if  st.session_state.method == "API":
-        st.session_state.isMagnet = False
-        lat = st.number_input("Latitude", -90.0, 90.0, 0.0, step=1.0)
-        lon = st.number_input("Longitude", 0.0, 360.0, 0.1, step=1.0, format="%.4f")
-        year = st.number_input("Year", 1950, 2024, 2024, 1)
-    else:
-        st.session_state.isMagnet = False
-        mag = [[st.number_input("Declination", -180.0, 180.0, 0.0, 0.1)]]
-    
-    if st.session_state.method == "Manual":
-        button_name = "Accept"
-    else:
-        button_name = "Compute"
-
-    if st.form_submit_button(
-        button_name, on_click=toggle_btns, disabled=st.session_state.isMagnetButton
-    ):
+    with st.form(key="magnet_form"):
         # if st.session_state.method == "WMM2020":
-        #     try:
-        #         mag = magnetic_declination(lat, lon, depth, year)
-        #         st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
-        #         st.session_state.lat = lat
-        #         st.session_state.lon = lon
-        #         st.session_state.magnetic_dec_depth = depth
-        #         st.session_state.year = year
-        #         st.session_state.angle = np.trunc(mag[0][0])
-        #         st.session_state.isMagnet = True
-        #         st.session_state.isButtonClicked = True
-        #     except:
-        #         st.write(":red[Process failed! please use other methods: API or  Manual]")
+        #     st.session_state.isMagnet = False
+        #     lat = st.number_input("Latitude", -90.0, 90.0, 0.0, step=1.0)
+        #     lon = st.number_input("Longitude", 0.0, 360.0, 0.1, step=1.0, format="%.4f")
+        #     depth = st.number_input("Depth", 0, 1000, 0, step=1)
+        #     year = st.number_input("Year", 1950, 2100, 2024, 1)
 
-        if  st.session_state.method == "API":
-            try:
-                mag = wmm2020api(lat, lon, year)
+        if  st.session_state.method == "pygeomag":
+            # st.session_state.isMagnet = False
+            lat = st.number_input("Latitude", -90.0, 90.0, 0.0, step=1.0)
+            lon = st.number_input("Longitude", 0.0, 360.0, 0.1, step=1.0, format="%.4f")
+            depth = st.number_input("Depth", 0, 1000, 0, step=1)
+            year = st.number_input("Year", 2010, 2030, 2025, 1)
+
+        elif  st.session_state.method == "API":
+            # st.session_state.isMagnet = False
+            lat = st.number_input("Latitude", -90.0, 90.0, 0.0, step=1.0)
+            lon = st.number_input("Longitude", 0.0, 360.0, 0.1, step=1.0, format="%.4f")
+            year = st.number_input("Year", 1950, 2030, 2025, 1)
+        else:
+            # st.session_state.isMagnet = False
+            mag = [[st.number_input("Declination", -180.0, 180.0, 0.0, 0.1)]]
+        
+        if st.session_state.method == "Manual":
+            button_name = "Accept"
+        else:
+            button_name = "Compute"
+
+        if st.form_submit_button(
+            button_name, on_click=toggle_btns, disabled=st.session_state.isMagnetButton
+        ):
+            # if st.session_state.method == "WMM2020":
+            #     try:
+            #         mag = magnetic_declination(lat, lon, depth, year)
+            #         st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
+            #         st.session_state.lat = lat
+            #         st.session_state.lon = lon
+            #         st.session_state.magnetic_dec_depth = depth
+            #         st.session_state.year = year
+            #         st.session_state.angle = np.trunc(mag[0][0])
+            #         st.session_state.isMagnet = True
+            #         st.session_state.isButtonClicked = True
+            #     except:
+            #         st.write(":red[Process failed! please use other methods: API or  Manual]")
+
+            if st.session_state.method == "pygeomag":
+                mag = magdec(lat, lon, depth, year)
                 st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
                 st.session_state.lat = lat
                 st.session_state.lon = lon
                 st.session_state.year = year
-                # st.session_state.angle = np.trunc(mag[0][0])
+                st.session_state.magnetic_dec_depth = depth
                 st.session_state.angle = np.round(mag[0][0], decimals=3 )
                 st.session_state.isMagnet = True
                 st.session_state.isButtonClicked = True
-            except:
-                st.write(":red[Connection error! please check the internet or use manual method]")
+            if  st.session_state.method == "API":
+                try:
+                    mag = wmm2020api(lat, lon, year)
+                    st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
+                    st.session_state.lat = lat
+                    st.session_state.lon = lon
+                    st.session_state.year = year
+                    # st.session_state.angle = np.trunc(mag[0][0])
+                    st.session_state.angle = np.round(mag[0][0], decimals=3 )
+                    st.session_state.isMagnet = True
+                    st.session_state.isButtonClicked = True
+                except:
+                    st.write(":red[Connection error! please check the internet or use manual method]")
 
-        else:
-            st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
-            st.session_state.angle = np.round(mag[0][0], decimals=3 )
-            st.session_state.isMagnet = True
-            st.session_state.isButtonClicked = True
+            else:
+                st.session_state.dummyvelocity = velocity_modifier(velocity, mag)
+                st.session_state.angle = np.round(mag[0][0], decimals=3 )
+                st.session_state.isMagnet = True
+                st.session_state.isButtonClicked = True
 
 
-if st.session_state.isMagnet:
-    st.write(f"Magnetic declination: {st.session_state.angle}\u00b0")
-    st.write(":green[Magnetic declination correction applied to velocities]")
+    if st.session_state.isMagnet:
+        st.write(f"Magnetic declination: {st.session_state.angle}\u00b0")
+        st.write(":green[Magnetic declination correction applied to velocities]")
 
-if st.button(
-    "Reset Magnetic Declination",
-    on_click=toggle_btns,
-    disabled=not st.session_state.isMagnetButton,
-):
-    st.session_state.dummyvelocity = np.copy(velocity)
-    st.session_state.isMagnet = False
-    st.session_state.isButtonClicked = False 
+    if st.button(
+        "Reset Magnetic Declination",
+        on_click=toggle_btns,
+        disabled=not st.session_state.isMagnetButton,
+    ):
+        st.session_state.dummyvelocity = np.copy(velocity)
+        st.session_state.isMagnet = False
+        st.session_state.isButtonClicked = False 
 
 ############# Velocity Cutoffs #################
-st.header("Velocity Cutoffs", divider="blue")
-st.write(
+with tab2:
+    st.header("Velocity Cutoffs", divider="blue")
+    st.write(
+        """
+    Drop velocities whose magnitude is larger than the threshold.
     """
-Drop velocities whose magnitude is larger than the threshold.
-"""
-)
-with st.form(key="cutbin_form"):
-    maxuvel = st.number_input("Maximum Zonal Velocity Cutoff (cm/s)", 0, 2000, 250, 1)
-    maxvvel = st.number_input(
-        "Maximum Meridional Velocity Cutoff (cm/s)", 0, 2000, 250, 1
     )
-    maxwvel = st.number_input("Maximum Vertical Velocity Cutoff (cm/s)", 0, 2000, 15, 1)
-    submit_cutoff = st.form_submit_button(label="Submit")
+    with st.form(key="cutbin_form"):
+        maxuvel = st.number_input("Maximum Zonal Velocity Cutoff (cm/s)", 0, 2000, 250, 1)
+        maxvvel = st.number_input(
+            "Maximum Meridional Velocity Cutoff (cm/s)", 0, 2000, 250, 1
+        )
+        maxwvel = st.number_input("Maximum Vertical Velocity Cutoff (cm/s)", 0, 2000, 15, 1)
+        submit_cutoff = st.form_submit_button(label="Submit")
 
-if submit_cutoff:
+    if submit_cutoff:
 
-    st.session_state.maxuvel = maxuvel
-    st.session_state.maxvvel = maxvvel
-    st.session_state.maxwvel = maxwvel
+        st.session_state.maxuvel = maxuvel
+        st.session_state.maxvvel = maxvvel
+        st.session_state.maxwvel = maxwvel
 
-    st.session_state.maskd = velocity_cutoff(
-        velocity[0, :, :], st.session_state.maskd, cutoff=maxuvel
-    )
-    st.session_state.maskd = velocity_cutoff(
-        velocity[1, :, :], st.session_state.maskd, cutoff=maxvvel
-    )
-    st.session_state.maskd = velocity_cutoff(
-        velocity[2, :, :], st.session_state.maskd, cutoff=maxwvel
-    )
-    st.session_state.isCutoff = True
+        st.session_state.maskd = velocity_cutoff(
+            velocity[0, :, :], st.session_state.maskd, cutoff=maxuvel
+        )
+        st.session_state.maskd = velocity_cutoff(
+            velocity[1, :, :], st.session_state.maskd, cutoff=maxvvel
+        )
+        st.session_state.maskd = velocity_cutoff(
+            velocity[2, :, :], st.session_state.maskd, cutoff=maxwvel
+        )
+        st.session_state.isCutoff = True
 
 
-if st.session_state.isCutoff:
-    st.write(":green[Cutoff Applied]")
-    a = {
-        "Max. Zonal Velocity": maxuvel,
-        "Max. Meridional Velocity": maxvvel,
-        "Max. Vertical Velocity": maxwvel,
-    }
-    st.write(a)
+    if st.session_state.isCutoff:
+        st.write(":green[Cutoff Applied]")
+        a = {
+            "Max. Zonal Velocity": maxuvel,
+            "Max. Meridional Velocity": maxvvel,
+            "Max. Vertical Velocity": maxwvel,
+        }
+        st.write(a)
 
 
 ############## DESPIKE DATA #################
-st.header("Despike Data", divider="blue")
-st.write("""A rolling median filter is applied to remove spikes from the data.
-The kernal size determines the number of ensembles (time interval) for the filter window.
-The standard deviation specifies the maximum allowable deviation to remove the spike.""")
+with tab3:
+    st.header("Despike Data", divider="blue")
+    st.write("""A rolling median filter is applied to remove spikes from the data.
+    The kernal size determines the number of ensembles (time interval) for the filter window.
+    The standard deviation specifies the maximum allowable deviation to remove the spike.""")
 
-# time_interval = pd.Timedelta(st.session_state.date[-1] - st.session_state.date[0]).seconds/(3600*st.session_state.head.ensembles)
+    # time_interval = pd.Timedelta(st.session_state.date[-1] - st.session_state.date[0]).seconds/(3600*st.session_state.head.ensembles)
 
-st.write("Time interval: ", st.session_state.date[1] - st.session_state.date[0])
+    st.write("Time interval: ", st.session_state.date[1] - st.session_state.date[0])
 
-despike_kernal = st.number_input(
-    "Enter Despike Kernal Size for Median Filter", 0, st.session_state.head.ensembles, 5, 1
-)
-
-
-
-despike_cutoff = st.number_input("Standard Deviation Cutoff for Spike Removal", 0.1, 10.0, 3.0, 0.1)
-despike_button = st.button("Despike")
-if despike_button:
-
-    st.session_state.despike_kernal = despike_kernal
-    st.session_state.despike_cutoff = despike_cutoff
-
-    st.session_state.maskd = despike(
-        velocity[0, :, :],
-        st.session_state.maskd,
-        kernal_size=despike_kernal,
-        cutoff=despike_cutoff,
+    despike_kernal = st.number_input(
+        "Enter Despike Kernal Size for Median Filter", 0, st.session_state.head.ensembles, 5, 1
     )
-    st.session_state.maskd = despike(
-        velocity[1, :, :],
-        st.session_state.maskd,
-        kernal_size=despike_kernal,
-        cutoff=despike_cutoff,
-    )
-    st.session_state.isDespike = True
-
-if st.session_state.isDespike:
-    st.write(":green[Data Despiked]")
-    b = {
-        "Kernal Size": despike_kernal,
-        "Despike Cutoff": despike_cutoff,
-    }
-    st.write(b)
-
-st.header("Remove Flatline", divider="blue")
-
-st.write("""
-Flatline removal detects segments of data where values remain constant over 
-a specified interval. The kernel size defines the number of consecutive 
-ensembles (time intervals) considered in the check, while the threshold sets 
-the maximum allowable variation.
-""")
-
-st.write("Time interval: ", st.session_state.date[1] - st.session_state.date[0])
-
-flatline_kernal = st.number_input("Enter Flatline Kernal Size", 0, 100, 13, 1)
-flatline_cutoff = st.number_input("Enter Flatline deviation (mm/s)", 0, 100, 1, 1)
-
-flatline_button = st.button("Remove Flatline")
 
 
-if flatline_button:
-    st.session_state.flatline_kernal = flatline_kernal
-    st.session_state.flatline_cutoff = flatline_cutoff
 
-    st.session_state.maskd = flatline(
-        velocity[0, :, :],
-        st.session_state.maskd,
-        kernal_size=flatline_kernal,
-        cutoff=flatline_cutoff,
-    )
-    st.session_state.maskd = flatline(
-        velocity[1, :, :],
-        st.session_state.maskd,
-        kernal_size=flatline_kernal,
-        cutoff=flatline_cutoff,
-    )
-    st.session_state.maskd = flatline(
-        velocity[2, :, :],
-        st.session_state.maskd,
-        kernal_size=flatline_kernal,
-        cutoff=flatline_cutoff,
-    )
-    st.session_state.isFlatline = True
+    despike_cutoff = st.number_input("Standard Deviation Cutoff for Spike Removal", 0.1, 10.0, 3.0, 0.1)
+    despike_button = st.button("Despike")
+    if despike_button:
 
-if st.session_state.isFlatline:
-    st.write(":green[Flatline Removed]")
-    b = {
-        "Kernal Size": flatline_kernal,
-        "Flatline Cutoff": flatline_cutoff,
-    }
-    st.write(b)
+        st.session_state.despike_kernal = despike_kernal
+        st.session_state.despike_cutoff = despike_cutoff
+
+        st.session_state.maskd = despike(
+            velocity[0, :, :],
+            st.session_state.maskd,
+            kernal_size=despike_kernal,
+            cutoff=despike_cutoff,
+        )
+        st.session_state.maskd = despike(
+            velocity[1, :, :],
+            st.session_state.maskd,
+            kernal_size=despike_kernal,
+            cutoff=despike_cutoff,
+        )
+        st.session_state.isDespike = True
+
+    if st.session_state.isDespike:
+        st.write(":green[Data Despiked]")
+        b = {
+            "Kernal Size": despike_kernal,
+            "Despike Cutoff": despike_cutoff,
+        }
+        st.write(b)
+
+##################### Remove Flatline ###################
+with tab4:
+    st.header("Remove Flatline", divider="blue")
+
+    st.write("""
+    Flatline removal detects segments of data where values remain constant over 
+    a specified interval. The kernel size defines the number of consecutive 
+    ensembles (time intervals) considered in the check, while the threshold sets 
+    the maximum allowable variation.
+    """)
+
+    st.write("Time interval: ", st.session_state.date[1] - st.session_state.date[0])
+
+    flatline_kernal = st.number_input("Enter Flatline Kernal Size", 0, 100, 13, 1)
+    flatline_cutoff = st.number_input("Enter Flatline deviation (mm/s)", 0, 100, 1, 1)
+
+    flatline_button = st.button("Remove Flatline")
+
+
+    if flatline_button:
+        st.session_state.flatline_kernal = flatline_kernal
+        st.session_state.flatline_cutoff = flatline_cutoff
+
+        st.session_state.maskd = flatline(
+            velocity[0, :, :],
+            st.session_state.maskd,
+            kernal_size=flatline_kernal,
+            cutoff=flatline_cutoff,
+        )
+        st.session_state.maskd = flatline(
+            velocity[1, :, :],
+            st.session_state.maskd,
+            kernal_size=flatline_kernal,
+            cutoff=flatline_cutoff,
+        )
+        st.session_state.maskd = flatline(
+            velocity[2, :, :],
+            st.session_state.maskd,
+            kernal_size=flatline_kernal,
+            cutoff=flatline_cutoff,
+        )
+        st.session_state.isFlatline = True
+
+    if st.session_state.isFlatline:
+        st.write(":green[Flatline Removed]")
+        b = {
+            "Kernal Size": flatline_kernal,
+            "Flatline Cutoff": flatline_cutoff,
+        }
+        st.write(b)
 
 
 ##################### SAVE DATA ###################
-st.header("Save & Reset Data", divider="blue")
+with tab5:
+    st.header("Save & Reset Data", divider="blue")
 
 
-def reset_data():
-    st.session_state.dummyvelocity = np.copy(st.session_state.velocity_regrid)
-    st.session_state.isMagnet = False
-    st.session_state.isCutoff = False
-    st.session_state.isDespike = False
-    st.session_state.isFlatline = False
-    st.session_state.isButtonClicked = False 
+    def reset_data():
+        st.session_state.dummyvelocity = np.copy(st.session_state.velocity_regrid)
+        st.session_state.isMagnet = False
+        st.session_state.isCutoff = False
+        st.session_state.isDespike = False
+        st.session_state.isFlatline = False
+        st.session_state.isButtonClicked = False 
 
 
-col1, col2 = st.columns([1, 1])
-with col1:
-    save_button = st.button(label="Save Data")
-    if save_button:
-        st.session_state.veltest_velocity = np.copy(st.session_state.dummyvelocity)
-        st.session_state.velocity_mask = np.copy(st.session_state.maskd)
-        st.session_state.isVelocityMask = True
-        st.write(":green[Mask data saved]")
-                # Status Summary Table
-        status_summary = pd.DataFrame(
-            [
-                ["Magnetic Declination", "True" if st.session_state.isButtonClicked  else "False"],
-                ["Velocity Cutoffs", "True" if st.session_state.isCutoff else "False"],
-                ["Despike Data", "True" if st.session_state.isDespike else "False"],
-                ["Remove Flatline", "True" if st.session_state.isFlatline else "False"],
-            ],
-            columns=["Test", "Status"],
-        )
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        save_button = st.button(label="Save Data")
+        if save_button:
+            st.session_state.veltest_velocity = np.copy(st.session_state.dummyvelocity)
+            st.session_state.velocity_mask = np.copy(st.session_state.maskd)
+            st.session_state.isVelocityMask = True
+            st.write(":green[Mask data saved]")
+                    # Status Summary Table
+            status_summary = pd.DataFrame(
+                [
+                    ["Magnetic Declination", "True" if st.session_state.isButtonClicked  else "False"],
+                    ["Velocity Cutoffs", "True" if st.session_state.isCutoff else "False"],
+                    ["Despike Data", "True" if st.session_state.isDespike else "False"],
+                    ["Remove Flatline", "True" if st.session_state.isFlatline else "False"],
+                ],
+                columns=["Test", "Status"],
+            )
 
-        # Define a mapping function for styling
-        def status_color_map(value):
-            if value == "True":
-                return "background-color: green; color: white"
-            elif value == "False":
-                return "background-color: red; color: white"
-            else:
-                return ""
+            # Define a mapping function for styling
+            def status_color_map(value):
+                if value == "True":
+                    return "background-color: green; color: white"
+                elif value == "False":
+                    return "background-color: red; color: white"
+                else:
+                    return ""
 
-        # Apply styles using Styler.apply
-        styled_table = status_summary.style.set_properties(**{"text-align": "center"})
-        styled_table = styled_table.map(status_color_map, subset=["Status"])
+            # Apply styles using Styler.apply
+            styled_table = status_summary.style.set_properties(**{"text-align": "center"})
+            styled_table = styled_table.map(status_color_map, subset=["Status"])
 
-        # Display the styled table
-        st.write(styled_table.to_html(), unsafe_allow_html=True)
-    else:
-        st.write(":red[Data not saved]")
+            # Display the styled table
+            st.write(styled_table.to_html(), unsafe_allow_html=True)
+        else:
+            st.write(":red[Data not saved]")
 
-with col2:
-    st.button(label="Reset Data", on_click=reset_data)
+    with col2:
+        st.button(label="Reset Data", on_click=reset_data)

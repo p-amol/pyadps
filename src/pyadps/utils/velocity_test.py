@@ -1,8 +1,21 @@
 from itertools import groupby
-
+from pygeomag import GeoMag
 import requests
 import numpy as np
 import scipy as sp
+
+# Function used to calculate declination using pygeomag library.
+def magdec(glat, glon, alt, time):
+    # Selecting COF file According to given year
+    if time >= 2010 and time < 2030:
+        var = 2010+(int(time)-2010)//5*5
+        file_name = "wmm/WMM_{}.COF".format(str(var))
+        geo_mag = GeoMag(coefficients_file=file_name)
+    else:
+        geo_mag = GeoMag("wmm/WMM_2025.COF")
+    result = geo_mag.calculate(glat=glat, glon=glon, alt=alt, time=time)
+
+    return([[result.d]])
 
 def wmm2020api(lat1, lon1, year):
     """
@@ -23,9 +36,12 @@ def wmm2020api(lat1, lon1, year):
     baseurl_emm = "https://emmcalc.geomag.info/?magneticcomponent=d&"
     key = "zNEw7"
     resultFormat="json"
-    if year >= 2019:
+    if year >= 2025:
         baseurl = baseurl_wmm
         model = "WMM"
+    elif year >= 2019:
+        baseurl = baseurl_igrf
+        model = "IGRF"
     elif year >= 2000:
         baseurl = baseurl_emm
         model = "EMM"

@@ -1,8 +1,23 @@
 from itertools import groupby
+from pygeomag import GeoMag
 
 import requests
 import numpy as np
 import scipy as sp
+
+
+def magdec(glat, glon, alt, time):
+    # Selecting COF file According to given year
+    if time >= 2010 and time < 2030:
+        var = 2010 + (int(time) - 2010) // 5 * 5
+        file_name = "wmm/WMM_{}.COF".format(str(var))
+        geo_mag = GeoMag(coefficients_file=file_name)
+    else:
+        geo_mag = GeoMag("wmm/WMM_2025.COF")
+    result = geo_mag.calculate(glat=glat, glon=glon, alt=alt, time=time)
+
+    return [[result.d]]
+
 
 def wmm2020api(lat1, lon1, year):
     """
@@ -18,27 +33,37 @@ def wmm2020api(lat1, lon1, year):
     Returns:
         mag -> magnetic declination at the given location in degree.
     """
-    baseurl_wmm = "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?"
-    baseurl_igrf = "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?"
+    baseurl_wmm = (
+        "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?"
+    )
+    baseurl_igrf = (
+        "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?"
+    )
     baseurl_emm = "https://emmcalc.geomag.info/?magneticcomponent=d&"
     key = "zNEw7"
-    resultFormat="json"
-    if year >= 2019:
+    resultFormat = "json"
+    if year >= 2025:
         baseurl = baseurl_wmm
         model = "WMM"
+    elif year >= 2019:
+        baseurl = baseurl_wmm
+        model = "IGRF"
     elif year >= 2000:
         baseurl = baseurl_emm
         model = "EMM"
     elif year >= 1590:
         baseurl = baseurl_igrf
         model = "IGRF"
-    url = "{}model={}&lat1={}&lon1={}&key={}&startYear={}&resultFormat={}".format(baseurl, model, lat1, lon1, key, year, resultFormat)
+    url = "{}model={}&lat1={}&lon1={}&key={}&startYear={}&resultFormat={}".format(
+        baseurl, model, lat1, lon1, key, year, resultFormat
+    )
     response = requests.get(url)
     data = response.json()
     results = data["result"][0]
     mag = [[results["declination"]]]
-    
+
     return mag
+
 
 # Commentin magnetic_declination model since the method is no longer using.
 # def magnetic_declination(lat, lon, depth, year):
@@ -62,6 +87,7 @@ def wmm2020api(lat1, lon1, year):
 
 #     return  mag
 
+
 def velocity_modifier(velocity, mag):
     """
     The function uses magnetic declination from wmm2020 to correct
@@ -76,11 +102,16 @@ def velocity_modifier(velocity, mag):
     """
     mag = np.deg2rad(mag[0][0])
     velocity = np.where(velocity == -32768, np.nan, velocity)
-    velocity[0, :, :] = velocity[0, :, :] * np.cos(mag) + velocity[1, :, :] * np.sin(mag)
-    velocity[1, :, :] = -1 * velocity[0, :, :] * np.sin(mag) + velocity[1, :, :] * np.cos(mag)
+    velocity[0, :, :] = velocity[0, :, :] * np.cos(mag) + velocity[1, :, :] * np.sin(
+        mag
+    )
+    velocity[1, :, :] = -1 * velocity[0, :, :] * np.sin(mag) + velocity[
+        1, :, :
+    ] * np.cos(mag)
     velocity = np.where(velocity == np.nan, -32768, velocity)
 
     return velocity
+
 
 def velocity_cutoff(velocity, mask, cutoff=250):
     """
@@ -109,7 +140,7 @@ def despike(velocity, mask, kernal_size=13, cutoff=3):
     Args:
         velocity (numpy array, integer): Velocity(depth, time) in mm/s
         mask (numpy array, integer): Mask file
-        kernal_size (paramater, integer): Window size for rolling median filter 
+        kernal_size (paramater, integer): Window size for rolling median filter
         cutoff (parameter, integer): Number of standard deviations to identify spikes
 
     Returns:
@@ -120,11 +151,11 @@ def despike(velocity, mask, kernal_size=13, cutoff=3):
     for j in range(shape[0]):
         # Apply median filter
         filt = sp.signal.medfilt(velocity[j, :], kernal_size)
-        # Calculate absolute deviation from the rolling median 
+        # Calculate absolute deviation from the rolling median
         diff = np.abs(velocity[j, :] - filt)
         # Calculate threshold for spikes based on standard deviation
         std_dev = np.nanstd(diff)
-        spike_threshold = cutoff*std_dev
+        spike_threshold = cutoff * std_dev
         # Apply mask after identifying spikes
         mask[j, :] = np.where(diff < spike_threshold, mask[j, :], 1)
     return mask

@@ -25,6 +25,11 @@ def reset_profiletest():
     st.session_state.isCutBinManualCheck = False
     st.session_state.isRegridCheck = False
 
+    # Reset Page Return
+    st.session_state.isQCPageReturn = False
+    if not st.session_state.isQCTest:
+        st.session_state.isSensorPageReturn = False
+
     # Reset Data
     st.session_state.echo_regrid = np.copy(st.session_state.echo)
     st.session_state.correlation_regrid = np.copy(st.session_state.correlation)
@@ -59,11 +64,18 @@ def reset_profiletest():
 def hard_reset(option):
     # Reset Global Test
     st.session_state.isProfileTest = False
+
     # Reset Local Tests
     st.session_state.isTrimEndsCheck = False
     st.session_state.isCutBinSideLobeCheck = False
     st.session_state.isCutBinManualCheck = False
     st.session_state.isRegridCheck = False
+
+    # Reset Page Return
+    st.session_state.isQCPageReturn = False
+    if not st.session_state.isQCTest:
+        st.session_state.isSensorPageReturn = False
+
     # Reset Data
     st.session_state.echo_regrid = np.copy(st.session_state.echo)
     st.session_state.correlation_regrid = np.copy(st.session_state.correlation)
@@ -74,9 +86,6 @@ def hard_reset(option):
     else:
         st.session_state.velocity_regrid = np.copy(st.session_state.velocity)
         st.session_state.velocity_temp = np.copy(st.session_state.velocity)
-
-    st.session_state.isSensorPageReturn = False
-    st.session_state.isQCPageReturn = False
 
     # Reset Mask Data based on user options
     if option == "Sensor Test":
@@ -125,7 +134,8 @@ if st.session_state.isQCTest or st.session_state.isSensorTest:
             st.write("Sensor Test mask file selected")
         elif reset_selectbox == "QC Test":
             st.write("QC Test mask file selected")
-        hard_reset(reset_selectbox)
+        if reset_selectbox is not None:
+            hard_reset(reset_selectbox)
     elif st.session_state.isFirstProfileVisit:
         reset_profiletest()
         st.session_state.isFirstProfileVisit = False
@@ -451,6 +461,9 @@ def save_profiletest():
     # st.session_state.velocity_regrid = np.copy(st.session_state.velocity_temp)
     st.session_state.isProfileTest = True
     st.session_state.isVelocityTest = False
+
+    st.session_state.isSensorPageReturn = True
+    st.session_state.isQCPageReturn = True
 
 
 st.header("Profile Test")

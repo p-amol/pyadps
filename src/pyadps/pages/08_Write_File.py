@@ -35,6 +35,8 @@ if st.session_state.isVelocityTest:
         st.session_state.final_velocity = st.session_state.velocity_regrid
     elif st.session_state.isVelocityModifiedSound:
         st.session_state.final_velocity = st.session_state.velocity_sensor
+    else:
+        st.session_state.final_velocity = st.session_state.velocity
 
     if st.session_state.isRegridCheck:
         st.session_state.final_echo = st.session_state.echo_regrid
@@ -503,12 +505,15 @@ if generate_config_radio == "Yes":
         config["Optional"][key] = str(value)  # Ensure all values are strings
 
     # Write config.ini to a temporary file
-    config_filepath = "config.ini"
-    with open(config_filepath, "w") as configfile:
-        config.write(configfile)
-
+    # config_filepath = "config.ini"
+    # with open(config_filepath, "w") as configfile:
+    #     config.write(configfile)
+    # Create a temporary file for the config.ini
+    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".ini") as temp_config:
+        config.write(temp_config)
+        temp_config_path = temp_config.name
     # Allow the user to download the generated config.ini file
-    with open(config_filepath, "rb") as file:
+    with open(temp_config_path, "rb") as file:
         st.download_button(
             label="Download config.ini File",
             data=file,

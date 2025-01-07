@@ -103,17 +103,6 @@ def qc_submit():
     st.session_state.qc_mask_temp = mask
 
 
-def isAnyQCTest():
-    if st.session_state.isQCCheck:
-        istest = True
-    if st.session_state.isBeamModified:
-        istest = True
-    else:
-        istest = False
-
-    return istest
-
-
 if st.session_state.isSensorTest:
     st.write(":grey[Working on a saved mask file ...]")
     if st.session_state.isQCPageReturn:
@@ -126,7 +115,8 @@ if st.session_state.isSensorTest:
             index=None,
             placeholder="Reset mask to ...",
         )
-        hard_reset(reset_selectbox)
+        if reset_selectbox is not None:
+            hard_reset(reset_selectbox)
     elif st.session_state.isFirstQCVisit:
         reset_qctest()
         st.session_state.isFirstQCVisit = False

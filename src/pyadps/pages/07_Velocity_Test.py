@@ -38,6 +38,14 @@ def reset_velocitytest():
     st.session_state.isCutoffCheck = False
 
     st.session_state.isVelocityModifiedMagnet = False
+
+    # Page return
+    st.session_state.isProfilePageReturn = False
+    if not st.session_state.isProfileTest:
+        st.session_state.isQCPageReturn = False
+    if not st.session_state.isQCTest:
+        st.session_state.isSensorPageReturn = False
+
     # Data Reset
     if st.session_state.isRegridCheck:
         st.session_state.velocity_magnet = st.session_state.velocity_regrid
@@ -80,6 +88,13 @@ def hard_reset(option):
     st.session_state.isDespikeCheck = False
     st.session_state.isFlatlineCheck = False
     st.session_state.isCutoffCheck = False
+
+    # Page return
+    st.session_state.isProfilePageReturn = False
+    if not st.session_state.isProfileTest:
+        st.session_state.isQCPageReturn = False
+    if not st.session_state.isQCTest:
+        st.session_state.isSensorPageReturn = False
 
     # Velocity data reset
     st.session_state.velocity_magnet = st.session_state.velocity
@@ -526,6 +541,10 @@ with tab5:
         st.session_state.isVelocityTest = True
         st.session_state.isFirstVelocityVisit = False
         st.session_state.velocity_mask = st.session_state.velocity_mask_temp
+
+        st.session_state.isSensorPageReturn = True
+        st.session_state.isQCPageReturn = True
+        st.session_state.isProfilePageReturn = True
 
     col1, col2 = st.columns([1, 1])
     with col1:

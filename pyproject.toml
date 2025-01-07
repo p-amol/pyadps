@@ -5,15 +5,15 @@ description = "A Python package for ADCP data processing"
 authors = ["P. Amol <prakashamol@gmail.com>"]
 readme = "README.md"
 license = "MIT"
-homepage = "https://example.com"  # You can add your homepage URL or GitHub URL here
-repository = "https://github.com/p-amol/pyadps"  # Replace with your repository link
-documentation = "https://example.com/docs"  # Optional documentation link
+homepage = "https://example.com" # You can add your homepage URL or GitHub URL here
+repository = "https://github.com/p-amol/pyadps" # Replace with your repository link
+documentation = "https://example.com/docs" # Optional documentation link
 keywords = ["adcp", "data-processing", "oceanography"]
 include = ["utils/metadata/*.json"]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent"
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
 ]
 
 
@@ -30,6 +30,8 @@ netCDF4 = ">=1.7.1"
 plotly = ">=5.22.0"
 plotly-resampler = ">=0.10.0"
 meson = ">=1.4.1"
+pygeomag = "^1.1.0"
+
 
 [tool.poetry.extras]
 tests = ["pytest"]
@@ -41,5 +43,3 @@ run-auto = "pyadps.utils.autoprocess:main"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-

@@ -6,32 +6,137 @@ import streamlit as st
 from plotly.subplots import make_subplots
 from plotly_resampler import FigureResampler
 from streamlit.runtime.state import session_state
-from utils.signal_quality import ev_check, false_target, pg_check, echo_check, correlation_check
+from utils.signal_quality import (
+    ev_check,
+    false_target,
+    pg_check,
+    echo_check,
+    correlation_check,
+)
 
 if "flead" not in st.session_state:
     st.write(":red[Please Select Data!]")
     st.stop()
 
-# `mask` holds the temporary changes in the page
-# `qcmask` holds the final changes in the page
-if "mask" not in st.session_state:
-    st.session_state.mask = np.copy(st.session_state.orig_mask)
 
-if not st.session_state.isQCMask:
-    st.write(":grey[Creating a new mask file ...]")
-    st.session_state.qc_mask = np.copy(st.session_state.orig_mask)
-    st.session_state.isSubmit = False
-else:
-    st.write(":grey[Working on a saved mask file ...]")
-    st.write(":orange[WARNING! QC test already completed. Reset to change settings.]")
-    reset_button1 = st.button("Reset Mask Data")
-    if reset_button1:
-        st.session_state.mask = np.copy(st.session_state.orig_mask)
+def reset_qctest():
+    # Reset Global Test
+    st.session_state.isQCTest = False
+    # Reset Local Tests
+    st.session_state.isQCCheck = False
+
+    # Reset Data
+    st.session_state.isBeamModified = False
+    beamdir = st.session_state.ds.fixedleader.system_configuration()["Beam Direction"]
+    st.session_state.beam_direction = beamdir
+
+    # As QC test is not saved the Sensor Page Returns is set to False
+    st.session_state.isSensorPageReturn = False
+
+    # Reset Mask Data
+    # Copy the sensor mask if sensor mask completed.
+    # Else copy the default mask.
+    if st.session_state.isSensorTest:
+        st.session_state.qc_mask = np.copy(st.session_state.sensor_mask)
+        st.session_state.qc_mask_temp = np.copy(st.session_state.sensor_mask)
+    else:
         st.session_state.qc_mask = np.copy(st.session_state.orig_mask)
-        st.write(":green[Mask data is reset to default]")
+        st.session_state.qc_mask_temp = np.copy(st.session_state.orig_mask)
 
-if "isThresh" not in st.session_state:
-    st.session_state.isThresh = False
+
+def hard_reset(option):
+    # Reset Global Test
+    st.session_state.isQCTest = False
+    # Reset Local Tests
+    st.session_state.isQCCheck = False
+    st.session_state.isBeamModified = False
+    # Reset Data
+    beamdir = st.session_state.ds.fixedleader.system_configuration()["Beam Direction"]
+    st.session_state.beam_direction = beamdir
+
+    st.session_state.isSensorPageReturn = False
+
+    # Reset Mask Data based on user options
+    if option == "Sensor Test":
+        st.session_state.qc_mask = np.copy(st.session_state.sensor_mask)
+        st.session_state.qc_mask_temp = np.copy(st.session_state.sensor_mask)
+
+    elif option == "Default":
+        st.session_state.qc_mask = np.copy(st.session_state.orig_mask)
+        st.session_state.qc_mask_temp = np.copy(st.session_state.orig_mask)
+
+
+def save_qctest():
+    st.session_state.qc_mask = np.copy(st.session_state.qc_mask_temp)
+    st.session_state.isQCTest = True
+    st.session_state.isProfileMask = False
+    st.session_state.isGridSave = False
+    st.session_state.isVelocityMask = False
+    # Indicate previous pages that Test has been carried out
+    st.session_state.isSensorPageReturn = True
+
+
+def qc_submit():
+    # st.write(st.session_state.newthresh)
+    st.session_state.isQCCheck = True
+
+    # First Quality check of the page
+    mask = np.copy(st.session_state.qc_mask_temp)
+    # if st.session_state.isSensorTest:
+    #     mask = np.copy(st.session_state.sensor_mask)
+    # else:
+    #     mask = np.copy(st.session_state.default_mask)
+
+    ds = st.session_state.ds
+    pgt = st.session_state.pgt
+    ct = st.session_state.ct
+    et = st.session_state.et
+    evt = st.session_state.evt
+    ft = st.session_state.ft
+    option = st.session_state.option
+    mask = pg_check(ds, mask, pgt, threebeam=option)
+    mask = correlation_check(ds, mask, ct)
+    mask = echo_check(ds, mask, et)
+    mask = ev_check(ds, mask, evt)
+    mask = false_target(ds, mask, ft, threebeam=True)
+    # Store the processed mask in a temporary mask
+    st.session_state.qc_mask_temp = mask
+
+
+def isAnyQCTest():
+    if st.session_state.isQCCheck:
+        istest = True
+    if st.session_state.isBeamModified:
+        istest = True
+    else:
+        istest = False
+
+    return istest
+
+
+if st.session_state.isSensorTest:
+    st.write(":grey[Working on a saved mask file ...]")
+    if st.session_state.isQCPageReturn:
+        st.write(
+            ":orange[Warning: QC test already completed. Reset the mask file to change settings.]"
+        )
+        reset_selectbox = st.selectbox(
+            "Choose reset option",
+            ("Sensor Test", "Default"),
+            index=None,
+            placeholder="Reset mask to ...",
+        )
+        hard_reset(reset_selectbox)
+    elif st.session_state.isFirstQCVisit:
+        reset_qctest()
+        st.session_state.isFirstQCVisit = False
+else:
+    if st.session_state.isFirstQCVisit:
+        # This will rest to the default mask file
+        reset_qctest()
+        st.session_state.isFirstQCVisit = False
+    st.write(":orange[Creating a new mask file ...]")
+
 
 # Load data
 ds = st.session_state.ds
@@ -58,6 +163,7 @@ def fillplot_plotly(data, colorscale="balance"):
     )
     st.plotly_chart(fig)
 
+
 @st.cache_data
 def lineplot(data, title, slope=None, xaxis="time"):
     if xaxis == "time":
@@ -65,25 +171,24 @@ def lineplot(data, title, slope=None, xaxis="time"):
     else:
         xdata = st.session_state.ensemble_axis
     scatter_trace = go.Scatter(
-                                x=xdata,
-                                y=data,
-                                mode='markers',
-                                name=title,
-                                marker=dict(color='blue', size=10)  # Customize marker color and size
-                                )
+        x=xdata,
+        y=data,
+        mode="markers",
+        name=title,
+        marker=dict(color="blue", size=10),  # Customize marker color and size
+    )
     # Create the slope line trace
     if slope is not None:
         line_trace = go.Scatter(
-                                x=xdata,
-                                y=slope,
-                                mode='lines',
-                                name='Slope Line',
-                                line=dict(color='red', width=2, dash='dash')  # Dashed red line
-                                )
+            x=xdata,
+            y=slope,
+            mode="lines",
+            name="Slope Line",
+            line=dict(color="red", width=2, dash="dash"),  # Dashed red line
+        )
         fig = go.Figure(data=[scatter_trace, line_trace])
     else:
         fig = go.Figure(data=[scatter_trace])
-
 
     st.plotly_chart(fig)
 
@@ -139,247 +244,245 @@ def plot_noise(dep=0, rec=-1):
     fig.update_xaxes(title="Echo (count)")
     fig.update_yaxes(title="Cells")
     st.plotly_chart(fig)
-    
-#########  NOISE FLOOR IDENTIFICATION ##############
-dn = rn = 1
-st.header("Noise Floor Identification", divider="blue")
-st.write(
-    """
-    If the ADCP has collected data from the air either 
-    before deployment or after recovery, this data can 
-    be used to estimate the echo intensity threshold. 
-    The plots below show the echo intensity from the first 
-    and last ensembles. The noise level is typically around 
-    30-40 counts throughout the entire profile.
-"""
-)
-dn = st.number_input("Deployment Ensemble", x[0] + 1, x[-1] + 1, x[0] + 1)
-# r = st.number_input("Recovery Ensemble", -1 * (x[-1] + 1), -1 * (x[0] + 1), -1)
-rn = st.number_input("Recovery Ensemble", x[0] + 1, x[-1] + 1, x[-1] + 1)
-dn = dn - 1
-rn = rn - 1
 
-plot_noise(dep=dn, rec=rn)
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    [
+        "Noise Floor Identification",
+        "QC Tests",
+        "Display Mask",
+        "Fix Orientation",
+        "Save Data",
+    ]
+)
+#########  NOISE FLOOR IDENTIFICATION ##############
+with tab1:
+    dn = rn = 1
+    st.header("Noise Floor Identification", divider="blue")
+    st.write(
+        """
+        If the ADCP has collected data from the air either 
+        before deployment or after recovery, this data can 
+        be used to estimate the echo intensity threshold. 
+        The plots below show the echo intensity from the first 
+        and last ensembles. The noise level is typically around 
+        30-40 counts throughout the entire profile.
+    """
+    )
+    dn = st.number_input("Deployment Ensemble", x[0] + 1, x[-1] + 1, x[0] + 1)
+    # r = st.number_input("Recovery Ensemble", -1 * (x[-1] + 1), -1 * (x[0] + 1), -1)
+    rn = st.number_input("Recovery Ensemble", x[0] + 1, x[-1] + 1, x[-1] + 1)
+    dn = dn - 1
+    rn = rn - 1
+
+    plot_noise(dep=dn, rec=rn)
 
 
 ################## QC Test ###################
+with tab2:
+    st.header("Quality Control Tests", divider="blue")
+    st.write("")
 
-st.header("Quality Control Tests", divider="blue")
-st.write("")
-
-left, right = st.columns([1, 1])
-with left:
-    st.write(""" Teledyne RDI recommends these quality control tests, 
-                 some of which can be configured before deployment. 
-                 The pre-deployment values configured for the ADCP are listed 
-                 in the table below. The noise-floor identification graph above 
-                 can assist in determining the echo intensity threshold. 
-                 For more information about these tests, 
-                 refer to *Acoustic Doppler Current Profiler Principles of 
-                 Operation: A Practical Primer* by Teledyne RDI.""")
-    fdata = st.session_state.flead.field()
-    st.divider()
-    st.write(":blue-background[Additional Information:]")
-    st.write(f"Number of Pings per Ensemble: `{fdata["Pings"]}`")
-    st.write(f"Number of Beams: `{fdata["Beams"]}`")
-    st.divider()
-    st.write(":red-background[Thresholds used during deployment:]")
-    thresh = pd.DataFrame(
-        [
-            ["Correlation", fdata["Correlation Thresh"]],
-            ["Error Velocity", fdata["Error Velocity Thresh"]],
-            ["Echo Intensity", 0],
-            ["False Target", fdata["False Target Thresh"]],
-            ["Percentage Good", fdata["Percent Good Min"]],
-        ],
-        columns=["Threshold", "Values"],
-    )
-
-    st.write(thresh)
-
-with right:
-    with st.form(key="my_form"):
-        st.write("Would you like to apply new threshold?")
-
-        ct = st.number_input(
-            "Select Correlation Threshold",
-            0,
-            255,
-            fdata["Correlation Thresh"],
-        )
-
-        evt = st.number_input(
-            "Select Error Velocity Threshold",
-            0,
-            9999,
-            fdata["Error Velocity Thresh"],
-        )
-
-        et = st.number_input(
-            "Select Echo Intensity Threshold",
-            0,
-            255,
-            0,
-        )
-
-        ft = st.number_input(
-            "Select False Target Threshold",
-            0,
-            255,
-            fdata["False Target Thresh"],
-        )
-
-        option = st.selectbox(
-            "Would you like to use a three-beam solution?", (True, False)
-        )
-
-        pgt = st.number_input(
-            "Select Percent Good Threshold",
-            0,
-            100,
-            fdata["Percent Good Min"],
-        )
-        submit_button = st.form_submit_button(label="Submit")
-
-
-mask = st.session_state.mask
-with left:
-    if submit_button:
-        st.session_state.newthresh = pd.DataFrame(
+    left, right = st.columns([1, 1])
+    with left:
+        st.write(""" Teledyne RDI recommends these quality control tests, 
+                    some of which can be configured before deployment. 
+                    The pre-deployment values configured for the ADCP are listed 
+                    in the table below. The noise-floor identification graph above 
+                    can assist in determining the echo intensity threshold. 
+                    For more information about these tests, 
+                    refer to *Acoustic Doppler Current Profiler Principles of 
+                    Operation: A Practical Primer* by Teledyne RDI.""")
+        fdata = st.session_state.flead.field()
+        st.divider()
+        st.write(":blue-background[Additional Information:]")
+        st.write(f"Number of Pings per Ensemble: `{fdata["Pings"]}`")
+        st.write(f"Number of Beams: `{fdata["Beams"]}`")
+        st.divider()
+        st.write(":red-background[Thresholds used during deployment:]")
+        thresh = pd.DataFrame(
             [
-                ["Correlation", str(ct)],
-                ["Error Velocity", str(evt)],
-                ["Echo Intensity", str(et)],
-                ["False Target", str(ft)],
-                ["Three Beam", str(option)],
-                ["Percentage Good", str(pgt)],
+                ["Correlation", fdata["Correlation Thresh"]],
+                ["Error Velocity", fdata["Error Velocity Thresh"]],
+                ["Echo Intensity", 0],
+                ["False Target", fdata["False Target Thresh"]],
+                ["Percentage Good", fdata["Percent Good Min"]],
             ],
             columns=["Threshold", "Values"],
         )
-        st.session_state.isThresh = True
-        # st.write(st.session_state.newthresh)
 
-        mask = pg_check(ds, mask, pgt, threebeam=option)
-        mask = correlation_check(ds, mask, ct)
-        mask = echo_check(ds, mask, et)
-        mask = ev_check(ds, mask, evt)
-        mask = false_target(ds, mask, ft, threebeam=True)
-        st.session_state.mask = mask
+        st.write(thresh)
 
-    if st.session_state.isThresh:
-        st.write(":green-background[Current Thresholds]")
-        st.write(st.session_state.newthresh)
+    with right:
+        with st.form(key="my_form"):
+            st.write("Would you like to apply new threshold?")
+
+            st.session_state.ct = st.number_input(
+                "Select Correlation Threshold",
+                0,
+                255,
+                fdata["Correlation Thresh"],
+            )
+
+            st.session_state.evt = st.number_input(
+                "Select Error Velocity Threshold",
+                0,
+                9999,
+                fdata["Error Velocity Thresh"],
+            )
+
+            st.session_state.et = st.number_input(
+                "Select Echo Intensity Threshold",
+                0,
+                255,
+                0,
+            )
+
+            st.session_state.ft = st.number_input(
+                "Select False Target Threshold",
+                0,
+                255,
+                fdata["False Target Thresh"],
+            )
+
+            st.session_state.option = st.selectbox(
+                "Would you like to use a three-beam solution?", (True, False)
+            )
+
+            st.session_state.pgt = st.number_input(
+                "Select Percent Good Threshold",
+                0,
+                100,
+                fdata["Percent Good Min"],
+            )
+            submit_button = st.form_submit_button(label="Submit", on_click=qc_submit)
+
+    # mask = st.session_state.qc_mask_temp
+    with left:
+        if submit_button:
+            st.session_state.isQCCheck = True
+            st.session_state.newthresh = pd.DataFrame(
+                [
+                    ["Correlation", str(st.session_state.ct)],
+                    ["Error Velocity", str(st.session_state.evt)],
+                    ["Echo Intensity", str(st.session_state.et)],
+                    ["False Target", str(st.session_state.ft)],
+                    ["Three Beam", str(st.session_state.option)],
+                    ["Percentage Good", str(st.session_state.pgt)],
+                ],
+                columns=["Threshold", "Values"],
+            )
+
+        if st.session_state.isQCCheck:
+            st.write(":green-background[Current Thresholds]")
+            st.write(st.session_state.newthresh)
 
 
-
-st.header("Mask File", divider="blue")
-st.write(
-"""
-Displayed the mask file. 
-Ensure to save any necessary changes or apply additional thresholds if needed.
-"""
-)
-
-
-if st.button("Display mask file"):
-    st.subheader("Default Mask File")
+with tab3:
+    st.header("Mask File", divider="blue")
     st.write(
+        """
+    Display the mask file. 
+    Ensure to save any necessary changes or apply additional thresholds if needed.
     """
-ADCP assigns missing values based on thresholds set before deployment.
-These values cannot be recovered and the default 
-"""
-)
-    fillplot_plotly(st.session_state.orig_mask, colorscale="greys")
+    )
 
+    leftplot, rightplot = st.columns([1, 1])
+    if st.button("Display mask file"):
+        with leftplot:
+            st.subheader("Default Mask File")
+            st.write(
+                """
+                    CAPTION:
+                    ADCP assigns missing values based on thresholds
+                    set before deployment. These values cannot be
+                    recovered and are part of default mask file.
+                """
+            )
+            fillplot_plotly(st.session_state.orig_mask, colorscale="greys")
+        with rightplot:
+            st.subheader("Updated Mask File")
+            # values, counts = np.unique(mask, return_counts=True)
+            st.write(
+                """
+                    CAPTION:
+                    Updated mask displayed after applying threshold.
+                    If thresholds are not saved, default mask
+                    is displayed. 
+                """
+            )
+            fillplot_plotly(st.session_state.qc_mask_temp, colorscale="greys")
 
-    st.subheader("Update Mask File")
-    st.write(
-    """
-Update, display and save the updated mask file after applying threshold.
-If thresholds are not saved, default mask file is used. 
-"""
-)
-# values, counts = np.unique(mask, return_counts=True)
-    fillplot_plotly(st.session_state.mask, colorscale="greys")
+with tab4:
+    ################## Fix Orientation ###################
+    st.subheader("Fix Orientation", divider="orange")
 
-
-################## Fix Orientation ###################
-st.subheader("Fix Orientation", divider="orange")
-
-
-if st.session_state.beam_direction == 'Up':
-    beamalt = 'Down' 
-else:
-    beamalt = 'Up'
-st.write(f"The current orientation of ADCP is `{st.session_state.beam_direction}`. Use the below option to correct the orientation.")
-
-beamdir_select = st.radio(f'Change orientation to {beamalt}', ['No', 'Yes'])
-if beamdir_select == 'Yes':
-    st.session_state.beam_direction = beamalt
-    st.write(f"The orientation changed to `{st.session_state.beam_direction}`")
-
-
-
-
-################## Save Button #############
-st.header("Save Data", divider="blue")
-col1, col2 = st.columns([1, 1])
-with col1:
-    save_mask_button = st.button(label="Save Mask Data")
-
-    if save_mask_button:
-        # st.session_state.mask = mask
-        st.session_state.qc_mask = np.copy(st.session_state.mask)
-        st.session_state.isQCMask = True
-        st.session_state.isProfileMask = False
-        st.session_state.isGridSave = False
-        st.session_state.isVelocityMask = False
-        st.write(":green[Mask file saved]")
-        # Table summarizing changes
-        changes_summary = pd.DataFrame(
-            [
-                ["Quality Control Tests", "True" if st.session_state.isThresh else "False"],
-                ["Fix Orientation",  st.session_state.beam_direction],
-            ],
-            columns=["Test", "Status"],
-        )
-
-        # Define a mapping function for styling
-        def status_color_map(value):
-            if value == "True":
-                return "background-color: green; color: white"
-            elif value == "False":
-                return "background-color: red; color: white"
-            elif value == "Up":
-                return "background-color: blue; color: white"
-            elif value == "Down":
-                return "background-color: orange; color: white"
-            else:
-                return ""
-
-        # Apply styles using Styler.apply
-        styled_table = changes_summary.style.set_properties(**{"text-align": "center"})
-        styled_table = styled_table.map(status_color_map, subset=["Status"])
-
-        # Display the styled table
-        st.write(styled_table.to_html(), unsafe_allow_html=True)
+    if st.session_state.beam_direction == "Up":
+        beamalt = "Down"
     else:
-        st.write(":red[Mask data not saved]")
-with col2:
-    reset_mask_button = st.button("Reset mask Data")
-    if reset_mask_button:
-        st.session_state.mask = np.copy(st.session_state.orig_mask)
-        st.session_state.isThresh = False
-        st.session_state.isQCMask = False
-        st.session_state.isGrid = False
-        st.session_state.isProfileMask = False
-        st.session_state.isVelocityMask = False
-        st.write(":green[Mask data is reset to default]")
+        beamalt = "Up"
+    st.write(
+        f"The current orientation of ADCP is `{st.session_state.beam_direction}`. Use the below option to correct the orientation."
+    )
 
+    beamdir_select = st.radio(f"Change orientation to {beamalt}", ["No", "Yes"])
+    if beamdir_select == "Yes":
+        st.session_state.beam_direction = beamalt
+        st.session_state.isBeamModified = True
+        st.write(f"The orientation changed to `{st.session_state.beam_direction}`")
 
+with tab5:
+    ################## Save Button #############
+    st.header("Save Data", divider="blue")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        save_mask_button = st.button(label="Save Mask Data", on_click=save_qctest)
 
+        if save_mask_button:
+            # st.session_state.qc_mask_temp = mask
+            st.success("Mask file saved")
+            # Table summarizing changes
+            changes_summary = pd.DataFrame(
+                [
+                    [
+                        "Quality Control Tests",
+                        "True" if st.session_state.isQCCheck else "False",
+                    ],
+                    ["Fix Orientation", st.session_state.beam_direction],
+                ],
+                columns=["Test", "Status"],
+            )
 
+            # Define a mapping function for styling
+            def status_color_map(value):
+                if value == "True":
+                    return "background-color: green; color: white"
+                elif value == "False":
+                    return "background-color: red; color: white"
+                elif value == "Up":
+                    return "background-color: blue; color: white"
+                elif value == "Down":
+                    return "background-color: orange; color: white"
+                else:
+                    return ""
 
+            # Apply styles using Styler.apply
+            styled_table = changes_summary.style.set_properties(
+                **{"text-align": "center"}
+            )
+            styled_table = styled_table.map(status_color_map, subset=["Status"])
 
-
-
+            # Display the styled table
+            st.write(styled_table.to_html(), unsafe_allow_html=True)
+        else:
+            st.warning("Mask data not saved")
+    with col2:
+        reset_mask_button = st.button("Reset mask Data", on_click=reset_qctest)
+        if reset_mask_button:
+            # st.session_state.qc_mask_temp = np.copy(st.session_state.orig_mask)
+            # st.session_state.isQCCheck = False
+            # st.session_state.isQCTest = False
+            # st.session_state.isGrid = False
+            # st.session_state.isProfileMask = False
+            # st.session_state.isVelocityMask = False
+            st.success("Mask data is reset to default")

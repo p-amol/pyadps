@@ -113,7 +113,7 @@ if uploaded_file is not None:
     correlation = ds.correlation.data
     echo = ds.echo.data
     pgood = ds.percentgood.data
-    beamdir = ds.fixedleader.system_configuration()['Beam Direction']
+    beamdir = ds.fixedleader.system_configuration()["Beam Direction"]
 
     st.session_state.fname = uploaded_file.name
     st.session_state.head = ds.fileheader
@@ -124,12 +124,14 @@ if uploaded_file is not None:
     st.session_state.correlation = ds.correlation.data
     st.session_state.pgood = ds.percentgood.data
     st.session_state.beam_direction = beamdir
+    st.session_state.sound_speed = ds.variableleader.speed_of_sound.data
     st.session_state.depth = ds.variableleader.depth_of_transducer.data
-    st.session_state.isDepthModified = False
-    st.session_state.temperature = ds.variableleader.temperature
-    st.session_state.isTemperatureModified = False
-    st.session_state.salt = ds.variableleader.salinity
-    st.session_state.isSalinityModified = False
+    st.session_state.temperature = (
+        ds.variableleader.temperature.data * ds.variableleader.temperature.scale
+    )
+    st.session_state.salinity = (
+        ds.variableleader.salinity.data * ds.variableleader.salinity.scale
+    )
 
     # st.session_state.flead = flead
     # st.session_state.vlead = vlead
@@ -183,8 +185,60 @@ st.session_state.date2 = pd.to_datetime(date_df)
 st.session_state.ensemble_axis = np.arange(0, st.session_state.head.ensembles, 1)
 
 
+# ---------- Initialize all options -------------
+# ------------------
+# Global Tests
+# ------------------
+# Checks if the following tests are carried out
+st.session_state.isSensorTest = False
+st.session_state.isQCTest = False
+st.session_state.isProfileTest = False
+st.session_state.isGrid = False
+st.session_state.isGridSave = False
+st.session_state.isVelocityTest = False
 
-######### MASK DATA ##############
+# Check if visiting the page first time
+st.session_state.isFirstSensorVisit = True
+st.session_state.isFirstQCVisit = True
+st.session_state.isFirstProfileVisit = True
+st.session_state.isFirstVelocityVisit = True
+# ------------------
+# Local Tests:
+# ------------------
+st.session_state.isRollCheck = False
+st.session_state.isPitchCheck = False
+
+st.session_state.isQCCheck = False
+st.session_state.isBeamModified = False
+
+st.session_state.isTrimEndsCheck = False
+st.session_state.isCutBinSideLobeCheck = False
+st.session_state.isCutBinManualCheck = False
+st.session_state.isRegridCheck = False
+
+st.session_state.isMagnetCheck = False
+st.session_state.isDespikeCheck = False
+st.session_state.isFlatlineCheck = False
+st.session_state.isCutoffCheck = False
+
+
+# ------------------
+# Data Modifications
+# ------------------
+# SENSOR TEST
+# Velocity Modified Based on Sound
+st.session_state.isVelocityModifiedSound = False
+# Transducer depth modified based on Pressure sensor
+st.session_state.isDepthModified = False
+st.session_state.isTemperatureModified = False
+st.session_state.isSalinityModified = False
+# QC TEST
+st.session_state.isBeamModified = False
+# VELOCITY TEST
+# Velocity Modified based on magnetic declination
+st.session_state.isVelocityModifiedMagnet = False
+
+# MASK DATA
 # The velocity data has missing values due to the cutoff
 # criteria used before deployment. The `default_mask` uses
 # the velocity to create a mask. This mask  file is stored
@@ -196,12 +250,14 @@ if "orig_mask" not in st.session_state:
     ds = st.session_state.ds
     st.session_state.orig_mask = default_mask(ds)
 
-# Checks if the following quality checks are carried out
-st.session_state.isQCMask = False
-st.session_state.isProfileMask = False
-st.session_state.isGrid = False
-st.session_state.isGridSave = False
-st.session_state.isVelocityMask = False
+# ----------------------
+# Page returning options
+# ----------------------
+# This checks if we have returned back to the page after saving the data
+st.session_state.isSensorPageReturn = False
+st.session_state.isQCPageReturn = False
+st.session_state.isProfilePageReturn = False
+st.session_state.isVelocityPageReturn = False
 
 ########## FILE HEADER ###############
 st.header("File Header", divider="blue")
@@ -279,7 +335,7 @@ if flead_check_button:
 flead_button = st.button("Fixed Leader")
 if flead_button:
     # Pandas array should have all elements with same data type.
-    # Except Sl. no., which is np.uint64, rest are np.int64. 
+    # Except Sl. no., which is np.uint64, rest are np.int64.
     # Convert all datatype to uint64
     fl_dict = st.session_state.flead.field().items()
     new_dict = {}
@@ -307,4 +363,3 @@ with right:
     df = df.astype("str")
     st.write((df.style.map(color_bool2)))
     # st.dataframe(df)
-

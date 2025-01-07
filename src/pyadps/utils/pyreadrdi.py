@@ -320,7 +320,7 @@ def safe_read(bfile, num_bytes):
 
         if len(readbytes) != num_bytes:
             print(f"Unexpected end of file: fewer than {num_bytes} bytes were read.")
-            return (readbytes, ErrorCode.FILE_CORRUPTED)
+            return (None, ErrorCode.FILE_CORRUPTED)
         else:
             return (readbytes, ErrorCode.SUCCESS)
 
@@ -427,6 +427,7 @@ def fileheader(rdi_file):
                 error = ErrorCode.WRONG_RDIFILE_TYPE
                 print(bcolors.FAIL + error.message + bcolors.ENDC)
                 error_code = error.code
+                dummytuple = ([], [], [], [], [], ensemble, error_code)
                 return dummytuple
         else:
             if headerid[i] != 127 or sourceid[i] != 127:
@@ -442,8 +443,14 @@ def fileheader(rdi_file):
                 print(f"Ensembles reset to {i}" + bcolors.ENDC)
                 break
 
-        data = unpack("H" * datatype[i], dbyte)
-        address_offset.append(data)
+        try:
+            data = unpack("H" * datatype[i], dbyte)
+            address_offset.append(data)
+        except:
+            error = ErrorCode.FILE_CORRUPTED
+            error_code = error.code
+            dummytuple = ([], [], [], [], [], ensemble, error_code)
+            return dummytuple
 
         skip_array = [None] * datatype[i]
         for dtype in range(datatype[i]):
@@ -553,7 +560,7 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
         fbyteskip = None
         for count, item in enumerate(idarray[i]):
             if item in (0, 1):
-                fbyteskip = offset[1][count]
+                fbyteskip = offset[0][count]
         if fbyteskip == None:
             error = ErrorCode.ID_NOT_FOUND
             ensemble = i
@@ -703,7 +710,7 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
         fbyteskip = None
         for count, item in enumerate(idarray[i]):
             if item in (128, 129):
-                fbyteskip = offset[1][count]
+                fbyteskip = offset[0][count]
         if fbyteskip == None:
             error = ErrorCode.ID_NOT_FOUND
             ensemble = i
@@ -935,7 +942,7 @@ def datatype(
     fbyteskip = None
     for count, item in enumerate(idarray[0][:]):
         if item in vid:
-            fbyteskip = offset[1][count]
+            fbyteskip = offset[0][count]
             break
     if fbyteskip is None:
         print(

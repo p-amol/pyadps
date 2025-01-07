@@ -26,10 +26,19 @@ if "vleadfilename" not in st.session_state:
 if "attributes" not in st.session_state:
     st.session_state.attributes = {}
 
-if st.session_state.isVelocityMask:
+if st.session_state.isVelocityTest:
     st.session_state.final_mask = st.session_state.velocity_mask
-    st.session_state.final_velocity = st.session_state.veltest_velocity
-    if st.session_state.isGridSave:
+
+    if st.session_state.isVelocityModifiedMagnet:
+        st.session_state.final_velocity = st.session_state.velocity_magnet
+    if st.session_state.isRegridCheck:
+        st.session_state.final_velocity = st.session_state.velocity_regrid
+    elif st.session_state.isVelocityModifiedSound:
+        st.session_state.final_velocity = st.session_state.velocity_sensor
+    else:
+        st.session_state.final_velocity = st.session_state.velocity
+
+    if st.session_state.isRegridCheck:
         st.session_state.final_echo = st.session_state.echo_regrid
         st.session_state.final_correlation = st.session_state.correlation_regrid
         st.session_state.final_pgood = st.session_state.pgood_regrid
@@ -38,17 +47,19 @@ if st.session_state.isVelocityMask:
         st.session_state.final_correlation = st.session_state.correlation
         st.session_state.final_pgood = st.session_state.pgood
 else:
-    if st.session_state.isGridSave:
-        st.session_state.final_mask = st.session_state.mask_regrid
+    if st.session_state.isRegridCheck:
+        st.session_state.final_mask = st.session_state.profile_mask_regrid
         st.session_state.final_velocity = st.session_state.velocity_regrid
         st.session_state.final_echo = st.session_state.echo_regrid
         st.session_state.final_correlation = st.session_state.correlation_regrid
         st.session_state.final_pgood = st.session_state.pgood_regrid
     else:
-        if st.session_state.isProfileMask:
+        if st.session_state.isProfileTest:
             st.session_state.final_mask = st.session_state.profile_mask
-        elif st.session_state.isQCMask:
+        elif st.session_state.isQCTest:
             st.session_state.final_mask = st.session_state.qc_mask
+        elif st.session_state.isSensorTest:
+            st.session_state.final_mask = st.session_state.sensor_mask
         else:
             st.session_state.final_mask = st.session_state.orig_mask
         st.session_state.final_velocity = st.session_state.velocity
@@ -57,7 +68,7 @@ else:
         st.session_state.final_pgood = st.session_state.pgood
 
 
-if "depth" not in st.session_state:
+if "depth_axis" not in st.session_state:
     st.session_state.isGrid = False
 
 
@@ -74,7 +85,8 @@ if not st.session_state.isGrid:
     st.write(
         "Data not regrided. Using the mean transducer depth to calculate the depth axis."
     )
-    mean_depth = np.mean(st.session_state.vlead.vleader["Depth of Transducer"]) / 10
+    # mean_depth = np.mean(st.session_state.vlead.vleader["Depth of Transducer"]) / 10
+    mean_depth = np.mean(st.session_state.depth) / 10
     mean_depth = np.trunc(mean_depth)
     st.write(f"Mean depth of the transducer is `{mean_depth}`")
     cells = st.session_state.flead.field()["Cells"]
@@ -83,9 +95,9 @@ if not st.session_state.isGrid:
     max_depth = mean_depth - bin1dist
     min_depth = max_depth - cells * cell_size
     z = np.arange(-1 * max_depth, -1 * min_depth, cell_size)
-    st.session_state.final_depth = z
+    st.session_state.final_depth_axis = z
 else:
-    st.session_state.final_depth = st.session_state.depth
+    st.session_state.final_depth_axis = st.session_state.depth_axis
 
 
 # Functions for plotting
@@ -121,7 +133,7 @@ def call_plot(varname, beam, mask=False):
     if varname == "Velocity":
         fillplot_plotly(
             st.session_state.date,
-            st.session_state.final_depth,
+            st.session_state.final_depth_axis,
             st.session_state.final_velocity[beam - 1, :, :],
             st.session_state.final_mask,
             title=varname,
@@ -130,7 +142,7 @@ def call_plot(varname, beam, mask=False):
     elif varname == "Echo":
         fillplot_plotly(
             st.session_state.date,
-            st.session_state.final_depth,
+            st.session_state.final_depth_axis,
             st.session_state.final_echo[beam - 1, :, :],
             st.session_state.final_mask,
             title=varname,
@@ -139,7 +151,7 @@ def call_plot(varname, beam, mask=False):
     elif varname == "Correlation":
         fillplot_plotly(
             st.session_state.date,
-            st.session_state.final_depth,
+            st.session_state.final_depth_axis,
             st.session_state.final_correlation[beam - 1, :, :],
             st.session_state.final_mask,
             title=varname,
@@ -148,7 +160,7 @@ def call_plot(varname, beam, mask=False):
     elif varname == "Percent Good":
         fillplot_plotly(
             st.session_state.date,
-            st.session_state.final_depth,
+            st.session_state.final_depth_axis,
             st.session_state.final_pgood[beam - 1, :, :],
             st.session_state.final_mask,
             title=varname,
@@ -237,15 +249,17 @@ download_button = st.button("Generate Processed files")
 if download_button:
     st.session_state.processed_filename = file_write()
     st.write(":grey[Processed file created. Click the download button.]")
-    st.write(st.session_state.processed_filename)
-    depth = np.trunc(st.session_state.final_depth)
+    #    st.write(st.session_state.processed_filename)
+    depth_axis = np.trunc(st.session_state.final_depth_axis)
+    final_mask = st.session_state.final_mask
 
     if file_type_radio == "NetCDF":
         if add_attr_button and st.session_state.attributes:
             # Generate file with attributes
             wr.finalnc(
                 st.session_state.processed_filename,
-                depth,
+                depth_axis,
+                final_mask,
                 st.session_state.date,
                 st.session_state.write_velocity,
                 attributes=st.session_state.attributes,  # Pass edited attributes
@@ -254,54 +268,63 @@ if download_button:
             # Generate file without attributes
             wr.finalnc(
                 st.session_state.processed_filename,
-                depth,
+                depth_axis,
+                final_mask,
                 st.session_state.date,
                 st.session_state.write_velocity,
             )
 
-    with open(st.session_state.processed_filename, "rb") as file:
-        st.download_button(
-            label="Download NetCDF File",
-            data=file,
-            file_name="processed_file.nc",
-        )
+        with open(st.session_state.processed_filename, "rb") as file:
+            st.download_button(
+                label="Download NetCDF File",
+                data=file,
+                file_name="processed_file.nc",
+            )
 
     if file_type_radio == "CSV":
         udf = pd.DataFrame(
             st.session_state.write_velocity[0, :, :].T,
             index=st.session_state.date,
-            columns=-1 * depth,
+            columns=-1 * depth_axis,
         )
         vdf = pd.DataFrame(
             st.session_state.write_velocity[1, :, :].T,
             index=st.session_state.date,
-            columns=-1 * depth,
+            columns=-1 * depth_axis,
         )
         wdf = pd.DataFrame(
             st.session_state.write_velocity[2, :, :].T,
             index=st.session_state.date,
-            columns=-1 * depth,
+            columns=-1 * depth_axis,
         )
         ucsv = udf.to_csv().encode("utf-8")
         vcsv = vdf.to_csv().encode("utf-8")
         wcsv = wdf.to_csv().encode("utf-8")
+        csv_mask = pd.DataFrame(st.session_state.final_mask.T).to_csv().encode("utf-8")
         st.download_button(
-            label="Download Zonal Velocity File",
+            label="Download Zonal Velocity File (CSV)",
             data=ucsv,
             file_name="zonal_velocity.csv",
             mime="text/csf",
         )
         st.download_button(
-            label="Download Meridional Velocity File",
+            label="Download Meridional Velocity File (CSV)",
             data=vcsv,
             file_name="meridional_velocity.csv",
             mime="text/csf",
         )
         st.download_button(
-            label="Download Vertical Velocity File",
+            label="Download Vertical Velocity File (CSV)",
             data=vcsv,
             file_name="vertical_velocity.csv",
             mime="text/csf",
+        )
+
+        st.download_button(
+            label="Download Final Mask (CSV)",
+            data=csv_mask,
+            file_name="final_mask.csv",
+            mime="text/csv",
         )
 
 
@@ -324,6 +347,7 @@ if generate_config_radio == "Yes":
     # Main section
     config["FileSettings"] = {}
     config["DownloadOptions"] = {}
+    config["SensorTest"] = {"sensor_test": "False"}
     config["QCTest"] = {"qc_test": "False"}
     config["ProfileTest"] = {"profile_test": "False"}
     config["VelocityTest"] = {"velocity_test": "False"}
@@ -342,8 +366,53 @@ if generate_config_radio == "Yes":
     config["DownloadOptions"]["apply_mask"] = "True"
     config["DownloadOptions"]["download_mask"] = "True"
 
+    # Sensor Test Options
+    if st.session_state.isSensorTest:
+        config["SensorTest"]["sensor_test"] = "True"
+        if st.session_state.isRollCheck:
+            config["SensorTest"]["roll_cutoff"] = str(
+                st.session_state.sensor_roll_cutoff
+            )
+        if st.session_state.isRollCheck:
+            config["SensorTest"]["pitch_cutoff"] = str(
+                st.session_state.sensor_pitch_cutoff
+            )
+
+        config["SensorTest"]["depth_modified"] = str(st.session_state.isDepthModified)
+        if st.session_state.isDepthModified:
+            config["SensorTest"]["depth_input_option"] = str(
+                st.session_state.sensor_depthoption
+            )
+            if st.session_state.sensor_depthoption == "Fixed Value":
+                config["SensorTest"]["depth_input"] = str(
+                    st.session_state.sensor_depthinput
+                )
+
+        config["SensorTest"]["salinity_modified"] = str(
+            st.session_state.isSalinityModified
+        )
+        if st.session_state.isSalinityModified:
+            config["SensorTest"]["salinity_input_option"] = str(
+                st.session_state.sensor_depthoption
+            )
+            if st.session_state.sensor_salinityoption == "Fixed Value":
+                config["SensorTest"]["salinity_input"] = str(
+                    st.session_state.sensor_salinityinput
+                )
+
+        config["SensorTest"]["temperature_modified"] = str(
+            st.session_state.isTemperatureModified
+        )
+        if st.session_state.isTemperatureModified:
+            config["SensorTest"]["temperature_input_option"] = str(
+                st.session_state.sensor_tempoption
+            )
+            if st.session_state.sensor_tempoption == "Fixed Value":
+                config["SensorTest"]["temperature_input"] = str(
+                    st.session_state.sensor_tempinput
+                )
     # QC Test Options
-    if st.session_state.isQCMask:
+    if st.session_state.isQCTest:
         config["QCTest"]["qc_test"] = "True"
 
         # Add the contents of the current QC Mask thresholds
@@ -352,39 +421,42 @@ if generate_config_radio == "Yes":
                 config["QCTest"][row["Threshold"].replace(" ", "_")] = row["Values"]
 
     # Profile Test Options
-    if st.session_state.isProfileMask:
+    if st.session_state.isProfileTest:
         config["ProfileTest"]["profile_test"] = "True"
 
-        if st.session_state.isTrimEnds:
+        if st.session_state.isTrimEndsCheck:
             config["ProfileTest"]["trim_ends"] = "True"
             config["ProfileTest"]["trim_ends_start_index"] = str(
-                st.session_state.start_ens
+                st.session_state.trimends_start_ens
             )
-            config["ProfileTest"]["trim_ends_end_index"] = str(st.session_state.end_ens)
+            config["ProfileTest"]["trim_ends_end_index"] = str(
+                st.session_state.trimends_end_ens
+            )
         else:
             config["ProfileTest"]["trim_ends"] = "False"
 
-        if st.session_state.isCutBins:
+        if st.session_state.isCutBinSideLobeCheck:
             config["ProfileTest"]["cut_bins"] = "True"
             config["ProfileTest"]["cut_bins_add_cells"] = str(
-                st.session_state.extra_cells
+                st.session_state.profile_extra_cells
             )
         else:
             config["ProfileTest"]["cut_bins"] = "False"
 
-        if st.session_state.isGrid:
+        if st.session_state.isCutBinManualCheck:
+            config["ProfileTest"]["cut_bins_manual"] = "True"
+
+        if st.session_state.isRegridCheck:
             config["ProfileTest"]["regrid"] = "True"
-            config["ProfileTest"][
-                "Regrid_Option"
-            ] = st.session_state.end_bin_option
+            config["ProfileTest"]["Regrid_Option"] = st.session_state.end_bin_option
         else:
             config["ProfileTest"]["regrid"] = "False"
 
     # Velocity Test Section
-    if st.session_state.isVelocityMask:
+    if st.session_state.isVelocityTest:
         config["VelocityTest"]["velocity_test"] = "True"
 
-        if st.session_state.isMagnet:
+        if st.session_state.isMagnetCheck:
             config["VelocityTest"]["magnetic_declination"] = str(True)
             config["VelocityTest"]["latitude"] = str(st.session_state.lat)
             config["VelocityTest"]["longitude"] = str(st.session_state.lon)
@@ -393,7 +465,7 @@ if generate_config_radio == "Yes":
         else:
             config["VelocityTest"]["magnetic_declination"] = str(False)
 
-        if st.session_state.isCutoff:
+        if st.session_state.isCutoffCheck:
             config["VelocityTest"]["cutoff"] = str(True)
             config["VelocityTest"]["max_zonal_velocity"] = str(st.session_state.maxuvel)
             config["VelocityTest"]["max_meridional_velocity"] = str(
@@ -405,7 +477,7 @@ if generate_config_radio == "Yes":
         else:
             config["VelocityTest"]["cutoff"] = str(False)
 
-        if st.session_state.isDespike:
+        if st.session_state.isDespikeCheck:
             config["VelocityTest"]["despike"] = str(True)
             config["VelocityTest"]["despike_Kernal_Size"] = str(
                 st.session_state.despike_kernal
@@ -416,7 +488,7 @@ if generate_config_radio == "Yes":
         else:
             config["VelocityTest"]["Despike"] = str(False)
 
-        if st.session_state.isFlatline:
+        if st.session_state.isFlatlineCheck:
             config["VelocityTest"]["flatline"] = str(True)
             config["VelocityTest"]["flatline_kernal_size"] = str(
                 st.session_state.flatline_kernal
@@ -433,12 +505,15 @@ if generate_config_radio == "Yes":
         config["Optional"][key] = str(value)  # Ensure all values are strings
 
     # Write config.ini to a temporary file
-    config_filepath = "config.ini"
-    with open(config_filepath, "w") as configfile:
-        config.write(configfile)
-
+    # config_filepath = "config.ini"
+    # with open(config_filepath, "w") as configfile:
+    #     config.write(configfile)
+    # Create a temporary file for the config.ini
+    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".ini") as temp_config:
+        config.write(temp_config)
+        temp_config_path = temp_config.name
     # Allow the user to download the generated config.ini file
-    with open(config_filepath, "rb") as file:
+    with open(temp_config_path, "rb") as file:
         st.download_button(
             label="Download config.ini File",
             data=file,

@@ -435,7 +435,7 @@ def flead_dict(fid, dim=2):
         "False Target Thresh": "int64",
         "Spare 1": "int64",
         "Transmit Lag Dist": "int64",
-        "CPU Serial No": "int64",
+        "CPU Serial No": "int128",
         "System Bandwidth": "int64",
         "System Power": "int64",
         "Spare 2": "int64",
@@ -447,9 +447,15 @@ def flead_dict(fid, dim=2):
     counter = 1
     for key, value in fname.items():
         if dim == 2:
-            flead[key] = getattr(np, value)(fid[:][counter])
+            if key == "CPU Serial No":
+                flead[key] = np.uint64(fid[:][counter])
+            else:
+                flead[key] = np.int64(fid[:][counter])
         elif dim == 1:
-            flead[key] = getattr(np, value)(fid[counter])
+            if key == "CPU Serial No":
+                flead[key] = np.uint64(fid[counter])
+            else:
+                flead[key] = np.int64(fid[counter])
         else:
             print("ERROR: Higher dimensions not allowed")
             sys.exit()
@@ -505,6 +511,7 @@ class FixedLeader:
         )
         self.warning = pyreadrdi.ErrorCode.get_message(self.error)
 
+        self.data = np.uint64(self.data)
         self.fleader = flead_dict(self.data)
         self._initialize_from_dict(DotDict(json_file_path="flmeta.json"))
 
@@ -878,7 +885,7 @@ class VariableLeader:
             setattr(getattr(self, key), "data", self.data[i])
             i = i + 1
 
-    def bit_result(self):
+    def bitresult(self):
         """
         Extracts Bit Results from Variable Leader (Byte 13 & 14)
         This field is part of the WorkHorse ADCP’s Built-in Test function.
@@ -957,8 +964,6 @@ class VariableLeader:
 
         scale_factor = scale_list.get(fixclass["Frequency"])
 
-        print(fixclass["Frequency"])
-
         channel["Xmit Voltage"] = adc1 * (scale_factor[0] / 1000000)
 
         channel["Xmit Current"] = adc0 * (scale_factor[1] / 1000000)
@@ -974,6 +979,73 @@ class VariableLeader:
         )
 
         return channel
+
+    def error_status_word(self, esw=1):
+        bitset1 = ("Bus Error exception", 
+                   "Address Error exception", 
+                   "Zero Divide exception",
+                   "Emulator exception",
+                   "Unassigned exception",
+                   "Watchdog restart occurred",
+                   "Batter Saver Power")
+
+        bitset2 = ("Pinging",
+                   "Not Used 1",
+                   "Not Used 2",
+                   "Not Used 3",
+                   "Not Used 4",
+                   "Not Used 5",
+                   "Cold Wakeup occured",
+                   "Unknown Wakeup occured")
+
+        bitset3 = ("Clock Read error occured",
+                   "Unexpected alarm",
+                   "Clock jump forward",
+                   "Clock jump backward",
+                   "Not Used 6",
+                   "Not Used 7",
+                   "Not Used 8",
+                   "Not Used 9")
+
+        bitset4 =  ("Not Used 10",
+                   "Not Used 11",
+                   "Not Used 12",
+                   "Power Fail Unrecorded",
+                   "Spurious level 4 intr DSP",
+                   "Spurious level 5 intr UART",
+                   "Spurious level 6 intr CLOCK",
+                   "Level 7 interrup occured")
+
+
+
+        if esw == 1:
+            bitset = bitset1
+            errorarray = self.vleader["Error Status Word 1"] 
+        elif esw == 2:
+            bitset = bitset2
+            errorarray = self.vleader["Error Status Word 2"] 
+        elif esw == 3:
+            bitset = bitset3
+            errorarray = self.vleader["Error Status Word 3"] 
+        else:
+            bitset = bitset4
+            errorarray = self.vleader["Error Status Word 4"] 
+
+        errorstatus = dict()
+        # bitarray = np.zeros(32, dtype='str')
+
+        for item in bitset:
+            errorstatus[item] = np.array([])
+
+        for data in errorarray:
+            byte_split = format(data, "08b")
+            bitposition=0
+            for item in bitset:
+                errorstatus[item] = np.append(errorstatus[item], byte_split[bitposition] )
+                bitposition+=1
+
+        return errorstatus
+
 
 
 class Velocity:

@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pyadps.utils.writenc as wr
 from pyadps.utils import readrdi
-from pyadps.utils.profile_test import side_lobe_beam_angle,manual_cut_bins
+from pyadps.utils.profile_test import side_lobe_beam_angle, manual_cut_bins
 from pyadps.utils.profile_test import regrid2d, regrid3d
 from pyadps.utils.signal_quality import (
     default_mask,
@@ -13,15 +13,16 @@ from pyadps.utils.signal_quality import (
     false_target,
     pg_check,
     echo_check,
-    correlation_check
+    correlation_check,
 )
 from pyadps.utils.velocity_test import (
     despike,
     flatline,
     velocity_cutoff,
     wmm2020api,
-    velocity_modifier
+    velocity_modifier,
 )
+
 
 def main():
     # Get the config file
@@ -33,21 +34,23 @@ def main():
             print("File not found!")
     except Exception as e:
         import traceback
+
         print("Error: Unable to process the data.")
         traceback.print_exc()
 
-def autoprocess(config_file,binary_file_path=None):
+
+def autoprocess(config_file, binary_file_path=None):
     # Load configuration
     config = configparser.ConfigParser()
 
     # Decode and parse the config file
     # Check if config_file is a file-like object or a file path
-    if hasattr(config_file, 'read'):
+    if hasattr(config_file, "read"):
         # If it's a file-like object, read its content
         config_content = config_file.read().decode("utf-8")
     else:
         # If it's a file path, open the file and read its content
-        with open(config_file, 'r', encoding="utf-8") as file:
+        with open(config_file, "r", encoding="utf-8") as file:
             config_content = file.read()
     config.read_string(config_content)
 
@@ -73,7 +76,7 @@ def autoprocess(config_file,binary_file_path=None):
     cells = flobj.field()["Cells"]
     fdata = flobj.fleader
     vdata = vlobj.vleader
-  #  depth = ds.variableleader.depth_of_transducer
+    #  depth = ds.variableleader.depth_of_transducer
 
     # Initialize mask
     mask = default_mask(ds)
@@ -83,8 +86,13 @@ def autoprocess(config_file,binary_file_path=None):
     y = np.arange(0, cells, 1)
     depth = None
 
-    axis_option = config.get("DownloadOptions","axis_option")
+    axis_option = config.get("DownloadOptions", "axis_option")
 
+    # Sensor Test
+    isSensorTest = config.getboolean("SensorTest", "sensor_test")
+    isRollTest = config.getboolean("RollTest", "roll_test")
+    # if isSensorTest:
+    #     if isRollTest:
 
     # QC Test
     isQCTest = config.getboolean("QCTest", "qc_test")
@@ -134,24 +142,24 @@ def autoprocess(config_file,binary_file_path=None):
                     mask,
                     orientation=orientation,
                     water_column_depth=water_column_depth,
-                    extra_cells=add_cells
-                    )
-            else :
+                    extra_cells=add_cells,
+                )
+            else:
                 mask = side_lobe_beam_angle(
                     ds,
                     mask,
                     orientation=orientation,
                     water_column_depth=water_column_depth,
-                    extra_cells=add_cells
-                    )
+                    extra_cells=add_cells,
+                )
 
             print("Cutbins complete.")
 
-        #Manual Cut Bins
+        # Manual Cut Bins
         isManual_cutbins = config.getboolean("ProfileTest", "manual_cutbins")
         if isManual_cutbins:
             raw_bins = config.get("ProfileTest", "manual_cut_bins")
-            bin_groups = raw_bins.split("]")  
+            bin_groups = raw_bins.split("]")
 
             for group in bin_groups:
                 if group.strip():  # Ignore empty parts
@@ -159,10 +167,11 @@ def autoprocess(config_file,binary_file_path=None):
                     clean_group = group.replace("[", "").strip()
                     values = list(map(int, clean_group.split(",")))
                     min_cell, max_cell, min_ensemble, max_ensemble = values
-                    mask = manual_cut_bins(mask, min_cell, max_cell, min_ensemble, max_ensemble)
+                    mask = manual_cut_bins(
+                        mask, min_cell, max_cell, min_ensemble, max_ensemble
+                    )
 
             print("Manual cut bins applied.")
-
 
         isRegrid = config.getboolean("ProfileTest", "regrid")
         if isRegrid:
@@ -172,19 +181,99 @@ def autoprocess(config_file,binary_file_path=None):
             interpolate = config.get("ProfileTest", "regrid_interpolation")
             boundary = 0
             if regrid_option == "Manual":
-                boundary = config.get("ProfileTest","transducer_depth")
-                z, velocity = regrid3d(ds,velocity, -32768,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
-                z, echo = regrid3d(ds,echo, -32768,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
-                z, correlation = regrid3d(ds,correlation, -32768,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
-                z, pgood = regrid3d(ds,pgood, -32768,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
-                z, mask = regrid2d(ds,mask, 1,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
+                boundary = config.get("ProfileTest", "transducer_depth")
+                z, velocity = regrid3d(
+                    ds,
+                    velocity,
+                    -32768,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
+                z, echo = regrid3d(
+                    ds,
+                    echo,
+                    -32768,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
+                z, correlation = regrid3d(
+                    ds,
+                    correlation,
+                    -32768,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
+                z, pgood = regrid3d(
+                    ds,
+                    pgood,
+                    -32768,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
+                z, mask = regrid2d(
+                    ds,
+                    mask,
+                    1,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
                 depth = z
-            else :
-                z, velocity = regrid3d(ds,velocity, -32768,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
-                z, echo = regrid3d(ds,echo, -32768,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
-                z, correlation = regrid3d(ds,correlation, -32768,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
-                z, pgood = regrid3d(ds,pgood, -32768,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
-                z, mask = regrid2d(ds,mask, 1,trimends=endpoints,orientation=orientation,method=interpolate,boundary_limit=boundary)
+            else:
+                z, velocity = regrid3d(
+                    ds,
+                    velocity,
+                    -32768,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
+                z, echo = regrid3d(
+                    ds,
+                    echo,
+                    -32768,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
+                z, correlation = regrid3d(
+                    ds,
+                    correlation,
+                    -32768,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
+                z, pgood = regrid3d(
+                    ds,
+                    pgood,
+                    -32768,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
+                z, mask = regrid2d(
+                    ds,
+                    mask,
+                    1,
+                    trimends=endpoints,
+                    orientation=orientation,
+                    method=interpolate,
+                    boundary_limit=boundary,
+                )
                 depth = z
 
             print("Regrid Complete.")
@@ -202,13 +291,10 @@ def autoprocess(config_file,binary_file_path=None):
             magdep = config.getfloat("VelocityTest", "depth")
             magyear = config.getfloat("VelocityTest", "year")
             year = int(magyear)
-      #      mag = config.getfloat("VelocityTest", "mag")
+            #      mag = config.getfloat("VelocityTest", "mag")
 
-
-            mag = wmm2020api(
-                 maglat, maglon, year
-                )
-            velocity = velocity_modifier(velocity,mag)
+            mag = wmm2020api(maglat, maglon, year)
+            velocity = velocity_modifier(velocity, mag)
             print(f"Magnetic Declination applied. The value is {mag[0]} degrees.")
         isCutOff = config.getboolean("VelocityTest", "cutoff")
         if isCutOff:
@@ -262,7 +348,7 @@ def autoprocess(config_file,binary_file_path=None):
                 kernal_size=despike_kernal,
                 cutoff=despike_cutoff,
             )
-            
+
             print("Flatlines in velocity removed.")
 
         print("Velocity Test complete.")
@@ -323,13 +409,20 @@ def autoprocess(config_file,binary_file_path=None):
     isWriteRawNC = config.get("DownloadOptions", "download_raw")
     isWriteVleadNC = config.get("DownloadOptions", "download_vlead")
     isWriteProcNC = config.get("DownloadOptions", "download_processed")
-    
+
     if isWriteRawNC:
         filepath = config.get("FileSettings", "output_file_path")
         filename = config.get("FileSettings", "output_file_name_raw")
         output_file_path = os.path.join(filepath, filename)
         if isAttributes:
-            wr.rawnc(full_input_file_path, output_file_path, date_raw, axis_option, attributes, isAttributes)
+            wr.rawnc(
+                full_input_file_path,
+                output_file_path,
+                date_raw,
+                axis_option,
+                attributes,
+                isAttributes,
+            )
 
         print("Raw file written.")
 
@@ -338,11 +431,17 @@ def autoprocess(config_file,binary_file_path=None):
         filename = config.get("FileSettings", "output_file_name_vlead")
         output_file_path = os.path.join(filepath, filename)
         if isAttributes:
-            wr.vlead_nc(full_input_file_path, output_file_path, date_vlead, axis_option, attributes, isAttributes)
+            wr.vlead_nc(
+                full_input_file_path,
+                output_file_path,
+                date_vlead,
+                axis_option,
+                attributes,
+                isAttributes,
+            )
 
             print("Vlead file written.")
 
-    
     depth1 = depth
 
     if isWriteProcNC:

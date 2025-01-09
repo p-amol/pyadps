@@ -370,9 +370,12 @@ if generate_config_radio == "Yes":
     if st.session_state.isSensorTest:
         config["SensorTest"]["sensor_test"] = "True"
         if st.session_state.isRollCheck:
+            config["RollTest"]["roll_test"] = "True"
             config["SensorTest"]["roll_cutoff"] = str(
                 st.session_state.sensor_roll_cutoff
             )
+        else:
+            config["RollTest"]["roll_test"] = "False"
         if st.session_state.isRollCheck:
             config["SensorTest"]["pitch_cutoff"] = str(
                 st.session_state.sensor_pitch_cutoff

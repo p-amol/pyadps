@@ -493,9 +493,9 @@ with tab1:
         [st.session_state.trimends_start_ens, st.session_state.trimends_end_ens]
     )
 
-    n = 20
+    n = int(ens_range)
     if start_ens or end_ens:
-        trim_ends(start_ens=start_ens, end_ens=end_ens, ens_range=n)
+        trim_ends(start_ens=int(start_ens), end_ens=int(end_ens), ens_range=n)
         # st.session_state.update_mask = False
 
     left_te, right_te = st.columns([1, 1])
@@ -655,7 +655,7 @@ with tab3:
             if delete_cell_button:
                 st.write("Deleted cell: ", st.session_state.profile_delete_cell)
 
-        elif delete_option == "Ensemble":
+        if delete_option == "Ensemble":
             # Option to delete a specific ensemble across all cells
             st.write("Select a specific ensemble to delete across all cells")
 
@@ -670,7 +670,7 @@ with tab3:
             )
 
             if delete_ensemble_button:
-                st.write("Deleted cell: ", st.session_state.profile_delete_ensemble)
+                st.write("Deleted Ensemble: ", st.session_state.profile_delete_ensemble)
 
     velocity = st.session_state.velocity_temp
     # Map variable selection to corresponding data

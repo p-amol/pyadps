@@ -114,38 +114,6 @@ def hard_reset(option):
     )
 
 
-# Giving infromations and warnings according to the state of masks.
-if st.session_state.isQCTest or st.session_state.isSensorTest:
-    st.write(":grey[Working on a saved mask file ...]")
-    if st.session_state.isProfilePageReturn:
-        st.write(
-            ":orange[Warning: Profile test already completed. Reset to change settings.]"
-        )
-        reset_selectbox = st.selectbox(
-            "Choose reset option",
-            ("Sensor Test", "QC Test", "Default"),
-            index=None,
-            placeholder="Reset mask to ...",
-        )
-        # Selecting the original mask file.
-        if reset_selectbox == "Default":
-            st.write("Default mask file selected")
-        elif reset_selectbox == "Sensor Test":
-            st.write("Sensor Test mask file selected")
-        elif reset_selectbox == "QC Test":
-            st.write("QC Test mask file selected")
-        if reset_selectbox is not None:
-            hard_reset(reset_selectbox)
-    elif st.session_state.isFirstProfileVisit:
-        reset_profiletest()
-        st.session_state.isFirstProfileVisit = False
-else:
-    if st.session_state.isFirstProfileVisit:
-        reset_profiletest()
-        st.session_state.isFirstProfileVisit = False
-    st.write(":orange[Creating a new mask file ...]")
-
-
 # Load data
 ds = st.session_state.ds
 flobj = st.session_state.flead
@@ -466,6 +434,37 @@ def save_profiletest():
     st.session_state.isQCPageReturn = True
 
 
+# Giving infromations and warnings according to the state of masks.
+if st.session_state.isQCTest or st.session_state.isSensorTest:
+    st.write(":grey[Working on a saved mask file ...]")
+    if st.session_state.isProfilePageReturn:
+        st.write(
+            ":orange[Warning: Profile test already completed. Reset to change settings.]"
+        )
+        reset_selectbox = st.selectbox(
+            "Choose reset option",
+            ("Sensor Test", "QC Test", "Default"),
+            index=None,
+            placeholder="Reset mask to ...",
+        )
+        # Selecting the original mask file.
+        if reset_selectbox == "Default":
+            st.write("Default mask file selected")
+        elif reset_selectbox == "Sensor Test":
+            st.write("Sensor Test mask file selected")
+        elif reset_selectbox == "QC Test":
+            st.write("QC Test mask file selected")
+        if reset_selectbox is not None:
+            hard_reset(reset_selectbox)
+    elif st.session_state.isFirstProfileVisit:
+        reset_profiletest()
+        st.session_state.isFirstProfileVisit = False
+else:
+    if st.session_state.isFirstProfileVisit:
+        reset_profiletest()
+        st.session_state.isFirstProfileVisit = False
+    st.write(":orange[Creating a new mask file ...]")
+
 st.header("Profile Test")
 # Creating tabs for each actions
 tab1, tab2, tab3, tab4, tab5 = st.tabs(
@@ -486,17 +485,17 @@ with tab1:
     start_ens = st.slider("Deployment Ensembles", 0, ens_range, 0)
     end_ens = st.slider("Recovery Ensembles", x[-1] - ens_range, x[-1] + 1, x[-1] + 1)
 
+    n = int(ens_range)
+    if start_ens or end_ens:
+        trim_ends(start_ens=int(start_ens), end_ens=int(end_ens), ens_range=n)
+        # st.session_state.update_mask = False
+
     st.session_state.trimends_ens_range = int(ens_range)
     st.session_state.trimends_start_ens = start_ens
     st.session_state.trimends_end_ens = end_ens
     st.session_state.trimends_endpoints = np.array(
         [st.session_state.trimends_start_ens, st.session_state.trimends_end_ens]
     )
-
-    n = int(ens_range)
-    if start_ens or end_ens:
-        trim_ends(start_ens=int(start_ens), end_ens=int(end_ens), ens_range=n)
-        # st.session_state.update_mask = False
 
     left_te, right_te = st.columns([1, 1])
     with left_te:

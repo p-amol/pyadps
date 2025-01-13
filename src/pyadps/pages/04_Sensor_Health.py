@@ -57,26 +57,26 @@ def set_button_upload_depth():
         numpy_depth = df_depth.to_numpy()
         st.session_state.df_numpy_depth = np.squeeze(numpy_depth)
         if len(st.session_state.df_numpy_depth) != st.session_state.head.ensembles:
-            st.session_state.isDepthModified = False
+            st.session_state.isDepthModified_ST = False
         else:
             st.session_state.depth = st.session_state.df_numpy_depth
-            st.session_state.isDepthModified = True
+            st.session_state.isDepthModified_ST = True
 
 
 def set_button_depth():
     # st.session_state.depth = st.session_state.depth * 0 + int(
-    #     st.session_state.sensor_depthinput * 10
+    #     st.session_state.fixeddepth_ST * 10
     # )
     st.session_state.depth = np.full(
-        st.session_state.head.ensembles, st.session_state.sensor_depthinput
+        st.session_state.head.ensembles, st.session_state.fixeddepth_ST
     )
     st.session_state.depth *= 10
-    st.session_state.isDepthModified = True
+    st.session_state.isDepthModified_ST = True
 
 
 def reset_button_depth():
     st.session_state.depth = st.session_state.vlead.depth_of_transducer.data
-    st.session_state.isDepthModified = False
+    st.session_state.isDepthModified_ST = False
 
 
 # Salinity Tab
@@ -87,22 +87,22 @@ def set_button_upload_salinity():
         numpy_salinity = df_salinity.to_numpy()
         st.session_state.df_numpy_salinity = np.squeeze(numpy_salinity)
         if len(st.session_state.df_numpy_salinity) != st.session_state.head.ensembles:
-            st.session_state.isSalinityModified = False
+            st.session_state.isSalinityModified_ST = False
         else:
             st.session_state.salinity = st.session_state.df_numpy_salinity
-            st.session_state.isSalinityModified = True
+            st.session_state.isSalinityModified_ST = True
 
 
 def set_button_salinity():
     st.session_state.salinity = np.full(
-        st.session_state.head.ensembles, st.session_state.sensor_salinityinput
+        st.session_state.head.ensembles, st.session_state.fixedsalinity_ST
     )
-    st.session_state.isSalinityModified = True
+    st.session_state.isSalinityModified_ST = True
 
 
 def reset_button_salinity():
     st.session_state.salinity = st.session_state.vlead.salinity.data
-    st.session_state.isSalinityModified = False
+    st.session_state.isSalinityModified_ST = False
 
 
 # Temperature Tab
@@ -118,22 +118,22 @@ def set_button_upload_temperature():
             len(st.session_state.df_numpy_temperature)
             != st.session_state.head.ensembles
         ):
-            st.session_state.isTemperatureModified = False
+            st.session_state.isTemperatureModified_ST = False
         else:
             st.session_state.temperature = st.session_state.df_numpy_temperature
-            st.session_state.isTemperatureModified = True
+            st.session_state.isTemperatureModified_ST = True
 
 
 def set_button_temperature():
     st.session_state.temperature = np.full(
-        st.session_state.head.ensembles, st.session_state.sensor_tempinput
+        st.session_state.head.ensembles, fixedtemperature_ST
     )
-    st.session_state.isTemperatureModified = True
+    st.session_state.isTemperatureModified_ST = True
 
 
 def reset_button_temperature():
     st.session_state.temperature = st.session_state.vlead.temperature.data
-    st.session_state.isTemperatureModified = False
+    st.session_state.isTemperatureModified_ST = False
 
 
 # Corrections/Threshold Tab
@@ -142,19 +142,19 @@ def set_threshold_button():
         rollmask = np.copy(st.session_state.sensor_mask_temp)
         roll = ds.variableleader.roll.data
         updated_rollmask = tilt_sensor_check(
-            roll, rollmask, cutoff=st.session_state.sensor_roll_cutoff
+            roll, rollmask, cutoff=st.session_state.roll_cutoff_ST
         )
         st.session_state.sensor_mask_temp = updated_rollmask
-        st.session_state.isRollCheck = True
+        st.session_state.isRollCheck_ST = True
 
     if st.session_state.sensor_pitch_checkbox:
         pitchmask = np.copy(st.session_state.sensor_mask_temp)
         pitch = ds.variableleader.pitch.data
         updated_pitchmask = tilt_sensor_check(
-            pitch, pitchmask, cutoff=st.session_state.sensor_pitch_cutoff
+            pitch, pitchmask, cutoff=st.session_state.pitch_cutoff_ST
         )
         st.session_state.sensor_mask_temp = updated_pitchmask
-        st.session_state.isPitchCheck = True
+        st.session_state.isPitchCheck_ST = True
 
     if (
         st.session_state.sensor_fix_velocity_checkbox
@@ -168,14 +168,14 @@ def set_threshold_button():
             st.session_state.velocity_sensor, sound, t, s, d
         )
         st.session_state.velocity_temp = velocity
-        st.session_state.isVelocityModifiedSound = True
+        st.session_state.isVelocityModifiedSound_ST = True
 
 
 # Save Tab
 def reset_threshold_button():
-    st.session_state.isRollCheck = False
-    st.session_state.isPitchCheck = False
-    st.session_state.isVelocityModifiedSound = False
+    st.session_state.isRollCheck_ST = False
+    st.session_state.isPitchCheck_ST = False
+    st.session_state.isVelocityModifiedSound_ST = False
     st.session_state.sensor_mask_temp = np.copy(st.session_state.orig_mask)
     st.session_state.velocity_temp = np.copy(st.session_state.velocity)
 
@@ -184,13 +184,13 @@ def reset_sensor():
     # Deactivate Global Test
     st.session_state.isSensorTest = False
     # Deactivate Local Tests
-    st.session_state.isRollCheck = False
-    st.session_state.isPitchCheck = False
+    st.session_state.isRollCheck_ST = False
+    st.session_state.isPitchCheck_ST = False
     # Deactivate Data Modification Tests
-    st.session_state.isDepthModified = False
-    st.session_state.isSalinityModified = False
-    st.session_state.isTemperatureModified = False
-    st.session_state.isVelocityModifiedSound = False
+    st.session_state.isDepthModified_ST = False
+    st.session_state.isSalinityModified_ST = False
+    st.session_state.isTemperatureModified_ST = False
+    st.session_state.isVelocityModifiedSound_ST = False
 
     # Reset Mask Data
     # `sensor_mask_temp` holds and transfers the mask changes between each section
@@ -349,7 +349,7 @@ with tab1:
         st.write(f"Total ensembles: `{st.session_state.head.ensembles}`")
         st.write(f"**Median depth**: `{depth_median/10} (m)`")
         st.write(f"**Change in depth**: `{np.round(depth_change, 3)} (m)`")
-        st.write("**Depth Modified**: ", st.session_state.isDepthModified)
+        st.write("**Depth Modified**: ", st.session_state.isDepthModified_ST)
 
     # Plot the data
     # label= depth.long_name + ' (' + depth.unit + ')'
@@ -366,22 +366,24 @@ with tab1:
         icon="ℹ️",
     )
 
-    st.session_state.sensor_depthoption = st.radio(
+    st.session_state.depthoption_ST = st.radio(
         "Select method for depth correction:",
         ["File Upload", "Fixed Value"],
         horizontal=True,
     )
 
-    if st.session_state.sensor_depthoption == "Fixed Value":
-        st.session_state.sensor_depthinput = st.number_input(
+    if st.session_state.depthoption_ST == "Fixed Value":
+        st.session_state.fixeddepth_ST = st.number_input(
             "Enter corrected depth (m): ",
             value=None,
             min_value=0,
             placeholder="Type a number ...",
         )
-        depthbutton = st.button("Change Depth", on_click=set_button_depth)
-        if depthbutton:
-            st.success(f"Depth changed to {st.session_state.sensor_depthinput}")
+        st.session_state.isFixedDepth_ST = st.button(
+            "Change Depth", on_click=set_button_depth
+        )
+        if st.session_state.isFixedDepth_ST:
+            st.success(f"Depth changed to {st.session_state.fixeddepth_ST}")
     else:
         st.session_state.uploaded_file_depth = st.file_uploader(
             "Upload Corrected Depth File",
@@ -389,10 +391,10 @@ with tab1:
         )
         if st.session_state.uploaded_file_depth is not None:
             # Check if the number of ensembles match and call button function
-            upload_file_depth_button = st.button(
+            st.session_state.isUploadDepth_ST = st.button(
                 "Check & Save Depth", on_click=set_button_upload_depth
             )
-            if upload_file_depth_button:
+            if st.session_state.isUploadDepth_ST:
                 if (
                     len(st.session_state.df_numpy_depth)
                     != st.session_state.head.ensembles
@@ -476,7 +478,7 @@ with tab2:
         st.write(f"Total ensembles: `{st.session_state.head.ensembles}`")
         st.write(f"Median salinity: {salinity_median} $^o$C")
         st.write(f"Change in salinity: {salinity_change} $^o$C")
-        st.write("**Salinity Modified**: ", st.session_state.isSalinityModified)
+        st.write("**Salinity Modified**: ", st.session_state.isSalinityModified_ST)
 
     # Plot the data
     label = salinity.long_name
@@ -502,21 +504,23 @@ with tab2:
         icon="ℹ️",
     )
 
-    st.session_state.sensor_salinityoption = st.radio(
+    st.session_state.salinityoption_ST = st.radio(
         "Select method", ["Fixed Value", "File Upload"], horizontal=True
     )
 
-    if st.session_state.sensor_salinityoption == "Fixed Value":
-        st.session_state.sensor_salinityinput = st.number_input(
+    if st.session_state.salinityoption_ST == "Fixed Value":
+        st.session_state.fixedsalinity_ST = st.number_input(
             "Enter corrected salinity: ",
             value=None,
             min_value=0.0,
             placeholder="Type a number ...",
         )
-        salinitybutton = st.button("Change Salinity", on_click=set_button_salinity)
-        if salinitybutton:
-            st.success(f"Salinity changed to {st.session_state.sensor_salinityinput}")
-            st.session_state.isSalinityModified = True
+        st.session_state.isFixedSalinity_ST = st.button(
+            "Change Salinity", on_click=set_button_salinity
+        )
+        if st.session_state.isFixedSalinity_ST:
+            st.success(f"Salinity changed to {st.session_state.fixedsalinity_ST}")
+            st.session_state.isSalinityModified_ST = True
     else:
         st.write(f"Total ensembles: `{st.session_state.head.ensembles}`")
 
@@ -525,15 +529,15 @@ with tab2:
             type="csv",
         )
         if st.session_state.uploaded_file_salinity is not None:
-            upload_file_salinity_button = st.button(
+            st.session_state.isUploadSalinity_ST = st.button(
                 "Check & Save Salinity", on_click=set_button_upload_salinity
             )
-            if upload_file_salinity_button:
+            if st.session_state.isUploadSalinity_ST:
                 if (
                     len(st.session_state.df_numpy_salinity)
                     != st.session_state.head.ensembles
                 ):
-                    st.session_state.isSalinityModified = False
+                    st.session_state.isSalinityModified_ST = False
                     st.error(
                         f"""
                             **ERROR: Ensembles not matching.** \\
@@ -606,7 +610,9 @@ with tab3:
         st.write(f"Total ensembles: `{st.session_state.head.ensembles}`")
         st.write(f"Median temperature: {temp_median} $^o$C")
         st.write(f"Change in temperature: {np.round(temp_change, 3)} $^o$C")
-        st.write("**Temperature Modified**: ", st.session_state.isTemperatureModified)
+        st.write(
+            "**Temperature Modified**: ", st.session_state.isTemperatureModified_ST
+        )
 
     # Plot the data
     label = temp.long_name + " (oC)"
@@ -625,40 +631,43 @@ with tab3:
         icon="ℹ️",
     )
 
-    st.session_state.sensor_tempoption = st.radio(
+    st.session_state.temperatureoption_ST = st.radio(
         "Select method for temperature correction:",
         ["File Upload", "Fixed Value"],
         horizontal=True,
     )
 
-    if st.session_state.sensor_tempoption == "Fixed Value":
-        st.session_state.sensor_tempinput = st.number_input(
+    if st.session_state.temperatureoption_ST == "Fixed Value":
+        fixedtemperature_ST = st.number_input(
             "Enter corrected temperature: ",
             value=None,
             min_value=0.0,
             placeholder="Type a number ...",
         )
-        tempbutton = st.button("Change Temperature", on_click=set_button_temperature)
-        if tempbutton:
-            st.success(f"Temperature changed to {st.session_state.sensor_tempinput}")
-            st.session_state.isTemperatureModified = True
-    elif st.session_state.sensor_tempoption == "File Upload":
+        st.session_state.isFixedTemperature_ST = st.button(
+            "Change Temperature", on_click=set_button_temperature
+        )
+        if st.session_state.isFixedTemperature_ST:
+            st.success(f"Temperature changed to {fixedtemperature_ST}")
+            st.session_state.isTemperatureModified_ST = True
+
+    elif st.session_state.temperatureoption_ST == "File Upload":
         st.write(f"Total ensembles: `{st.session_state.head.ensembles}`")
         st.session_state.uploaded_file_temperature = st.file_uploader(
             "Upload Corrected Temperature File",
             type="csv",
         )
         if st.session_state.uploaded_file_temperature is not None:
-            upload_file_temperature_button = st.button(
+            st.session_state.isUploadTemperature_ST = st.button(
                 "Check & Save Temperature", on_click=set_button_upload_temperature
             )
 
-            if upload_file_temperature_button:
+            if st.session_state.isUploadTemperature_ST:
                 if (
                     len(st.session_state.df_numpy_temperature)
                     != st.session_state.head.ensembles
                 ):
-                    st.session_state.isTemperatureModified = False
+                    st.session_state.isTemperatureModified_ST = False
                     st.error(
                         f"""
                             **ERROR: Ensembles not matching.** \\
@@ -671,7 +680,7 @@ with tab3:
                 else:
                     st.success(" The temperature of transducer modified.", icon="✅")
                     st.session_state.temperature = st.session_state.df_numpy_temperature
-                    st.session_state.isTemperatureModified = True
+                    st.session_state.isTemperatureModified_ST = True
                     lineplot(
                         np.squeeze(st.session_state.df_numpy_temperature.T),
                         title="Modified Temperature",
@@ -778,10 +787,10 @@ with tab7:
     st.subheader("Apply Sensor Thresholds/Corrections", divider="orange")
     col1, col2 = st.columns([0.4, 0.6], gap="large")
     with col1:
-        st.session_state.sensor_roll_cutoff = st.number_input(
+        st.session_state.roll_cutoff_ST = st.number_input(
             "Enter roll threshold (deg):", min_value=0, max_value=359, value=15
         )
-        st.session_state.sensor_pitch_cutoff = st.number_input(
+        st.session_state.pitch_cutoff_ST = st.number_input(
             "Enter pitch threshold (deg):", min_value=0, max_value=359, value=15
         )
 
@@ -790,8 +799,8 @@ with tab7:
 
         with st.form("Select options"):
             if (
-                st.session_state.isTemperatureModified
-                or st.session_state.isSalinityModified
+                st.session_state.isTemperatureModified_ST
+                or st.session_state.isSalinityModified_ST
             ):
                 st.session_state.sensor_ischeckbox_disabled = False
             else:
@@ -843,27 +852,31 @@ with tab8:
                 [
                     [
                         "Depth Modified",
-                        "True" if st.session_state.isDepthModified else "False",
+                        "True" if st.session_state.isDepthModified_ST else "False",
                     ],
                     [
                         "Salinity Modified",
-                        "True" if st.session_state.isSalinityModified else "False",
+                        "True" if st.session_state.isSalinityModified_ST else "False",
                     ],
                     [
                         "Temperature Modified",
-                        "True" if st.session_state.isTemperatureModified else "False",
+                        "True"
+                        if st.session_state.isTemperatureModified_ST
+                        else "False",
                     ],
                     [
                         "Pitch Test",
-                        "True" if st.session_state.isPitchCheck else "False",
+                        "True" if st.session_state.isPitchCheck_ST else "False",
                     ],
                     [
                         "Roll Test",
-                        "True" if st.session_state.isRollCheck else "False",
+                        "True" if st.session_state.isRollCheck_ST else "False",
                     ],
                     [
                         "Velocity Correction (Sound)",
-                        "True" if st.session_state.isVelocityModifiedSound else "False",
+                        "True"
+                        if st.session_state.isVelocityModifiedSound_ST
+                        else "False",
                     ],
                 ],
                 columns=["Test", "Status"],

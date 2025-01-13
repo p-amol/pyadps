@@ -32,10 +32,10 @@ def reset_velocitytest():
     st.session_state.isVelocityTest = False
 
     # Reset Local Tests
-    st.session_state.isMagnetCheck = False
-    st.session_state.isDespikeCheck = False
+    st.session_state.isMagnetCheck_VT = False
+    st.session_state.isDespikeCheck_VT = False
     st.session_state.isFlatlineCheck = False
-    st.session_state.isCutoffCheck = False
+    st.session_state.isCutoffCheck_VT = False
 
     st.session_state.isVelocityModifiedMagnet = False
 
@@ -47,16 +47,16 @@ def reset_velocitytest():
         st.session_state.isSensorPageReturn = False
 
     # Data Reset
-    if st.session_state.isRegridCheck:
+    if st.session_state.isRegridCheck_PT:
         st.session_state.velocity_magnet = st.session_state.velocity_regrid
-    elif st.session_state.isVelocityModifiedSound:
+    elif st.session_state.isVelocityModifiedSound_ST:
         st.session_state.velocity_magnet = st.session_state.velocity_sensor
     else:
         st.session_state.velocity_magnet = st.session_state.velocity
 
     # Reset Mask
     if st.session_state.isProfileTest:
-        if st.session_state.isRegridCheck:
+        if st.session_state.isRegridCheck_PT:
             st.session_state.velocity_mask_default = np.copy(
                 st.session_state.profile_mask_regrid
             )
@@ -84,10 +84,10 @@ def hard_reset(option):
     st.session_state.isVelocityTest = False
 
     # Reset Local Tests
-    st.session_state.isMagnetCheck = False
-    st.session_state.isDespikeCheck = False
+    st.session_state.isMagnetCheck_VT = False
+    st.session_state.isDespikeCheck_VT = False
     st.session_state.isFlatlineCheck = False
-    st.session_state.isCutoffCheck = False
+    st.session_state.isCutoffCheck_VT = False
 
     # Page return
     st.session_state.isProfilePageReturn = False
@@ -101,13 +101,13 @@ def hard_reset(option):
 
     if option == "Sensor Test":
         st.session_state.velocity_mask_default = np.copy(st.session_state.sensor_mask)
-        if st.session_state.isVelocityModifiedSound:
+        if st.session_state.isVelocityModifiedSound_ST:
             st.session_state.velocity_magnet = st.session_state.velocity_sensor
     elif option == "QC Test":
         st.session_state.velocity_mask_default = np.copy(st.session_state.qc_mask)
     elif option == "Profile Test":
         st.session_state.velocity_mask_default = np.copy(st.session_state.profile_mask)
-        if st.session_state.isRegridCheck:
+        if st.session_state.isRegridCheck_PT:
             st.session_state.velocity_magnet = st.session_state.velocity_regrid
     else:
         st.session_state.velocity_mask_default = np.copy(st.session_state.orig_mask)
@@ -256,6 +256,7 @@ with tab1:
         else:
             # st.session_state.isMagnet = False
             mag = [[st.number_input("Declination", -180.0, 180.0, 0.0, 0.1)]]
+            st.session_state.magnet_user_input_VT = mag
 
         if st.session_state.method == "Manual":
             button_name = "Accept"
@@ -268,24 +269,24 @@ with tab1:
             if st.session_state.method == "pygeomag":
                 mag = magdec(lat, lon, depth, year)
                 st.session_state.velocity_magnet = velocity_modifier(velocity, mag)
-                st.session_state.lat = lat
-                st.session_state.lon = lon
-                st.session_state.year = year
-                st.session_state.magnetic_dec_depth = depth
+                st.session_state.magnet_lat_VT = lat
+                st.session_state.magnet_lon_VT = lon
+                st.session_state.magnet_year_VT = year
+                st.session_state.magnet_depth_VT = depth
                 st.session_state.angle = np.round(mag[0][0], decimals=3)
-                st.session_state.isMagnetCheck = True
+                st.session_state.isMagnetCheck_VT = True
                 st.session_state.isButtonClicked = True
 
             if st.session_state.method == "API":
                 try:
                     mag = wmm2020api(lat, lon, year)
                     st.session_state.velocity_magnet = velocity_modifier(velocity, mag)
-                    st.session_state.lat = lat
-                    st.session_state.lon = lon
-                    st.session_state.year = year
+                    st.session_state.magnet_lat_VT = lat
+                    st.session_state.magnet_lon_VT = lon
+                    st.session_state.magnet_year_VT = year
                     # st.session_state.angle = np.trunc(mag[0][0])
                     st.session_state.angle = np.round(mag[0][0], decimals=3)
-                    st.session_state.isMagnetCheck = True
+                    st.session_state.isMagnetCheck_VT = True
                     st.session_state.isButtonClicked = True
                 except:
                     st.write(
@@ -294,10 +295,10 @@ with tab1:
             else:
                 st.session_state.velocity_magnet = velocity_modifier(velocity, mag)
                 st.session_state.angle = np.round(mag[0][0], decimals=3)
-                st.session_state.isMagnetCheck = True
+                st.session_state.isMagnetCheck_VT = True
                 st.session_state.isButtonClicked = True
 
-        if st.session_state.isMagnetCheck:
+        if st.session_state.isMagnetCheck_VT:
             st.write(f"Magnetic declination: {st.session_state.angle}\u00b0")
             st.write(":green[Magnetic declination correction applied to velocities]")
 
@@ -308,7 +309,7 @@ with tab1:
     )
     if magnet_button_reset:
         st.session_state.velocity_magnet = np.copy(velocity)
-        st.session_state.isMagnetCheck = False
+        st.session_state.isMagnetCheck_VT = False
         st.session_state.isButtonClicked = False
 
 with tab2:
@@ -333,9 +334,9 @@ with tab2:
 
     if submit_cutoff:
         velocity = st.session_state.velocity_magnet
-        st.session_state.maxuvel = maxuvel
-        st.session_state.maxvvel = maxvvel
-        st.session_state.maxwvel = maxwvel
+        st.session_state.maxuvel_VT = maxuvel
+        st.session_state.maxvvel_VT = maxvvel
+        st.session_state.maxwvel_VT = maxwvel
 
         st.session_state.velocity_mask_cutoff = velocity_cutoff(
             velocity[0, :, :], st.session_state.velocity_mask_temp, cutoff=maxuvel
@@ -349,9 +350,9 @@ with tab2:
         st.session_state.velocity_mask_temp = np.copy(
             st.session_state.velocity_mask_cutoff
         )
-        st.session_state.isCutoffCheck = True
+        st.session_state.isCutoffCheck_VT = True
 
-    if st.session_state.isCutoffCheck:
+    if st.session_state.isCutoffCheck_VT:
         st.success("Cutoff Applied")
         a = {
             "Max. Zonal Velocity": maxuvel,
@@ -361,7 +362,7 @@ with tab2:
         st.write(a)
 
     def reset_button_cutoff():
-        st.session_state.isCutoffCheck = False
+        st.session_state.isCutoffCheck_VT = False
         st.session_state.velocity_mask_temp = np.copy(
             st.session_state.velocity_mask_default
         )
@@ -398,8 +399,8 @@ with tab3:
     )
     despike_button = st.button("Despike")
     if despike_button:
-        st.session_state.despike_kernal = despike_kernal
-        st.session_state.despike_cutoff = despike_cutoff
+        st.session_state.despike_kernal_VT = despike_kernal
+        st.session_state.despike_cutoff_VT = despike_cutoff
 
         st.session_state.velocity_mask_despike = despike(
             velocity[0, :, :],
@@ -418,9 +419,9 @@ with tab3:
         st.session_state.velocity_mask_temp = np.copy(
             st.session_state.velocity_mask_despike
         )
-        st.session_state.isDespikeCheck = True
+        st.session_state.isDespikeCheck_VT = True
 
-    if st.session_state.isDespikeCheck:
+    if st.session_state.isDespikeCheck_VT:
         st.success("Data Despiked")
         b = {
             "Kernal Size": despike_kernal,
@@ -429,8 +430,8 @@ with tab3:
         st.write(b)
 
     def reset_button_despike():
-        st.session_state.isDespikeCheck = False
-        if st.session_state.isCutoffCheck:
+        st.session_state.isDespikeCheck_VT = False
+        if st.session_state.isCutoffCheck_VT:
             st.session_state.velocity_mask_temp = np.copy(
                 st.session_state.velocity_mask_cutoff
             )
@@ -467,8 +468,8 @@ with tab4:
     flatline_button = st.button("Remove Flatline")
 
     if flatline_button:
-        st.session_state.flatline_kernal = flatline_kernal
-        st.session_state.flatline_cutoff = flatline_cutoff
+        st.session_state.flatline_kernal_VT = flatline_kernal
+        st.session_state.flatline_cutoff_VT = flatline_cutoff
 
         st.session_state.velocity_mask_flatline = flatline(
             velocity[0, :, :],
@@ -504,14 +505,14 @@ with tab4:
 
     def reset_button_flatline():
         st.session_state.isFlatlineCheck = False
-        if st.sesion_state.isDespikeCheck:
+        if st.sesion_state.isDespikeCheck_VT:
             st.session_state.velocity_mask_temp = np.copy(
                 st.session_state.velocity_mask_despike
             )
             st.session_state.velocity_mask_flatline = np.copy(
                 st.session_state.velocity_mask_despike
             )
-        elif st.session_state.isCutoffCheck:
+        elif st.session_state.isCutoffCheck_VT:
             st.session_state.velocity_mask_temp = np.copy(
                 st.session_state.velocity_mask_cutoff
             )
@@ -560,11 +561,11 @@ with tab5:
                     ],
                     [
                         "Velocity Cutoffs",
-                        "True" if st.session_state.isCutoffCheck else "False",
+                        "True" if st.session_state.isCutoffCheck_VT else "False",
                     ],
                     [
                         "Despike Data",
-                        "True" if st.session_state.isDespikeCheck else "False",
+                        "True" if st.session_state.isDespikeCheck_VT else "False",
                     ],
                     [
                         "Remove Flatline",

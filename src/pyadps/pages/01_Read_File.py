@@ -275,6 +275,7 @@ st.session_state.end_ens_PT = st.session_state.head.ensembles
 # Tab2: Cutbins - Sidelobe
 st.session_state.isCutBinSideLobeCheck_PT = False
 st.session_state.extra_cells_PT = 0
+st.session_state.water_depth_PT = 0
 
 # Tab3: Cutbins - Manual
 st.session_state.isCutBinManualCheck_PT = False
@@ -295,13 +296,13 @@ st.session_state.isFirstVelocityVisit = True
 # Local Tests:
 # Tab1: Magnetic Declination
 st.session_state.isMagnetCheck_VT = False
-st.session_state.isVelocityModifiedMagnet = False
 # OPTIONS: pygeomag, API, Manual
 st.session_state.magnet_method_VT = "pygeomag"
 st.session_state.magnet_lat_VT = 0
 st.session_state.magnet_lon_VT = 0
 st.session_state.magnet_year_VT = 2025
 st.session_state.magnet_depth_VT = 0
+st.session_state.magnet_user_input_VT = 0
 
 # Tab2: Velocity Cutoff
 st.session_state.isCutoffCheck_VT = False
@@ -327,6 +328,8 @@ st.session_state.isAttributes = False
 st.session_state.mask_data_WF = "Yes"
 # FileTypes: NetCDF, CSV
 st.session_state.file_type_WF = "NetCDF"
+st.session_state.isProcessedNetcdfDownload_WF = True
+st.session_state.isProcessedCSVDownload_WF = False
 
 # MASK DATA
 # The velocity data has missing values due to the cutoff

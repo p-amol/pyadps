@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 import pyadps.utils.writenc as wr
+from netCDF4 import date2num
 from pyadps.utils import readrdi
 from pyadps.utils.profile_test import side_lobe_beam_angle, manual_cut_bins
 from pyadps.utils.profile_test import regrid2d, regrid3d
@@ -19,9 +20,11 @@ from pyadps.utils.velocity_test import (
     despike,
     flatline,
     velocity_cutoff,
+    magdec,
     wmm2020api,
     velocity_modifier,
 )
+from pyadps.utils.sensor_health import sound_speed_correction, tilt_sensor_check
 
 
 def main():
@@ -72,8 +75,21 @@ def autoprocess(config_file, binary_file_path=None):
     echo = ds.echo.data
     correlation = ds.correlation.data
     pgood = ds.percentgood.data
+    roll = ds.variableleader.roll.data
+    pitch = ds.variableleader.pitch.data
+    sound = ds.variableleader.speed_of_sound.data
+    depth = ds.variableleader.depth_of_transducer.data
+    temperature = (
+        ds.variableleader.temperature.data * ds.variableleader.temperature.scale
+    )
+    salinity = ds.variableleader.salinity.data * ds.variableleader.salinity.scale
+    orientation = ds.fixedleader.system_configuration()["Beam Direction"]
     ensembles = header.ensembles
     cells = flobj.field()["Cells"]
+    beams = flobj.field()["Beams"]
+    cell_size = flobj.field()["Depth Cell Len"]
+    bin1dist = flobj.field()["Bin 1 Dist"]
+    beam_angle = int(flobj.system_configuration()["Beam Angle"])
     fdata = flobj.fleader
     vdata = vlobj.vleader
     #  depth = ds.variableleader.depth_of_transducer
@@ -84,42 +100,123 @@ def autoprocess(config_file, binary_file_path=None):
     # Debugging statement
     x = np.arange(0, ensembles, 1)
     y = np.arange(0, cells, 1)
-    depth = None
 
     axis_option = config.get("DownloadOptions", "axis_option")
 
     # Sensor Test
     isSensorTest = config.getboolean("SensorTest", "sensor_test")
-    isRollTest = config.getboolean("RollTest", "roll_test")
-    # if isSensorTest:
-    #     if isRollTest:
+    if isSensorTest:
+        isDepthModified = config.getboolean("SensorTest", "is_depth_modified")
+        if isDepthModified:
+            depth_option = config.get("SensorTest", "depth_input_option")
+            if depth_option == "Fixed Value":
+                fixed_depth = config.getfloat("SensorTest", "fixed_depth")
+                depth = np.full(ensembles, fixed_depth)
+                depth *= 10
+            elif depth_option == "File Upload":
+                depth_file_path = config.get("SensorTest", "depth_file_path")
+                df = pd.read_csv(depth_file_path)
+                depth = np.squeeze(df)
+                if len(depth) != ensembles:
+                    print("""
+                          Error: Uploaded file ensembles and 
+                          actual ensembles mismatch
+                          """)
+                else:
+                    print("Depth file uploaded.")
+
+        isSalinityModified = config.getboolean("SensorTest", "is_salinity_modified")
+        if isSalinityModified:
+            salinity_option = config.get("SensorTest", "salinity_input_option")
+            if salinity_option == "Fixed Value":
+                fixed_salinity = config.getfloat("SensorTest", "fixed_salinity")
+                salinity = np.full(ensembles, fixed_salinity)
+                salinity *= 10
+            elif salinity_option == "File Upload":
+                salinity_file_path = config.get("SensorTest", "salinity_file_path")
+                df = pd.read_csv(salinity_file_path)
+                salinity = np.squeeze(df)
+                if len(salinity) != ensembles:
+                    print("""
+                          Error: Uploaded file ensembles and 
+                          actual ensembles mismatch
+                          """)
+                else:
+                    print("Salinity file uploaded.")
+
+        isTemperatureModified = config.getboolean(
+            "SensorTest", "is_temperature_modified"
+        )
+        if isTemperatureModified:
+            temperature_option = config.get("SensorTest", "temperature_input_option")
+            if temperature_option == "Fixed Value":
+                fixed_temperature = config.getfloat("SensorTest", "fixed_temperature")
+                temperature = np.full(ensembles, fixed_temperature)
+                temperature *= 10
+            elif temperature_option == "File Upload":
+                temperature_file_path = config.get(
+                    "SensorTest", "temperature_file_path"
+                )
+                df = pd.read_csv(temperature_file_path)
+                temperature = np.squeeze(df)
+                if len(temperature) != ensembles:
+                    print("""
+                          Error: Uploaded file ensembles and 
+                          actual ensembles mismatch
+                          """)
+                else:
+                    print("Temperature file uploaded.")
+
+        isRollCheck = config.getboolean("SensorTest", "roll_check")
+        if isRollCheck:
+            roll_cutoff = config.getint("SensorTest", "roll_cutoff")
+            mask = tilt_sensor_check(roll, mask, cutoff=roll_cutoff)
+
+        isPitchCheck = config.getboolean("SensorTest", "pitch_check")
+        if isPitchCheck:
+            pitch_cutoff = config.getint("SensorTest", "pitch_cutoff")
+            mask = tilt_sensor_check(pitch, mask, cutoff=pitch_cutoff)
+
+        isVelocityModified = config.getboolean("SensorTest", "velocity_modified")
+        if isVelocityModified:
+            velocity = sound_speed_correction(
+                velocity, sound, temperature, salinity, depth
+            )
 
     # QC Test
     isQCTest = config.getboolean("QCTest", "qc_test")
-
     if isQCTest:
-        ct = config.getint("QCTest", "correlation")
-        evt = config.getint("QCTest", "error_velocity")
-        et = config.getint("QCTest", "echo_intensity")
-        ft = config.getint("QCTest", "false_target")
-        is3Beam = config.getboolean("QCTest", "three_beam")
-        pgt = config.getint("QCTest", "percentage_good")
-        orientation = config.get("QCTest", "orientation")
+        isQCCheck = config.get("QCTest", "qc_check")
+        if isQCCheck:
+            ct = config.getint("QCTest", "correlation")
+            evt = config.getint("QCTest", "error_velocity")
+            et = config.getint("QCTest", "echo_intensity")
+            ft = config.getint("QCTest", "false_target")
+            is3Beam = config.getboolean("QCTest", "three_beam")
+            pgt = config.getint("QCTest", "percent_good")
+            orientation = config.get("QCTest", "orientation")
 
-        mask = pg_check(ds, mask, pgt, threebeam=is3Beam)
-        mask = correlation_check(ds, mask, ct)
-        mask = echo_check(ds, mask, et)
-        mask = ev_check(ds, mask, evt)
-        mask = false_target(ds, mask, ft, threebeam=True)
+            mask = pg_check(ds, mask, pgt, threebeam=is3Beam)
+            mask = correlation_check(ds, mask, ct)
+            mask = echo_check(ds, mask, et)
+            mask = ev_check(ds, mask, evt)
+            mask = false_target(ds, mask, ft, threebeam=True)
+
+            print("QC Check Complete.")
+
+        isBeamModified = config.getboolean("QCTest", "beam_modified")
+        if isBeamModified:
+            orientation = config.get("QCTest", "orientation")
+            print("Beam orientation changed.")
 
     # Profile Test
     endpoints = None
     isProfileTest = config.getboolean("ProfileTest", "profile_test")
     if isProfileTest:
-        isTrimEnds = config.getboolean("ProfileTest", "trim_ends")
+        isTrimEnds = config.getboolean("ProfileTest", "trim_ends_check")
         if isTrimEnds:
-            start_index = config.getint("ProfileTest", "trim_ends_start_index")
-            end_index = config.getint("ProfileTest", "trim_ends_end_index")
+            start_index = config.getint("ProfileTest", "trim_start_ensemble")
+            end_index = config.getint("ProfileTest", "trim_end_ensemble")
             if start_index > 0:
                 mask[:, :start_index] = 1
 
@@ -130,29 +227,21 @@ def autoprocess(config_file, binary_file_path=None):
 
             print("Trim Ends complete.")
 
-        isCutBins = config.getboolean("ProfileTest", "cut_bins")
+        isCutBins = config.getboolean("ProfileTest", "cutbins_sidelobe_check")
         if isCutBins:
-            water_column_depth = 0
-            add_cells = config.getint("ProfileTest", "cut_bins_add_cells")
-            if orientation == "down":
-                water_column_depth = config.get("ProfileTest", "water_column_depth")
-                water_column_depth = int(water_column_depth)
-                mask = side_lobe_beam_angle(
-                    ds,
-                    mask,
-                    orientation=orientation,
-                    water_column_depth=water_column_depth,
-                    extra_cells=add_cells,
-                )
-            else:
-                mask = side_lobe_beam_angle(
-                    ds,
-                    mask,
-                    orientation=orientation,
-                    water_column_depth=water_column_depth,
-                    extra_cells=add_cells,
-                )
-
+            water_column_depth = config.getint("ProfileTest", "water_depth")
+            extra_cells = config.getint("ProfileTest", "extra_cells")
+            mask = side_lobe_beam_angle(
+                depth,
+                mask,
+                orientation=orientation,
+                water_column_depth=water_column_depth,
+                extra_cells=extra_cells,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+                beam_angle=beam_angle,
+            )
             print("Cutbins complete.")
 
         # Manual Cut Bins
@@ -177,104 +266,76 @@ def autoprocess(config_file, binary_file_path=None):
         if isRegrid:
             print("File regridding started. This will take a few seconds ...")
 
-            regrid_option = config.get("ProfileTest", "regrid_option")
-            interpolate = config.get("ProfileTest", "regrid_interpolation")
-            boundary = 0
-            if regrid_option == "Manual":
-                boundary = config.get("ProfileTest", "transducer_depth")
-                z, velocity = regrid3d(
-                    ds,
-                    velocity,
-                    -32768,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                z, echo = regrid3d(
-                    ds,
-                    echo,
-                    -32768,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                z, correlation = regrid3d(
-                    ds,
-                    correlation,
-                    -32768,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                z, pgood = regrid3d(
-                    ds,
-                    pgood,
-                    -32768,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                z, mask = regrid2d(
-                    ds,
-                    mask,
-                    1,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                depth = z
-            else:
-                z, velocity = regrid3d(
-                    ds,
-                    velocity,
-                    -32768,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                z, echo = regrid3d(
-                    ds,
-                    echo,
-                    -32768,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                z, correlation = regrid3d(
-                    ds,
-                    correlation,
-                    -32768,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                z, pgood = regrid3d(
-                    ds,
-                    pgood,
-                    -32768,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                z, mask = regrid2d(
-                    ds,
-                    mask,
-                    1,
-                    trimends=endpoints,
-                    orientation=orientation,
-                    method=interpolate,
-                    boundary_limit=boundary,
-                )
-                depth = z
+            # regrid_option = config.get("ProfileTest", "regrid_option")
+            end_cell_option = config.get("ProfileTest", "end_cell_option")
+            interpolate = config.get("ProfileTest", "interpolate")
+            boundary = config.getint("ProfileTest", "boundary")
+            z, velocity = regrid3d(
+                depth,
+                velocity,
+                -32768,
+                trimends=endpoints,
+                orientation=orientation,
+                end_cell_option=end_cell_option,
+                method=interpolate,
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+                beams=beams,
+            )
+            z, echo = regrid3d(
+                depth,
+                echo,
+                -32768,
+                trimends=endpoints,
+                orientation=orientation,
+                method=interpolate,
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+                beams=beams,
+            )
+            z, correlation = regrid3d(
+                depth,
+                correlation,
+                -32768,
+                trimends=endpoints,
+                orientation=orientation,
+                method=interpolate,
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+                beams=beams,
+            )
+            z, pgood = regrid3d(
+                depth,
+                pgood,
+                -32768,
+                trimends=endpoints,
+                orientation=orientation,
+                method=interpolate,
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+                beams=beams,
+            )
+            z, mask = regrid2d(
+                depth,
+                mask,
+                1,
+                trimends=endpoints,
+                orientation=orientation,
+                method=interpolate,
+                boundary_limit=boundary,
+                cells=cells,
+                cell_size=cell_size,
+                bin1dist=bin1dist,
+            )
+            depth = z
 
             print("Regrid Complete.")
 
@@ -286,16 +347,25 @@ def autoprocess(config_file, binary_file_path=None):
             "VelocityTest", "magnetic_declination"
         )
         if isMagneticDeclination:
-            maglat = config.getfloat("VelocityTest", "latitude")
-            maglon = config.getfloat("VelocityTest", "longitude")
-            magdep = config.getfloat("VelocityTest", "depth")
-            magyear = config.getfloat("VelocityTest", "year")
+            magmethod = config.get("VelocityTest", "magnet_method")
+            maglat = config.getfloat("VelocityTest", "magnet_latitude")
+            maglon = config.getfloat("VelocityTest", "magnet_longitude")
+            magdep = config.getfloat("VelocityTest", "magnet_depth")
+            magyear = config.getfloat("VelocityTest", "magnet_year")
             year = int(magyear)
             #      mag = config.getfloat("VelocityTest", "mag")
 
-            mag = wmm2020api(maglat, maglon, year)
+            if magmethod == "pygeomag":
+                mag = magdec(maglat, maglon, magdep, magyear)
+            elif magmethod.lower() == "api":
+                mag = wmm2020api(maglat, maglon, year)
+            elif magmethod.lower() == "manual":
+                mag = config.getint("VelocityTest", "magnet_user_input")
+            else:
+                mag = 0
             velocity = velocity_modifier(velocity, mag)
             print(f"Magnetic Declination applied. The value is {mag[0]} degrees.")
+
         isCutOff = config.getboolean("VelocityTest", "cutoff")
         if isCutOff:
             maxu = config.getint("VelocityTest", "max_zonal_velocity")
@@ -398,59 +468,55 @@ def autoprocess(config_file, binary_file_path=None):
 
     print("Time axis created.")
 
-    isAttributes = config.get("Optional", "attributes")
+    isAttributes = config.getboolean("DownloadOptions", "add_attributes_processed")
     if isAttributes:
-        attributes = [att for att in config["Optional"]]
-        attributes = dict(config["Optional"].items())
-        del attributes["attributes"]
+        attributes = [att for att in config["DownloadOptions"]]
+        attributes = dict(config["DownloadOptions"].items())
+        del attributes["add_attributes_processed"]
     else:
         attributes = None
 
-    isWriteRawNC = config.get("DownloadOptions", "download_raw")
-    isWriteVleadNC = config.get("DownloadOptions", "download_vlead")
-    isWriteProcNC = config.get("DownloadOptions", "download_processed")
+    isWriteRawNC = config.getboolean("DownloadOptions", "download_raw_netcdf")
+    isWriteVleadNC = config.getboolean("DownloadOptions", "download_vlead_netcdf")
+    isWriteProcNC = config.getboolean("DownloadOptions", "download_processed_netcdf")
+    filepath = config.get("FileSettings", "output_file_path")
 
+    print(isWriteRawNC)
     if isWriteRawNC:
-        filepath = config.get("FileSettings", "output_file_path")
-        filename = config.get("FileSettings", "output_file_name_raw")
+        filename = config.get("FileSettings", "output_file_name_raw_netcdf")
         output_file_path = os.path.join(filepath, filename)
-        if isAttributes:
-            wr.rawnc(
-                full_input_file_path,
-                output_file_path,
-                date_raw,
-                axis_option,
-                attributes,
-                isAttributes,
-            )
+        print(date_raw.shape)
+        wr.rawnc(
+            full_input_file_path,
+            output_file_path,
+            date_raw,
+            axis_option=axis_option,
+            attributes=attributes,
+        )
 
         print("Raw file written.")
 
     if isWriteVleadNC:
-        filepath = config.get("FileSettings", "output_file_path")
-        filename = config.get("FileSettings", "output_file_name_vlead")
+        filename = config.get("FileSettings", "output_file_name_vlead_netcdf")
         output_file_path = os.path.join(filepath, filename)
-        if isAttributes:
-            wr.vlead_nc(
-                full_input_file_path,
-                output_file_path,
-                date_vlead,
-                axis_option,
-                attributes,
-                isAttributes,
-            )
+        wr.vlead_nc(
+            full_input_file_path,
+            output_file_path,
+            date_vlead,
+            axis_option=axis_option,
+            attributes=attributes,
+        )
 
-            print("Vlead file written.")
+        print("Vlead file written.")
 
     depth1 = depth
 
     if isWriteProcNC:
-        filepath = config.get("FileSettings", "output_file_path")
-        filename = config.get("FileSettings", "output_file_name_processed")
-        full_file_path = os.path.join(filepath, filename)
+        filename = config.get("FileSettings", "output_file_name_processed_netcdf")
+        output_file_path = os.path.join(filepath, filename)
 
         wr.finalnc(
-            full_file_path,
+            output_file_path,
             depth1,
             mask,
             date_final,

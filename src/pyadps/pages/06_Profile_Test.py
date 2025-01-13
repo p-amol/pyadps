@@ -304,7 +304,7 @@ def reset_button_trimends():
 def set_button_apply_sidelobe():
     inmask = np.copy(st.session_state.profile_mask_temp)
     transdepth = st.session_state.depth
-    water_column_depth = st.session_state.profile_water_column_depth
+    water_column_depth = st.session_state.water_depth_PT
     extra_cells = st.session_state.extra_cell_PT
     mask = side_lobe_beam_angle(
         transdepth,
@@ -546,7 +546,7 @@ with tab2:
         st.session_state.beam = beam
 
     with right1:
-        st.session_state.profile_water_column_depth = 0
+        st.session_state.water_depth_PT = 0
 
         st.session_state.extra_cell_PT = st.number_input(
             "Additional Cells to Delete", 0, 10, 0

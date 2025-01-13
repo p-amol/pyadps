@@ -256,6 +256,7 @@ with tab1:
         else:
             # st.session_state.isMagnet = False
             mag = [[st.number_input("Declination", -180.0, 180.0, 0.0, 0.1)]]
+            st.session_state.magnet_user_input_VT = mag
 
         if st.session_state.method == "Manual":
             button_name = "Accept"

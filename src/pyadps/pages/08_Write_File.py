@@ -34,7 +34,7 @@ if st.session_state.isVelocityTest:
         st.session_state.final_velocity = st.session_state.velocity_magnet
     if st.session_state.isRegridCheck_PT:
         st.session_state.final_velocity = st.session_state.velocity_regrid
-    elif st.session_state.isVelocityModifiedSound:
+    elif st.session_state.isVelocityModifiedSound_ST:
         st.session_state.final_velocity = st.session_state.velocity_sensor
     else:
         st.session_state.final_velocity = st.session_state.velocity
@@ -359,20 +359,11 @@ if generate_config_radio == "Yes":
     config["VelocityTest"] = {"velocity_test": "False"}
     config["Attributes"] = {}
 
+    # ------------------
+    # File Settings
+    # ------------------
     config["FileSettings"]["input_file_path"] = ""
     config["FileSettings"]["input_file_name"] = st.session_state.fname
-    config["FileSettings"]["output_file_raw_csv"] = str(
-        st.session_state.rawcsv_download_DRW
-    )
-    config["FileSettings"]["output_file_raw_netcdf"] = str(
-        st.session_state.rawnc_download_DRW
-    )
-    config["FileSettings"]["output_file_vlead_netcdf"] = str(
-        st.session_state.vleadnc_download_DRW
-    )
-    config["FileSettings"]["output_processed_file"] = str(st.session_state.isWriteFile)
-    config["FileSettings"]["processed_file_format"] = str(st.session_state.file_type_WF)
-
     config["FileSettings"]["output_file_path"] = ""
     config["FileSettings"]["output_file_name_raw_netcdf"] = ""
     config["FileSettings"]["output_file_name_vlead_netcdf"] = ""
@@ -380,6 +371,29 @@ if generate_config_radio == "Yes":
     config["FileSettings"]["output_file_name_processed_netcdf"] = ""
     config["FileSettings"]["output_file_name_processed_csv"] = ""
 
+    if st.session_state.file_type_WF.lower() == "netcdf":
+        st.session_state.isProcessedNetcdfDownload_WF = True
+    else:
+        st.session_state.isProcessedNetcdfDownload_WF = False
+        st.session_state.isProcessedCSVDownload_WF = True
+    # ------------------
+    # Download options
+    # ------------------
+    config["DownloadOptions"]["download_raw_netcdf"] = str(
+        st.session_state.rawnc_download_DRW
+    )
+    config["DownloadOptions"]["download_vlead_netcdf"] = str(
+        st.session_state.vleadnc_download_DRW
+    )
+    config["DownloadOptions"]["download_processed_netcdf"] = str(
+        st.session_state.isProcessedNetcdfDownload_WF
+    )
+    config["DownloadOptions"]["download_raw_csv"] = str(
+        st.session_state.rawcsv_download_DRW
+    )
+    config["DownloadOptions"]["download_processed_csv"] = str(
+        st.session_state.isProcessedCSVDownload_WF
+    )
     config["DownloadOptions"]["add_attributes_raw"] = str(
         st.session_state.add_attributes_DRW
     )
@@ -451,11 +465,12 @@ if generate_config_radio == "Yes":
     # Tab 2
     config["QCTest"]["qc_test"] = str(st.session_state.isQCTest)
     config["QCTest"]["qc_check"] = str(st.session_state.isQCCheck_QCT)
-    config["QCTest"]["correlation_threshold"] = str(st.session_state.ct_QCT)
-    config["QCTest"]["echo_intensity_threshold"] = str(st.session_state.et_QCT)
-    config["QCTest"]["error_velocity_threshold"] = str(st.session_state.evt_QCT)
+    config["QCTest"]["correlation"] = str(st.session_state.ct_QCT)
+    config["QCTest"]["echo_intensity"] = str(st.session_state.et_QCT)
+    config["QCTest"]["error_velocity"] = str(st.session_state.evt_QCT)
+    config["QCTest"]["false_target"] = str(st.session_state.ft_QCT)
     config["QCTest"]["three_beam"] = str(st.session_state.is3beam_QCT)
-    config["QCTest"]["percent_good_threshold"] = str(st.session_state.pgt_QCT)
+    config["QCTest"]["percent_good"] = str(st.session_state.pgt_QCT)
 
     # Tab 4
     config["QCTest"]["beam_modified"] = str(st.session_state.isBeamModified_QCT)
@@ -474,7 +489,8 @@ if generate_config_radio == "Yes":
     config["ProfileTest"]["cutbins_sidelobe_check"] = str(
         st.session_state.isCutBinSideLobeCheck_PT
     )
-    config["ProfileTest"]["extra_cells_PT"] = str(st.session_state.extra_cells_PT)
+    config["ProfileTest"]["extra_cells"] = str(st.session_state.extra_cells_PT)
+    config["ProfileTest"]["water_depth"] = str(st.session_state.water_depth_PT)
 
     # Tab 3
     config["ProfileTest"]["manual_cutbins"] = str(
@@ -483,9 +499,9 @@ if generate_config_radio == "Yes":
 
     # Tab 4
     config["ProfileTest"]["regrid"] = str(st.session_state.isRegridCheck_PT)
-    config["ProfileTest"]["last_cell_option"] = str(st.session_state.end_cell_option_PT)
+    config["ProfileTest"]["end_cell_option"] = str(st.session_state.end_cell_option_PT)
     config["ProfileTest"]["interpolate"] = str(st.session_state.interpolate_PT)
-    config["ProfileTest"]["manual_depth"] = str(st.session_state.manualdepth_PT)
+    config["ProfileTest"]["boundary"] = str(st.session_state.manualdepth_PT)
 
     # ------------------
     # PAGE: Velocity Test
@@ -494,7 +510,7 @@ if generate_config_radio == "Yes":
     config["VelocityTest"]["velocity_test"] = str(st.session_state.isVelocityTest)
 
     # Tab 1
-    config["VelocityTest"]["magnetic_declination_check"] = str(
+    config["VelocityTest"]["magnetic_declination"] = str(
         st.session_state.isMagnetCheck_VT
     )
     config["VelocityTest"]["magnet_method"] = str(st.session_state.magnet_method_VT)
@@ -502,22 +518,25 @@ if generate_config_radio == "Yes":
     config["VelocityTest"]["magnet_longitude"] = str(st.session_state.magnet_lon_VT)
     config["VelocityTest"]["magnet_depth"] = str(st.session_state.magnet_depth_VT)
     config["VelocityTest"]["magnet_year"] = str(st.session_state.magnet_year_VT)
+    config["VelocityTest"]["magnet_user_input"] = str(
+        st.session_state.magnet_user_input_VT
+    )
 
     # Tab 2
-    config["VelocityTest"]["cutoff_check"] = str(st.session_state.isCutoffCheck_VT)
+    config["VelocityTest"]["cutoff"] = str(st.session_state.isCutoffCheck_VT)
     config["VelocityTest"]["max_zonal_velocity"] = str(st.session_state.maxuvel_VT)
     config["VelocityTest"]["max_meridional_velocity"] = str(st.session_state.maxvvel_VT)
     config["VelocityTest"]["max_vertical_velocity"] = str(st.session_state.maxwvel_VT)
 
     # Tab 3
-    config["VelocityTest"]["despike_check"] = str(st.session_state.isDespikeCheck_VT)
+    config["VelocityTest"]["despike"] = str(st.session_state.isDespikeCheck_VT)
     config["VelocityTest"]["despike_kernal_size"] = str(
         st.session_state.despike_kernal_VT
     )
     config["VelocityTest"]["despike_cutoff"] = str(st.session_state.despike_cutoff_VT)
 
     # Tab 4
-    config["VelocityTest"]["flatline_check"] = str(st.session_state.isFlatlineCheck_VT)
+    config["VelocityTest"]["flatline"] = str(st.session_state.isFlatlineCheck_VT)
     config["VelocityTest"]["flatline_kernal_size"] = str(
         st.session_state.flatline_kernal_VT
     )

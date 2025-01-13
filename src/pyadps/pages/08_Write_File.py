@@ -25,20 +25,21 @@ if "vleadfilename" not in st.session_state:
 # Check if attributes exist in session state
 if "attributes" not in st.session_state:
     st.session_state.attributes = {}
+    st.session_state.isAttributes = False
 
 if st.session_state.isVelocityTest:
     st.session_state.final_mask = st.session_state.velocity_mask
 
     if st.session_state.isVelocityModifiedMagnet:
         st.session_state.final_velocity = st.session_state.velocity_magnet
-    if st.session_state.isRegridCheck:
+    if st.session_state.isRegridCheck_PT:
         st.session_state.final_velocity = st.session_state.velocity_regrid
     elif st.session_state.isVelocityModifiedSound:
         st.session_state.final_velocity = st.session_state.velocity_sensor
     else:
         st.session_state.final_velocity = st.session_state.velocity
 
-    if st.session_state.isRegridCheck:
+    if st.session_state.isRegridCheck_PT:
         st.session_state.final_echo = st.session_state.echo_regrid
         st.session_state.final_correlation = st.session_state.correlation_regrid
         st.session_state.final_pgood = st.session_state.pgood_regrid
@@ -47,7 +48,7 @@ if st.session_state.isVelocityTest:
         st.session_state.final_correlation = st.session_state.correlation
         st.session_state.final_pgood = st.session_state.pgood
 else:
-    if st.session_state.isRegridCheck:
+    if st.session_state.isRegridCheck_PT:
         st.session_state.final_mask = st.session_state.profile_mask_regrid
         st.session_state.final_velocity = st.session_state.velocity_regrid
         st.session_state.final_echo = st.session_state.echo_regrid
@@ -69,7 +70,7 @@ else:
 
 
 if "depth_axis" not in st.session_state:
-    st.session_state.isGrid = False
+    st.session_state.isRegridCheck_PT = False
 
 
 @st.cache_data
@@ -80,7 +81,7 @@ def file_write(filename="processed_file.nc"):
 
 
 # If the data is not regrided based on pressure sensor. Use the mean depth
-if not st.session_state.isGrid:
+if not st.session_state.isRegridCheck_PT:
     st.write(":red[WARNING!]")
     st.write(
         "Data not regrided. Using the mean transducer depth to calculate the depth axis."
@@ -187,9 +188,11 @@ if plot_button:
 # Option to Write Processed Data
 st.header("Write Data", divider="blue")
 
-mask_data_radio = st.radio("Do you want to mask the final data?", ("Yes", "No"))
+st.session_state.mask_data_WF = st.radio(
+    "Do you want to mask the final data?", ("Yes", "No")
+)
 
-if mask_data_radio == "Yes":
+if st.session_state.mask_data_WF == "Yes":
     mask = st.session_state.final_mask
     st.session_state.write_velocity = np.copy(st.session_state.final_velocity)
     st.session_state.write_velocity[:, mask == 1] = -32768
@@ -197,12 +200,15 @@ else:
     st.session_state.write_velocity = np.copy(st.session_state.final_velocity)
 
 
-file_type_radio = st.radio("Select output file format:", ("NetCDF", "CSV"))
+st.session_state.file_type_WF = st.radio(
+    "Select output file format:", ("NetCDF", "CSV")
+)
 
-if file_type_radio == "NetCDF":
+if st.session_state.file_type_WF == "NetCDF":
     add_attr_button = st.checkbox("Add attributes to NetCDF file")
 
     if add_attr_button:
+        st.session_state.isAttributes = True
         st.write("### Modify Attributes")
 
         # Create two-column layout for attributes
@@ -253,7 +259,7 @@ if download_button:
     depth_axis = np.trunc(st.session_state.final_depth_axis)
     final_mask = st.session_state.final_mask
 
-    if file_type_radio == "NetCDF":
+    if st.session_state.file_type_WF == "NetCDF":
         if add_attr_button and st.session_state.attributes:
             # Generate file with attributes
             wr.finalnc(
@@ -281,7 +287,7 @@ if download_button:
                 file_name="processed_file.nc",
             )
 
-    if file_type_radio == "CSV":
+    if st.session_state.file_type_WF == "CSV":
         udf = pd.DataFrame(
             st.session_state.write_velocity[0, :, :].T,
             index=st.session_state.date,
@@ -351,161 +357,176 @@ if generate_config_radio == "Yes":
     config["QCTest"] = {"qc_test": "False"}
     config["ProfileTest"] = {"profile_test": "False"}
     config["VelocityTest"] = {"velocity_test": "False"}
-    config["Optional"] = {"attributes": "False"}
+    config["Attributes"] = {}
 
     config["FileSettings"]["input_file_path"] = ""
     config["FileSettings"]["input_file_name"] = st.session_state.fname
-    config["FileSettings"]["output_file_path"] = ""
-    config["FileSettings"]["output_file_name_raw"] = ""
-    config["FileSettings"]["output_file_name_processed"] = ""
-    config["FileSettings"]["output_format_raw"] = str(file_type_radio).lower()
-    config["FileSettings"]["output_format_processed"] = str(file_type_radio).lower()
+    config["FileSettings"]["output_file_raw_csv"] = str(
+        st.session_state.rawcsv_download_DRW
+    )
+    config["FileSettings"]["output_file_raw_netcdf"] = str(
+        st.session_state.rawnc_download_DRW
+    )
+    config["FileSettings"]["output_file_vlead_netcdf"] = str(
+        st.session_state.vleadnc_download_DRW
+    )
+    config["FileSettings"]["output_processed_file"] = str(st.session_state.isWriteFile)
+    config["FileSettings"]["processed_file_format"] = str(st.session_state.file_type_WF)
 
-    config["DownloadOptions"]["download_raw"] = "True"
-    config["DownloadOptions"]["download_processed"] = "True"
+    config["FileSettings"]["output_file_path"] = ""
+    config["FileSettings"]["output_file_name_raw_netcdf"] = ""
+    config["FileSettings"]["output_file_name_vlead_netcdf"] = ""
+    config["FileSettings"]["output_file_name_raw_csv"] = ""
+    config["FileSettings"]["output_file_name_processed_netcdf"] = ""
+    config["FileSettings"]["output_file_name_processed_csv"] = ""
+
+    config["DownloadOptions"]["add_attributes_raw"] = str(
+        st.session_state.add_attributes_DRW
+    )
+    config["DownloadOptions"]["add_attributes_processed"] = str(
+        st.session_state.isAttributes
+    )
+    config["DownloadOptions"]["axis_option"] = str(st.session_state.axis_option_DRW)
     config["DownloadOptions"]["apply_mask"] = "True"
     config["DownloadOptions"]["download_mask"] = "True"
 
-    # Sensor Test Options
-    if st.session_state.isSensorTest:
-        config["SensorTest"]["sensor_test"] = "True"
-        if st.session_state.isRollCheck:
-            config["RollTest"]["roll_test"] = "True"
-            config["SensorTest"]["roll_cutoff"] = str(
-                st.session_state.sensor_roll_cutoff
-            )
-        else:
-            config["RollTest"]["roll_test"] = "False"
-        if st.session_state.isRollCheck:
-            config["SensorTest"]["pitch_cutoff"] = str(
-                st.session_state.sensor_pitch_cutoff
-            )
+    # ------------------
+    # PAGE: Sensor Test
+    # ------------------
+    config["SensorTest"]["sensor_test"] = str(st.session_state.isSensorTest)
+    # Tab 1: Depth Sensor
+    config["SensorTest"]["is_depth_modified"] = str(st.session_state.isDepthModified_ST)
+    config["SensorTest"]["depth_input_option"] = str(st.session_state.depthoption_ST)
+    config["SensorTest"]["is_fixed_depth"] = str(st.session_state.isFixedDepth_ST)
+    config["SensorTest"]["fixed_depth"] = str(st.session_state.fixeddepth_ST)
+    config["SensorTest"]["is_upload_depth"] = str(st.session_state.isUploadDepth_ST)
+    config["SensorTest"]["depth_file_path"] = ""
 
-        config["SensorTest"]["depth_modified"] = str(st.session_state.isDepthModified)
-        if st.session_state.isDepthModified:
-            config["SensorTest"]["depth_input_option"] = str(
-                st.session_state.sensor_depthoption
-            )
-            if st.session_state.sensor_depthoption == "Fixed Value":
-                config["SensorTest"]["depth_input"] = str(
-                    st.session_state.sensor_depthinput
-                )
+    # Tab 2: Salinity sensor
+    config["SensorTest"]["is_salinity_modified"] = str(
+        st.session_state.isSalinityModified_ST
+    )
+    config["SensorTest"]["salinity_input_option"] = str(
+        st.session_state.salinityoption_ST
+    )
+    config["SensorTest"]["is_fixed_salinity"] = str(st.session_state.isFixedSalinity_ST)
+    config["SensorTest"]["fixed_salinity"] = str(st.session_state.fixedsalinity_ST)
+    config["SensorTest"]["is_upload_salinity"] = str(
+        st.session_state.isUploadSalinity_ST
+    )
+    config["SensorTest"]["salinity_file_path"] = ""
 
-        config["SensorTest"]["salinity_modified"] = str(
-            st.session_state.isSalinityModified
-        )
-        if st.session_state.isSalinityModified:
-            config["SensorTest"]["salinity_input_option"] = str(
-                st.session_state.sensor_depthoption
-            )
-            if st.session_state.sensor_salinityoption == "Fixed Value":
-                config["SensorTest"]["salinity_input"] = str(
-                    st.session_state.sensor_salinityinput
-                )
+    # Tab 3: Temperature sensor
+    config["SensorTest"]["is_temperature_modified"] = str(
+        st.session_state.isTemperatureModified_ST
+    )
+    config["SensorTest"]["temperature_input_option"] = str(
+        st.session_state.temperatureoption_ST
+    )
+    config["SensorTest"]["is_fixed_temperature"] = str(
+        st.session_state.isFixedTemperature_ST
+    )
+    config["SensorTest"]["fixed_temperature"] = str(
+        st.session_state.fixedtemperature_ST
+    )
+    config["SensorTest"]["is_upload_temperature"] = str(
+        st.session_state.isUploadTemperature_ST
+    )
+    config["SensorTest"]["temperature_file_path"] = ""
 
-        config["SensorTest"]["temperature_modified"] = str(
-            st.session_state.isTemperatureModified
-        )
-        if st.session_state.isTemperatureModified:
-            config["SensorTest"]["temperature_input_option"] = str(
-                st.session_state.sensor_tempoption
-            )
-            if st.session_state.sensor_tempoption == "Fixed Value":
-                config["SensorTest"]["temperature_input"] = str(
-                    st.session_state.sensor_tempinput
-                )
-    # QC Test Options
-    if st.session_state.isQCTest:
-        config["QCTest"]["qc_test"] = "True"
+    # Tab 7:
 
-        # Add the contents of the current QC Mask thresholds
-        if "newthresh" in st.session_state:
-            for idx, row in st.session_state.newthresh.iterrows():
-                config["QCTest"][row["Threshold"].replace(" ", "_")] = row["Values"]
+    config["SensorTest"]["roll_check"] = str(st.session_state.isRollCheck_ST)
+    config["SensorTest"]["roll_cutoff"] = str(st.session_state.roll_cutoff_ST)
+    config["SensorTest"]["pitch_check"] = str(st.session_state.isPitchCheck_ST)
+    config["SensorTest"]["pitch_cutoff"] = str(st.session_state.pitch_cutoff_ST)
 
-    # Profile Test Options
-    if st.session_state.isProfileTest:
-        config["ProfileTest"]["profile_test"] = "True"
+    config["SensorTest"]["velocity_modified"] = str(
+        st.session_state.isVelocityModifiedSound_ST
+    )
 
-        if st.session_state.isTrimEndsCheck:
-            config["ProfileTest"]["trim_ends"] = "True"
-            config["ProfileTest"]["trim_ends_start_index"] = str(
-                st.session_state.trimends_start_ens
-            )
-            config["ProfileTest"]["trim_ends_end_index"] = str(
-                st.session_state.trimends_end_ens
-            )
-        else:
-            config["ProfileTest"]["trim_ends"] = "False"
+    # ------------------
+    # PAGE: QC Test
+    # ------------------
+    # Tab 2
+    config["QCTest"]["qc_test"] = str(st.session_state.isQCTest)
+    config["QCTest"]["qc_check"] = str(st.session_state.isQCCheck_QCT)
+    config["QCTest"]["correlation_threshold"] = str(st.session_state.ct_QCT)
+    config["QCTest"]["echo_intensity_threshold"] = str(st.session_state.et_QCT)
+    config["QCTest"]["error_velocity_threshold"] = str(st.session_state.evt_QCT)
+    config["QCTest"]["three_beam"] = str(st.session_state.is3beam_QCT)
+    config["QCTest"]["percent_good_threshold"] = str(st.session_state.pgt_QCT)
 
-        if st.session_state.isCutBinSideLobeCheck:
-            config["ProfileTest"]["cut_bins"] = "True"
-            config["ProfileTest"]["cut_bins_add_cells"] = str(
-                st.session_state.profile_extra_cells
-            )
-        else:
-            config["ProfileTest"]["cut_bins"] = "False"
+    # Tab 4
+    config["QCTest"]["beam_modified"] = str(st.session_state.isBeamModified_QCT)
+    config["QCTest"]["orientation"] = str(st.session_state.beam_direction_QCT)
 
-        if st.session_state.isCutBinManualCheck:
-            config["ProfileTest"]["cut_bins_manual"] = "True"
+    # ------------------
+    # PAGE: Profile Test
+    # ------------------
+    # Tab 1
+    config["ProfileTest"]["profile_test"] = str(st.session_state.isProfileTest)
+    config["ProfileTest"]["trim_ends_check"] = str(st.session_state.isTrimEndsCheck_PT)
+    config["ProfileTest"]["trim_start_ensemble"] = str(st.session_state.start_ens_PT)
+    config["ProfileTest"]["trim_end_ensemble"] = str(st.session_state.end_ens_PT)
 
-        if st.session_state.isRegridCheck:
-            config["ProfileTest"]["regrid"] = "True"
-            config["ProfileTest"]["Regrid_Option"] = st.session_state.end_bin_option
-        else:
-            config["ProfileTest"]["regrid"] = "False"
+    # Tab 2
+    config["ProfileTest"]["cutbins_sidelobe_check"] = str(
+        st.session_state.isCutBinSideLobeCheck_PT
+    )
+    config["ProfileTest"]["extra_cells_PT"] = str(st.session_state.extra_cells_PT)
 
-    # Velocity Test Section
-    if st.session_state.isVelocityTest:
-        config["VelocityTest"]["velocity_test"] = "True"
+    # Tab 3
+    config["ProfileTest"]["manual_cutbins"] = str(
+        st.session_state.isCutBinManualCheck_PT
+    )
 
-        if st.session_state.isMagnetCheck:
-            config["VelocityTest"]["magnetic_declination"] = str(True)
-            config["VelocityTest"]["latitude"] = str(st.session_state.lat)
-            config["VelocityTest"]["longitude"] = str(st.session_state.lon)
-            config["VelocityTest"]["depth"] = str(st.session_state.magnetic_dec_depth)
-            config["VelocityTest"]["year"] = str(st.session_state.year)
-        else:
-            config["VelocityTest"]["magnetic_declination"] = str(False)
+    # Tab 4
+    config["ProfileTest"]["regrid"] = str(st.session_state.isRegridCheck_PT)
+    config["ProfileTest"]["last_cell_option"] = str(st.session_state.end_cell_option_PT)
+    config["ProfileTest"]["interpolate"] = str(st.session_state.interpolate_PT)
+    config["ProfileTest"]["manual_depth"] = str(st.session_state.manualdepth_PT)
 
-        if st.session_state.isCutoffCheck:
-            config["VelocityTest"]["cutoff"] = str(True)
-            config["VelocityTest"]["max_zonal_velocity"] = str(st.session_state.maxuvel)
-            config["VelocityTest"]["max_meridional_velocity"] = str(
-                st.session_state.maxvvel
-            )
-            config["VelocityTest"]["max_vertical_velocity"] = str(
-                st.session_state.maxwvel
-            )
-        else:
-            config["VelocityTest"]["cutoff"] = str(False)
+    # ------------------
+    # PAGE: Velocity Test
+    # ------------------
 
-        if st.session_state.isDespikeCheck:
-            config["VelocityTest"]["despike"] = str(True)
-            config["VelocityTest"]["despike_Kernal_Size"] = str(
-                st.session_state.despike_kernal
-            )
-            config["VelocityTest"]["despike_Cutoff"] = str(
-                st.session_state.despike_cutoff
-            )
-        else:
-            config["VelocityTest"]["Despike"] = str(False)
+    config["VelocityTest"]["velocity_test"] = str(st.session_state.isVelocityTest)
 
-        if st.session_state.isFlatlineCheck:
-            config["VelocityTest"]["flatline"] = str(True)
-            config["VelocityTest"]["flatline_kernal_size"] = str(
-                st.session_state.flatline_kernal
-            )
-            config["VelocityTest"]["flatline_deviation"] = str(
-                st.session_state.flatline_cutoff
-            )
-        else:
-            config["VelocityTest"]["flatline"] = str(False)
+    # Tab 1
+    config["VelocityTest"]["magnetic_declination_check"] = str(
+        st.session_state.isMagnetCheck_VT
+    )
+    config["VelocityTest"]["magnet_method"] = str(st.session_state.magnet_method_VT)
+    config["VelocityTest"]["magnet_latitude"] = str(st.session_state.magnet_lat_VT)
+    config["VelocityTest"]["magnet_longitude"] = str(st.session_state.magnet_lon_VT)
+    config["VelocityTest"]["magnet_depth"] = str(st.session_state.magnet_depth_VT)
+    config["VelocityTest"]["magnet_year"] = str(st.session_state.magnet_year_VT)
+
+    # Tab 2
+    config["VelocityTest"]["cutoff_check"] = str(st.session_state.isCutoffCheck_VT)
+    config["VelocityTest"]["max_zonal_velocity"] = str(st.session_state.maxuvel_VT)
+    config["VelocityTest"]["max_meridional_velocity"] = str(st.session_state.maxvvel_VT)
+    config["VelocityTest"]["max_vertical_velocity"] = str(st.session_state.maxwvel_VT)
+
+    # Tab 3
+    config["VelocityTest"]["despike_check"] = str(st.session_state.isDespikeCheck_VT)
+    config["VelocityTest"]["despike_kernal_size"] = str(
+        st.session_state.despike_kernal_VT
+    )
+    config["VelocityTest"]["despike_cutoff"] = str(st.session_state.despike_cutoff_VT)
+
+    # Tab 4
+    config["VelocityTest"]["flatline_check"] = str(st.session_state.isFlatlineCheck_VT)
+    config["VelocityTest"]["flatline_kernal_size"] = str(
+        st.session_state.flatline_kernal_VT
+    )
+    config["VelocityTest"]["flatline_cutoff"] = str(st.session_state.flatline_cutoff_VT)
 
     # Optional section (attributes)
-    config["Optional"] = {}
+
     for key, value in st.session_state.attributes.items():
-        config["Optional"][key] = str(value)  # Ensure all values are strings
+        config["Attributes"][key] = str(value)  # Ensure all values are strings
 
     # Write config.ini to a temporary file
     # config_filepath = "config.ini"

@@ -183,60 +183,150 @@ st.session_state.date = pd.to_datetime(date_df)
 st.session_state.date1 = pd.to_datetime(date_df)
 st.session_state.date2 = pd.to_datetime(date_df)
 st.session_state.ensemble_axis = np.arange(0, st.session_state.head.ensembles, 1)
+st.session_state.axis_option = "time"
 
 
 # ---------- Initialize all options -------------
+# ------------------------
+# Page: Download Raw File
+# ------------------------
+# Widgets
+st.session_state.add_attributes_DRW = "No"
+st.session_state.axis_option_DRW = "time"
+st.session_state.rawnc_download_DRW = False
+st.session_state.vleadnc_download_DRW = False
+st.session_state.rawcsv_option_DRW = "Velocity"
+st.session_state.rawcsv_beam_DRW = 1
+st.session_state.rawcsv_download_DRW = False
+
 # ------------------
-# Global Tests
+# Page: Sensor Test
 # ------------------
-# Checks if the following tests are carried out
 st.session_state.isSensorTest = False
-st.session_state.isQCTest = False
-st.session_state.isProfileTest = False
-st.session_state.isGrid = False
-st.session_state.isGridSave = False
-st.session_state.isVelocityTest = False
-
-# Check if visiting the page first time
 st.session_state.isFirstSensorVisit = True
+
+# -- Tab 1: Depth Correction
+st.session_state.isDepthModified_ST = False
+# Widgets
+# Options: "Fixed Value", "File Upload"
+st.session_state.depthoption_ST = "Fixed Value"
+st.session_state.isFixedDepth_ST = False
+st.session_state.fixeddepth_ST = 0
+st.session_state.isUploadDepth_ST = False
+
+# -- Tab 2: Salinity Correction
+st.session_state.isSalinityModified_ST = False
+# Widgets
+st.session_state.salinityoption_ST = "Fixed Value"
+st.session_state.isFixedSalinity_ST = False
+st.session_state.fixedsalinity_ST = 35
+st.session_state.isUploadSalinity_ST = False
+
+# -- Tab 3: Temperature Correction
+st.session_state.isTemperatureModified_ST = False
+# Widgets
+st.session_state.temperatureoption_ST = "Fixed Value"
+st.session_state.isFixedTemperature_ST = False
+st.session_state.fixedtemperature_ST = 0
+st.session_state.isUploadTemperature_ST = False
+
+# -- Tab 7: Pitch, Roll, Velocity Correction
+st.session_state.isRollCheck_ST = False
+st.session_state.isPitchCheck_ST = False
+st.session_state.isVelocityModifiedSound_ST = False
+# Widgets
+st.session_state.roll_cutoff_ST = 359
+st.session_state.pitch_cutoff_ST = 359
+
+# ------------------
+# Page: QC Test
+# ------------------
+# Global Test
+st.session_state.isQCTest = False
 st.session_state.isFirstQCVisit = True
-st.session_state.isFirstProfileVisit = True
-st.session_state.isFirstVelocityVisit = True
-# ------------------
-# Local Tests:
-# ------------------
-st.session_state.isRollCheck = False
-st.session_state.isPitchCheck = False
 
-st.session_state.isQCCheck = False
-st.session_state.isBeamModified = False
+# Tab 2: Apply QC
+st.session_state.isQCCheck_QCT = False
+# Widgets
+st.session_state.ct_QCT = 64
+st.session_state.et_QCT = 0
+st.session_state.evt_QCT = 2000
+st.session_state.ft_QCT = 50
+st.session_state.is3beam_QCT = True
+st.session_state.pgt_QCT = 0
 
-st.session_state.isTrimEndsCheck = False
-st.session_state.isCutBinSideLobeCheck = False
-st.session_state.isCutBinManualCheck = False
-st.session_state.isRegridCheck = False
-
-st.session_state.isMagnetCheck = False
-st.session_state.isDespikeCheck = False
-st.session_state.isFlatlineCheck = False
-st.session_state.isCutoffCheck = False
-
-
-# ------------------
 # Data Modifications
+st.session_state.isBeamModified_QCT = False
+# Widgets
+st.session_state.beam_direction_QCT = st.session_state.beam_direction
+
 # ------------------
-# SENSOR TEST
-# Velocity Modified Based on Sound
-st.session_state.isVelocityModifiedSound = False
-# Transducer depth modified based on Pressure sensor
-st.session_state.isDepthModified = False
-st.session_state.isTemperatureModified = False
-st.session_state.isSalinityModified = False
-# QC TEST
-st.session_state.isBeamModified = False
-# VELOCITY TEST
-# Velocity Modified based on magnetic declination
+# Page: Profile Test
+# ------------------
+st.session_state.isProfileTest = False
+st.session_state.isFirstProfileVisit = True
+
+# Tab1: Trim Ends
+st.session_state.isTrimEndsCheck_PT = False
+# Widgets
+st.session_state.start_ens_PT = 0
+st.session_state.end_ens_PT = st.session_state.head.ensembles
+
+# Tab2: Cutbins - Sidelobe
+st.session_state.isCutBinSideLobeCheck_PT = False
+st.session_state.extra_cells_PT = 0
+
+# Tab3: Cutbins - Manual
+st.session_state.isCutBinManualCheck_PT = False
+
+# Tab4: Regrid
+st.session_state.isRegridCheck_PT = False
+st.session_state.end_cell_option_PT = "Cell"
+st.session_state.interpolate_PT = "nearest"
+st.session_state.manualdepth_PT = 0
+
+# ------------------
+# Page: Velocity Test
+# ------------------
+# Global Test
+st.session_state.isVelocityTest = False
+# Check if visiting the page first time
+st.session_state.isFirstVelocityVisit = True
+# Local Tests:
+# Tab1: Magnetic Declination
+st.session_state.isMagnetCheck_VT = False
 st.session_state.isVelocityModifiedMagnet = False
+# OPTIONS: pygeomag, API, Manual
+st.session_state.magnet_method_VT = "pygeomag"
+st.session_state.magnet_lat_VT = 0
+st.session_state.magnet_lon_VT = 0
+st.session_state.magnet_year_VT = 2025
+st.session_state.magnet_depth_VT = 0
+
+# Tab2: Velocity Cutoff
+st.session_state.isCutoffCheck_VT = False
+st.session_state.maxuvel_VT = 250
+st.session_state.maxvvel_VT = 250
+st.session_state.maxwvel_VT = 15
+
+# Tab3: Despike
+st.session_state.isDespikeCheck_VT = False
+st.session_state.despike_kernal_VT = 5
+st.session_state.despike_cutoff_VT = 3
+
+# Tab4: Flatline
+st.session_state.isFlatlineCheck_VT = False
+st.session_state.flatline_kernal_VT = 5
+st.session_state.flatline_cutoff_VT = 3
+
+# ------------------
+# Page: Write File
+# ------------------
+st.session_state.isWriteFile = True
+st.session_state.isAttributes = False
+st.session_state.mask_data_WF = "Yes"
+# FileTypes: NetCDF, CSV
+st.session_state.file_type_WF = "NetCDF"
 
 # MASK DATA
 # The velocity data has missing values due to the cutoff

@@ -20,10 +20,10 @@ def reset_profiletest():
     # Reset Global Test
     st.session_state.isProfileTest = False
     # Reset Local Tests
-    st.session_state.isTrimEndsCheck = False
-    st.session_state.isCutBinSideLobeCheck = False
-    st.session_state.isCutBinManualCheck = False
-    st.session_state.isRegridCheck = False
+    st.session_state.isTrimEndsCheck_PT = False
+    st.session_state.isCutBinSideLobeCheck_PT = False
+    st.session_state.isCutBinManualCheck_PT = False
+    st.session_state.isRegridCheck_PT = False
 
     # Reset Page Return
     st.session_state.isQCPageReturn = False
@@ -34,7 +34,7 @@ def reset_profiletest():
     st.session_state.echo_regrid = np.copy(st.session_state.echo)
     st.session_state.correlation_regrid = np.copy(st.session_state.correlation)
     st.session_state.pgood_regrid = np.copy(st.session_state.pgood)
-    if st.session_state.isVelocityModifiedSound:
+    if st.session_state.isVelocityModifiedSound_ST:
         st.session_state.velocity_regrid = np.copy(st.session_state.velocity_sensor)
         st.session_state.velocity_temp = np.copy(st.session_state.velocity_sensor)
     else:
@@ -66,10 +66,10 @@ def hard_reset(option):
     st.session_state.isProfileTest = False
 
     # Reset Local Tests
-    st.session_state.isTrimEndsCheck = False
-    st.session_state.isCutBinSideLobeCheck = False
-    st.session_state.isCutBinManualCheck = False
-    st.session_state.isRegridCheck = False
+    st.session_state.isTrimEndsCheck_PT = False
+    st.session_state.isCutBinSideLobeCheck_PT = False
+    st.session_state.isCutBinManualCheck_PT = False
+    st.session_state.isRegridCheck_PT = False
 
     # Reset Page Return
     st.session_state.isQCPageReturn = False
@@ -80,7 +80,7 @@ def hard_reset(option):
     st.session_state.echo_regrid = np.copy(st.session_state.echo)
     st.session_state.correlation_regrid = np.copy(st.session_state.correlation)
     st.session_state.pgood_regrid = np.copy(st.session_state.pgood)
-    if st.session_state.isVelocityModifiedSound:
+    if st.session_state.isVelocityModifiedSound_ST:
         st.session_state.velocity_regrid = np.copy(st.session_state.velocity_sensor)
         st.session_state.velocity_temp = np.copy(st.session_state.velocity_sensor)
     else:
@@ -169,7 +169,7 @@ def fillplot_plotly(
                 colorscale="gray",
                 hoverongaps=False,
                 showscale=False,
-                opacity=0.7,
+                opacity=0.4,
             )
         )
     fig.update_layout(
@@ -282,20 +282,20 @@ def trim_ends(start_ens=0, end_ens=0, ens_range=20):
 def set_button_trimends():
     # Trim ends only modifies Mask
     mask = st.session_state.profile_mask_default
-    if st.session_state.trimends_start_ens > 0:
-        mask[:, : st.session_state.trimends_start_ens] = 1
+    if st.session_state.start_ens_PT > 0:
+        mask[:, : st.session_state.start_ens_PT] = 1
 
-    if st.session_state.trimends_end_ens <= x[-1]:
-        mask[:, st.session_state.trimends_end_ens :] = 1
+    if st.session_state.end_ens_PT <= x[-1]:
+        mask[:, st.session_state.end_ens_PT :] = 1
 
     st.session_state.profile_mask_trimends = np.copy(mask)
     st.session_state.profile_mask_temp = np.copy(mask)
-    st.session_state.isTrimEndsCheck = True
+    st.session_state.isTrimEndsCheck_PT = True
 
 
 def reset_button_trimends():
     # Trim ends only modifies Mask
-    st.session_state.isTrimEndsCheck = False
+    st.session_state.isTrimEndsCheck_PT = False
     st.session_state.profile_mask_trimends = st.session_state.profile_mask_default
     st.session_state.profile_mask_temp = st.session_state.profile_mask_default
 
@@ -305,7 +305,7 @@ def set_button_apply_sidelobe():
     inmask = np.copy(st.session_state.profile_mask_temp)
     transdepth = st.session_state.depth
     water_column_depth = st.session_state.profile_water_column_depth
-    extra_cells = st.session_state.profile_extra_cells
+    extra_cells = st.session_state.extra_cell_PT
     mask = side_lobe_beam_angle(
         transdepth,
         inmask,
@@ -321,14 +321,14 @@ def set_button_apply_sidelobe():
 
 
 def set_button_sidelobe():
-    st.session_state.isCutBinSideLobeCheck = True
+    st.session_state.isCutBinSideLobeCheck_PT = True
     st.session_state.profile_mask_temp = np.copy(st.session_state.sidelobe_displaymask)
     st.session_state.profile_mask_sidelobe = np.copy(st.session_state.profile_mask_temp)
 
 
 def reset_button_sidelobe():
-    st.session_state.isCutBinSideLobeCheck = False
-    if st.session_state.isTrimEndsCheck:
+    st.session_state.isCutBinSideLobeCheck_PT = False
+    if st.session_state.isTrimEndsCheck_PT:
         st.session_state.profile_mask_temp = st.session_state.profile_mask_trimends
     else:
         st.session_state.profile_mask_temp = st.session_state.profile_mask_default
@@ -351,11 +351,11 @@ def set_button_apply_mask_region():
     st.session_state.profile_mask_temp = np.copy(mask)
     st.session_state.profile_mask_manual = np.copy(mask)
 
-    st.session_state.isCutBinManualCheck = True
+    st.session_state.isCutBinManualCheck_PT = True
 
 
 def set_button_mask_region():
-    st.session_state.isCutBinManualCheck = True
+    st.session_state.isCutBinManualCheck_PT = True
     st.session_state.profile_mask_manual = np.copy(st.session_state.profile_mask_temp)
 
 
@@ -366,7 +366,7 @@ def set_button_delete_cell():
     st.session_state.profile_mask_temp = np.copy(mask)
     st.session_state.profile_mask_manual = np.copy(mask)
 
-    st.session_state.isCutBinManualCheck = True
+    st.session_state.isCutBinManualCheck_PT = True
 
 
 def set_button_delete_ensemble():
@@ -375,16 +375,16 @@ def set_button_delete_ensemble():
     mask[:, ensemble - 1] = 1  # Mask the entire column for the selected ensemble
     st.session_state.profile_mask_temp = np.copy(mask)
     st.session_state.profile_mask_manual = np.copy(mask)
-    st.session_state.isCutBinManualCheck = True
+    st.session_state.isCutBinManualCheck_PT = True
 
 
 def reset_button_mask_manual():
-    st.session_state.isCutBinManualCheck = False
+    st.session_state.isCutBinManualCheck_PT = False
     # st.session_state.isCutBinManualOn = False
 
-    if st.session_state.isCutBinSideLobeCheck:
+    if st.session_state.isCutBinSideLobeCheck_PT:
         st.session_state.profile_mask_temp = st.session_state.profile_mask_sidelobe
-    elif st.session_state.isTrimEndsCheck:
+    elif st.session_state.isTrimEndsCheck_PT:
         st.session_state.profile_mask_temp = st.session_state.profile_mask_trimends
     else:
         st.session_state.profile_mask_temp = st.session_state.profile_mask_default
@@ -395,14 +395,14 @@ def reset_button_mask_manual():
 
 # Regrid functions
 def reset_button_regrid():
-    st.session_state.isRegridCheck = False
+    st.session_state.isRegridCheck_PT = False
 
     # Reset to previous state
-    if st.session_state.isCutBinManualCheck:
+    if st.session_state.isCutBinManualCheck_PT:
         st.session_state.profile_mask_temp = st.session_state.profile_mask_manual
-    elif st.session_state.isCutBinSideLobeCheck:
+    elif st.session_state.isCutBinSideLobeCheck_PT:
         st.session_state.profile_mask_temp = st.session_state.profile_mask_sidelobe
-    elif st.session_state.isTrimEndsCheck:
+    elif st.session_state.isTrimEndsCheck_PT:
         st.session_state.profile_mask_temp = st.session_state.profile_mask_trimends
     else:
         st.session_state.profile_mask_temp = st.session_state.profile_mask_default
@@ -411,7 +411,7 @@ def reset_button_regrid():
     st.session_state.profile_mask_regrid = np.copy(st.session_state.profile_mask_temp)
 
     # Reset Data
-    if st.session_state.isVelocityModifiedSound:
+    if st.session_state.isVelocityModifiedSound_ST:
         st.session_state.velocity_regrid = np.copy(st.session_state.velocity_sensor)
     else:
         st.session_state.velocity_regrid = np.copy(st.session_state.velocity)
@@ -422,7 +422,7 @@ def reset_button_regrid():
 
 
 def save_profiletest():
-    if st.session_state.isRegridCheck:
+    if st.session_state.isRegridCheck_PT:
         st.session_state.profile_mask = st.session_state.profile_mask_regrid
     else:
         st.session_state.profile_mask = st.session_state.profile_mask_temp
@@ -481,20 +481,29 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
 ############## TRIM ENDS #################
 with tab1:
     st.header("Trim Ends", divider="blue")
-    ens_range = st.number_input("Change range", x[0], x[-1], 20)
-    start_ens = st.slider("Deployment Ensembles", 0, ens_range, 0)
-    end_ens = st.slider("Recovery Ensembles", x[-1] - ens_range, x[-1] + 1, x[-1] + 1)
+    x1 = np.arange(0, ensembles, 1)
+    st.session_state.ens_range = st.number_input("Change range", x[0], x[-1], 20)
+    st.session_state.start_ens = st.slider(
+        "Deployment Ensembles", 0, st.session_state.ens_range, 0
+    )
+    st.session_state.end_ens = st.slider(
+        "Recovery Ensembles",
+        x1[-1] - st.session_state.ens_range,
+        x1[-1] + 1,
+        x1[-1] + 1,
+    )
 
-    n = int(ens_range)
-    if start_ens or end_ens:
-        trim_ends(start_ens=int(start_ens), end_ens=int(end_ens), ens_range=n)
-        # st.session_state.update_mask = False
+    if st.session_state.start_ens or st.session_state.end_ens:
+        trim_ends(
+            start_ens=int(st.session_state.start_ens),
+            end_ens=int(st.session_state.end_ens),
+            ens_range=int(st.session_state.ens_range),
+        )
 
-    st.session_state.trimends_ens_range = int(ens_range)
-    st.session_state.trimends_start_ens = start_ens
-    st.session_state.trimends_end_ens = end_ens
+    st.session_state.start_ens_PT = st.session_state.start_ens
+    st.session_state.end_ens_PT = st.session_state.end_ens
     st.session_state.trimends_endpoints = np.array(
-        [st.session_state.trimends_start_ens, st.session_state.trimends_end_ens]
+        [st.session_state.start_ens_PT, st.session_state.end_ens_PT]
     )
 
     left_te, right_te = st.columns([1, 1])
@@ -530,7 +539,7 @@ with tab2:
     left1, right1 = st.columns([1, 1])
 
     with left1:
-        orientation = st.session_state.beam_direction
+        orientation = st.session_state.beam_direction_QCT
         st.write(f"The orientation is `{orientation}`.")
         beam = st.radio("Select beam", (1, 2, 3, 4), horizontal=True)
         beam = beam - 1
@@ -539,7 +548,7 @@ with tab2:
     with right1:
         st.session_state.profile_water_column_depth = 0
 
-        st.session_state.profile_extra_cells = st.number_input(
+        st.session_state.extra_cell_PT = st.number_input(
             "Additional Cells to Delete", 0, 10, 0
         )
         if orientation.lower() == "down":
@@ -553,7 +562,7 @@ with tab2:
     left2, right2 = st.columns([1, 1])
 
     with left2:
-        # if st.session_state.isCutBinSideLobeCheck:
+        # if st.session_state.isCutBinSideLobeCheck_PT:
         #     fillplot_plotly(
         #         echo[beam, :, :],
         #         title="Echo Intensity (Masked)",
@@ -615,6 +624,7 @@ with tab3:
             "Max Cell", 0, int(flobj.field()["Cells"]), int(flobj.field()["Cells"])
         )
 
+        st.write(st.session_state.profile_max_cell)
         # Input for selecting minimum and maximum ensembles
         st.session_state.profile_min_ensemble = st.number_input(
             "Min Ensemble", 0, int(flobj.ensembles), 0
@@ -624,9 +634,9 @@ with tab3:
         )
 
         # Submit button to apply the mask
-        cut_bins_mask_manual = st.button(
-            label="Apply Manual Cut Bins", on_click=set_button_apply_mask_region
-        )
+        cut_bins_mask_manual = st.button(label="Apply Manual Cut Bins")
+        if cut_bins_mask_manual:
+            set_button_apply_mask_region()
 
         # Adding the new feature: Delete Single Cell or Ensemble
         st.subheader("Delete Specific Cell or Ensemble")
@@ -730,23 +740,23 @@ with tab4:
     left4, right4 = st.columns([1, 3])
 
     with left4:
-        if st.session_state.beam_direction.lower() == "up":
-            end_bin_option = st.radio(
+        if st.session_state.beam_direction_QCT.lower() == "up":
+            end_cell_option = st.radio(
                 "Select the depth of last bin for regridding",
                 ("Cell", "Surface", "Manual"),
                 horizontal=True,
             )
         else:
-            end_bin_option = st.radio(
+            end_cell_option = st.radio(
                 "Select the depth of last bin for regridding",
                 ("Cell", "Manual"),
                 horizontal=True,
             )
 
-        st.session_state.end_bin_option = end_bin_option
-        st.write(f"You have selected: `{end_bin_option}`")
+        st.session_state.end_cell_option_PT = end_cell_option
+        st.write(f"You have selected: `{end_cell_option}`")
 
-        if end_bin_option == "Manual":
+        if end_cell_option == "Manual":
             mean_depth = (
                 np.mean(st.session_state.vlead.vleader["Depth of Transducer"]) / 10
             )
@@ -755,7 +765,7 @@ with tab4:
             st.write(
                 f"The transducer depth is {mean_depth} m. The value should not exceed the transducer depth"
             )
-            if st.session_state.beam_direction.lower() == "up":
+            if st.session_state.beam_direction_QCT.lower() == "up":
                 boundary = st.number_input(
                     "Enter the depth (m):", max_value=int(mean_depth), min_value=0
                 )
@@ -766,9 +776,10 @@ with tab4:
         else:
             boundary = 0
 
-        interpolate = st.radio(
+        st.session_state.interpolate_PT = st.radio(
             "Choose interpolation method:", ("nearest", "linear", "cubic")
         )
+        st.session_state.manualdepth_PT = boundary
 
         progress_text = "Regridding in progress. Please wait."
         grid_bar = st.progress(0, text=progress_text)
@@ -781,9 +792,9 @@ with tab4:
                 st.session_state.velocity_temp,
                 -32768,
                 trimends=st.session_state.trimends_endpoints,
-                end_bin_option=st.session_state.end_bin_option,
-                orientation=st.session_state.beam_direction,
-                method=interpolate,
+                end_cell_option=st.session_state.end_cell_option_PT,
+                orientation=st.session_state.beam_direction_QCT,
+                method=st.session_state.interpolate_PT,
                 boundary_limit=boundary,
                 cells=cells,
                 cell_size=cell_size,
@@ -797,9 +808,9 @@ with tab4:
                 echo,
                 -32768,
                 trimends=st.session_state.trimends_endpoints,
-                end_bin_option=st.session_state.end_bin_option,
-                orientation=st.session_state.beam_direction,
-                method=interpolate,
+                end_cell_option=st.session_state.end_cell_option_PT,
+                orientation=st.session_state.beam_direction_QCT,
+                method=st.session_state.interpolate_PT,
                 boundary_limit=boundary,
                 cells=cells,
                 cell_size=cell_size,
@@ -813,9 +824,9 @@ with tab4:
                 correlation,
                 -32768,
                 trimends=st.session_state.trimends_endpoints,
-                end_bin_option=st.session_state.end_bin_option,
-                orientation=st.session_state.beam_direction,
-                method=interpolate,
+                end_cell_option=st.session_state.end_cell_option_PT,
+                orientation=st.session_state.beam_direction_QCT,
+                method=st.session_state.interpolate_PT,
                 boundary_limit=boundary,
                 cells=cells,
                 cell_size=cell_size,
@@ -829,9 +840,9 @@ with tab4:
                 pgood,
                 -32768,
                 trimends=st.session_state.trimends_endpoints,
-                end_bin_option=st.session_state.end_bin_option,
-                orientation=st.session_state.beam_direction,
-                method=interpolate,
+                end_cell_option=st.session_state.end_cell_option_PT,
+                orientation=st.session_state.beam_direction_QCT,
+                method=st.session_state.interpolate_PT,
                 boundary_limit=boundary,
                 cells=cells,
                 cell_size=cell_size,
@@ -846,8 +857,8 @@ with tab4:
                 st.session_state.profile_mask_temp,
                 1,
                 trimends=st.session_state.trimends_endpoints,
-                end_bin_option=st.session_state.end_bin_option,
-                orientation=st.session_state.beam_direction,
+                end_cell_option=st.session_state.end_cell_option_PT,
+                orientation=st.session_state.beam_direction_QCT,
                 method="nearest",
                 boundary_limit=boundary,
                 cells=cells,
@@ -871,8 +882,7 @@ with tab4:
                 "No. of grid depth bins after regridding: ",
                 np.shape(st.session_state.velocity_regrid)[1],
             )
-            st.session_state.isGrid = True
-            st.session_state.isRegridCheck = True
+            st.session_state.isRegridCheck_PT = True
 
         regrid_reset_button = st.button(
             "Reset Regrid Test", on_click=reset_button_regrid
@@ -882,7 +892,7 @@ with tab4:
             st.info("Data Reset")
 
     with right4:
-        if st.session_state.isRegridCheck:
+        if st.session_state.isRegridCheck_PT:
             fillplot_plotly(
                 st.session_state.velocity_regrid[0, :, :],
                 title="Regridded Velocity File",
@@ -915,19 +925,21 @@ with tab5:
                 [
                     [
                         "Trim Ends",
-                        "True" if st.session_state.isTrimEndsCheck else "False",
+                        "True" if st.session_state.isTrimEndsCheck_PT else "False",
                     ],
                     [
                         "Cut Bins: Side Lobe Contamination",
-                        "True" if st.session_state.isCutBinSideLobeCheck else "False",
+                        "True"
+                        if st.session_state.isCutBinSideLobeCheck_PT
+                        else "False",
                     ],
                     [
                         "Cut Bins: Manual",
-                        "True" if st.session_state.isCutBinManualCheck else "False",
+                        "True" if st.session_state.isCutBinManualCheck_PT else "False",
                     ],
                     [
                         "Regrid Depth Cells",
-                        "True" if st.session_state.isRegridCheck else "False",
+                        "True" if st.session_state.isRegridCheck_PT else "False",
                     ],
                 ],
                 columns=["Parameter", "Status"],

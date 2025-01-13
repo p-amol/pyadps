@@ -23,12 +23,11 @@ def reset_qctest():
     # Reset Global Test
     st.session_state.isQCTest = False
     # Reset Local Tests
-    st.session_state.isQCCheck = False
+    st.session_state.isQCCheck_QCT = False
 
     # Reset Data
-    st.session_state.isBeamModified = False
-    beamdir = st.session_state.ds.fixedleader.system_configuration()["Beam Direction"]
-    st.session_state.beam_direction = beamdir
+    st.session_state.isBeamModified_QCT = False
+    st.session_state.beam_direction_QCT = st.session_state.beam_direction
 
     # As QC test is not saved the Sensor Page Returns is set to False
     st.session_state.isSensorPageReturn = False
@@ -48,11 +47,10 @@ def hard_reset(option):
     # Reset Global Test
     st.session_state.isQCTest = False
     # Reset Local Tests
-    st.session_state.isQCCheck = False
-    st.session_state.isBeamModified = False
+    st.session_state.isQCCheck_QCT = False
+    st.session_state.isBeamModified_QCT = False
     # Reset Data
-    beamdir = st.session_state.ds.fixedleader.system_configuration()["Beam Direction"]
-    st.session_state.beam_direction = beamdir
+    st.session_state.beam_direction_QCT = st.session_state.beam_direction
 
     st.session_state.isSensorPageReturn = False
 
@@ -78,7 +76,7 @@ def save_qctest():
 
 def qc_submit():
     # st.write(st.session_state.newthresh)
-    st.session_state.isQCCheck = True
+    st.session_state.isQCCheck_QCT = True
 
     # First Quality check of the page
     mask = np.copy(st.session_state.qc_mask_temp)
@@ -88,13 +86,13 @@ def qc_submit():
     #     mask = np.copy(st.session_state.default_mask)
 
     ds = st.session_state.ds
-    pgt = st.session_state.pgt
-    ct = st.session_state.ct
-    et = st.session_state.et
-    evt = st.session_state.evt
-    ft = st.session_state.ft
-    option = st.session_state.option
-    mask = pg_check(ds, mask, pgt, threebeam=option)
+    pgt = st.session_state.pgt_QCT
+    ct = st.session_state.ct_QCT
+    et = st.session_state.et_QCT
+    evt = st.session_state.evt_QCT
+    ft = st.session_state.ft_QCT
+    is3beam = st.session_state.is3beam_QCT
+    mask = pg_check(ds, mask, pgt, threebeam=is3beam)
     mask = correlation_check(ds, mask, ct)
     mask = echo_check(ds, mask, et)
     mask = ev_check(ds, mask, evt)
@@ -307,39 +305,39 @@ with tab2:
         with st.form(key="my_form"):
             st.write("Would you like to apply new threshold?")
 
-            st.session_state.ct = st.number_input(
+            st.session_state.ct_QCT = st.number_input(
                 "Select Correlation Threshold",
                 0,
                 255,
                 fdata["Correlation Thresh"],
             )
 
-            st.session_state.evt = st.number_input(
+            st.session_state.evt_QCT = st.number_input(
                 "Select Error Velocity Threshold",
                 0,
                 9999,
                 fdata["Error Velocity Thresh"],
             )
 
-            st.session_state.et = st.number_input(
+            st.session_state.et_QCT = st.number_input(
                 "Select Echo Intensity Threshold",
                 0,
                 255,
                 0,
             )
 
-            st.session_state.ft = st.number_input(
+            st.session_state.ft_QCT = st.number_input(
                 "Select False Target Threshold",
                 0,
                 255,
                 fdata["False Target Thresh"],
             )
 
-            st.session_state.option = st.selectbox(
+            st.session_state.is3beam_QCT = st.selectbox(
                 "Would you like to use a three-beam solution?", (True, False)
             )
 
-            st.session_state.pgt = st.number_input(
+            st.session_state.pgt_QCT = st.number_input(
                 "Select Percent Good Threshold",
                 0,
                 100,
@@ -350,20 +348,20 @@ with tab2:
     # mask = st.session_state.qc_mask_temp
     with left:
         if submit_button:
-            st.session_state.isQCCheck = True
+            st.session_state.isQCCheck_QCT = True
             st.session_state.newthresh = pd.DataFrame(
                 [
-                    ["Correlation", str(st.session_state.ct)],
-                    ["Error Velocity", str(st.session_state.evt)],
-                    ["Echo Intensity", str(st.session_state.et)],
-                    ["False Target", str(st.session_state.ft)],
-                    ["Three Beam", str(st.session_state.option)],
-                    ["Percentage Good", str(st.session_state.pgt)],
+                    ["Correlation", str(st.session_state.ct_QCT)],
+                    ["Error Velocity", str(st.session_state.evt_QCT)],
+                    ["Echo Intensity", str(st.session_state.et_QCT)],
+                    ["False Target", str(st.session_state.ft_QCT)],
+                    ["Three Beam", str(st.session_state.is3beam_QCT)],
+                    ["Percentage Good", str(st.session_state.pgt_QCT)],
                 ],
                 columns=["Threshold", "Values"],
             )
 
-        if st.session_state.isQCCheck:
+        if st.session_state.isQCCheck_QCT:
             st.write(":green-background[Current Thresholds]")
             st.write(st.session_state.newthresh)
 
@@ -417,9 +415,9 @@ with tab4:
 
     beamdir_select = st.radio(f"Change orientation to {beamalt}", ["No", "Yes"])
     if beamdir_select == "Yes":
-        st.session_state.beam_direction = beamalt
-        st.session_state.isBeamModified = True
-        st.write(f"The orientation changed to `{st.session_state.beam_direction}`")
+        st.session_state.beam_direction_QCT = beamalt
+        st.session_state.isBeamModified_QCT = True
+        st.write(f"The orientation changed to `{st.session_state.beam_direction_QCT}`")
 
 with tab5:
     ################## Save Button #############
@@ -436,9 +434,9 @@ with tab5:
                 [
                     [
                         "Quality Control Tests",
-                        "True" if st.session_state.isQCCheck else "False",
+                        "True" if st.session_state.isQCCheck_QCT else "False",
                     ],
-                    ["Fix Orientation", st.session_state.beam_direction],
+                    ["Fix Orientation", st.session_state.beam_direction_QCT],
                 ],
                 columns=["Test", "Status"],
             )
@@ -470,7 +468,7 @@ with tab5:
         reset_mask_button = st.button("Reset mask Data", on_click=reset_qctest)
         if reset_mask_button:
             # st.session_state.qc_mask_temp = np.copy(st.session_state.orig_mask)
-            # st.session_state.isQCCheck = False
+            # st.session_state.isQCCheck_QCT = False
             # st.session_state.isQCTest = False
             # st.session_state.isGrid = False
             # st.session_state.isProfileMask = False

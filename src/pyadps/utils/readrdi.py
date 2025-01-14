@@ -3,9 +3,9 @@
 """
 RDI ADCP Binary File Reader
 ===========================
-This module provides classes and functions to read and extract data from RDI Acoustic Doppler 
-Current Profiler (ADCP) binary files. The module supports Workhorse, Ocean Surveyor, and DVS ADCPs. 
-It allows for parsing of various data types such as Fixed Leader, Variable Leader, Velocity, Correlation, 
+This module provides classes and functions to read and extract data from RDI Acoustic Doppler
+Current Profiler (ADCP) binary files. The module supports Workhorse, Ocean Surveyor, and DVS ADCPs.
+It allows for parsing of various data types such as Fixed Leader, Variable Leader, Velocity, Correlation,
 Echo Intensity, Percent Good, and Status data.
 
 Classes
@@ -28,7 +28,7 @@ Status
     Parses the status data from the ADCP.
 ReadFile
     Manages the entire data extraction process and unifies all data types.
-    
+
 Functions
 ---------
 check_equal(array)
@@ -101,6 +101,7 @@ import os
 import sys
 
 import numpy as np
+import pandas as pd
 from pyadps.utils import pyreadrdi
 
 
@@ -129,9 +130,7 @@ class DotDict:
             #     with open(json_file_path, "r") as file:
             #         dictionary = json.load(file)
             else:
-                dictionary = (
-                    {}
-                )  # Initialize an empty dictionary if no JSON file is found
+                dictionary = {}  # Initialize an empty dictionary if no JSON file is found
         self._initialize_from_dict(dictionary)
 
     def _initialize_from_dict(self, dictionary):
@@ -981,55 +980,61 @@ class VariableLeader:
         return channel
 
     def error_status_word(self, esw=1):
-        bitset1 = ("Bus Error exception", 
-                   "Address Error exception", 
-                   "Zero Divide exception",
-                   "Emulator exception",
-                   "Unassigned exception",
-                   "Watchdog restart occurred",
-                   "Batter Saver Power")
+        bitset1 = (
+            "Bus Error exception",
+            "Address Error exception",
+            "Zero Divide exception",
+            "Emulator exception",
+            "Unassigned exception",
+            "Watchdog restart occurred",
+            "Batter Saver Power",
+        )
 
-        bitset2 = ("Pinging",
-                   "Not Used 1",
-                   "Not Used 2",
-                   "Not Used 3",
-                   "Not Used 4",
-                   "Not Used 5",
-                   "Cold Wakeup occured",
-                   "Unknown Wakeup occured")
+        bitset2 = (
+            "Pinging",
+            "Not Used 1",
+            "Not Used 2",
+            "Not Used 3",
+            "Not Used 4",
+            "Not Used 5",
+            "Cold Wakeup occured",
+            "Unknown Wakeup occured",
+        )
 
-        bitset3 = ("Clock Read error occured",
-                   "Unexpected alarm",
-                   "Clock jump forward",
-                   "Clock jump backward",
-                   "Not Used 6",
-                   "Not Used 7",
-                   "Not Used 8",
-                   "Not Used 9")
+        bitset3 = (
+            "Clock Read error occured",
+            "Unexpected alarm",
+            "Clock jump forward",
+            "Clock jump backward",
+            "Not Used 6",
+            "Not Used 7",
+            "Not Used 8",
+            "Not Used 9",
+        )
 
-        bitset4 =  ("Not Used 10",
-                   "Not Used 11",
-                   "Not Used 12",
-                   "Power Fail Unrecorded",
-                   "Spurious level 4 intr DSP",
-                   "Spurious level 5 intr UART",
-                   "Spurious level 6 intr CLOCK",
-                   "Level 7 interrup occured")
-
-
+        bitset4 = (
+            "Not Used 10",
+            "Not Used 11",
+            "Not Used 12",
+            "Power Fail Unrecorded",
+            "Spurious level 4 intr DSP",
+            "Spurious level 5 intr UART",
+            "Spurious level 6 intr CLOCK",
+            "Level 7 interrup occured",
+        )
 
         if esw == 1:
             bitset = bitset1
-            errorarray = self.vleader["Error Status Word 1"] 
+            errorarray = self.vleader["Error Status Word 1"]
         elif esw == 2:
             bitset = bitset2
-            errorarray = self.vleader["Error Status Word 2"] 
+            errorarray = self.vleader["Error Status Word 2"]
         elif esw == 3:
             bitset = bitset3
-            errorarray = self.vleader["Error Status Word 3"] 
+            errorarray = self.vleader["Error Status Word 3"]
         else:
             bitset = bitset4
-            errorarray = self.vleader["Error Status Word 4"] 
+            errorarray = self.vleader["Error Status Word 4"]
 
         errorstatus = dict()
         # bitarray = np.zeros(32, dtype='str')
@@ -1039,13 +1044,14 @@ class VariableLeader:
 
         for data in errorarray:
             byte_split = format(data, "08b")
-            bitposition=0
+            bitposition = 0
             for item in bitset:
-                errorstatus[item] = np.append(errorstatus[item], byte_split[bitposition] )
-                bitposition+=1
+                errorstatus[item] = np.append(
+                    errorstatus[item], byte_split[bitposition]
+                )
+                bitposition += 1
 
         return errorstatus
-
 
 
 class Velocity:
@@ -1100,7 +1106,7 @@ class Velocity:
         self.cells = cell
         self.beams = beam
 
-        self.units = "mm/s"
+        self.unit = "mm/s"
         self.missing_value = "-32768"
         self.scale_factor = 1
         self.valid_min = -32768
@@ -1159,7 +1165,7 @@ class Correlation:
         self.cells = cell
         self.beams = beam
 
-        self.units = ""
+        self.unit = ""
         self.scale_factor = 1
         self.valid_min = 0
         self.valid_max = 255
@@ -1218,7 +1224,7 @@ class Echo:
         self.cells = cell
         self.beams = beam
 
-        self.units = "counts"
+        self.unit = "counts"
         self.scale_factor = "0.45"
         self.valid_min = 0
         self.valid_max = 255
@@ -1277,7 +1283,7 @@ class PercentGood:
         self.cells = cell
         self.beams = beam
 
-        self.units = "percent"
+        self.unit = "percent"
         self.valid_min = 0
         self.valid_max = 100
         self.long_name = "Percent Good"
@@ -1335,7 +1341,7 @@ class Status:
         self.cells = cell
         self.beams = beam
 
-        self.units = ""
+        self.unit = ""
         self.valid_min = 0
         self.valid_max = 1
         self.long_name = "Status Data Format"
@@ -1477,6 +1483,47 @@ class ReadFile:
             self.isWarning = False
         else:
             self.isWarning = True
+
+        dtens = self.ensemble_value_array
+        minens = np.min(dtens)
+        self.ensembles = minens
+        year = self.variableleader.vleader["RTC Year"]
+        month = self.variableleader.vleader["RTC Month"]
+        day = self.variableleader.vleader["RTC Day"]
+        hour = self.variableleader.vleader["RTC Hour"]
+        minute = self.variableleader.vleader["RTC Minute"]
+        second = self.variableleader.vleader["RTC Second"]
+        year = year + 2000
+        date_df = pd.DataFrame(
+            {
+                "year": year,
+                "month": month,
+                "day": day,
+                "hour": hour,
+                "minute": minute,
+                "second": second,
+            }
+        )
+        self.time = pd.to_datetime(date_df)
+        self._copy_attributes_from_var()
+
+    def _copy_attributes_from_var(self):
+        for attr_name, attr_value in self.variableleader.__dict__.items():
+            # Copy each attribute of var into self
+            setattr(self, attr_name, attr_value)
+        for attr_name, attr_value in self.fixedleader.__dict__.items():
+            # Copy each attribute of var into self
+            setattr(self, attr_name, attr_value)
+
+    def __getattr__(self, name):
+        # Delegate attribute/method access to self.var if not found in self
+        if hasattr(self.variableleader, name):
+            return getattr(self.variableleader, name)
+        if hasattr(self.fixedleader, name):
+            return getattr(self.fixedleader, name)
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
 
     def fixensemble(self, min_cutoff=0):
         """

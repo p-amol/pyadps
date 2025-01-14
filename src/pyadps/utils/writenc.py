@@ -17,7 +17,6 @@ from netCDF4 import date2num
 from pyadps.utils import readrdi as rd
 
 
-
 def pd2nctime(time, t0="hours since 2000-01-01"):
     """
     Function to convert pandas datetime format to netcdf datetime format.
@@ -68,7 +67,14 @@ def flead_ncatt(fl_obj, ncfile_id, ens=0):
             setattr(ncfile_id, format_key, format(value))
 
 
-def rawnc(infile, outfile, time, axis_option=None, attributes=None, t0="hours since 2000-01-01"):
+def rawnc(
+    infile,
+    outfile,
+    time,
+    axis_option=None,
+    attributes=None,
+    t0="hours since 2000-01-01",
+):
     """
     rawnc is a function to create netcdf file. Stores 3-D data types like
     velocity, echo, correlation, and percent good.
@@ -156,28 +162,32 @@ def rawnc(infile, outfile, time, axis_option=None, attributes=None, t0="hours si
 
         vshape = var.T.shape
         if i == 0:
-            if primary_axis == "time":
-                time[:] = np.arange(1, vshape[0] + 1, 1)
-            elif primary_axis == "ensemble":
+            if primary_axis == "ensemble":
                 ensemble[:] = np.arange(1, vshape[0] + 1, 1)
-            else:
-                raise ValueError(f"Invalid axis_option: {axis_option}.")
 
         varid[i][0 : vshape[0], 0 : vshape[1], 0 : vshape[2]] = var.T
-        
+
     # Add global attributes if provided
     if attributes:
         for key, value in attributes.items():
-            setattr(outnc, key, str(value))  # Convert to string to store in NetCDF metadata
+            setattr(
+                outnc, key, str(value)
+            )  # Convert to string to store in NetCDF metadata
 
     # outnc.history = "Created " + time.ctime(time.time())
     flead_ncatt(flead, outnc)
-    
 
     outnc.close()
 
 
-def vlead_nc(infile, outfile, time, axis_option=None, attributes=None, t0="hours since 2000-01-01"):
+def vlead_nc(
+    infile,
+    outfile,
+    time,
+    axis_option=None,
+    attributes=None,
+    t0="hours since 2000-01-01",
+):
     """
     Function to create ncfile containing Variable Leader.
 
@@ -226,16 +236,12 @@ def vlead_nc(infile, outfile, time, axis_option=None, attributes=None, t0="hours
         var = values
         vshape = var.shape
         if i == 0:
-            if primary_axis == "time":
-                time[:] = np.arange(1, vshape[0] + 1, 1)
-            elif primary_axis == "ensemble":
+            if primary_axis == "ensemble":
                 ensemble[:] = np.arange(1, vshape[0] + 1, 1)
-            else:
-                raise ValueError(f"Invalid axis_option: {axis_option}.")
 
         varid[i][0 : vshape[0]] = var
         i += 1
-        
+
     # Add global attributes if provided
     if attributes:
         for key, value in attributes.items():
@@ -244,7 +250,9 @@ def vlead_nc(infile, outfile, time, axis_option=None, attributes=None, t0="hours
     outnc.close()
 
 
-def finalnc(outfile, depth, final_mask, time, data, t0="hours since 2000-01-01", attributes=None):
+def finalnc(
+    outfile, depth, final_mask, time, data, t0="hours since 2000-01-01", attributes=None
+):
     """
     Function to create the processed NetCDF file.
 
@@ -259,7 +267,7 @@ def finalnc(outfile, depth, final_mask, time, data, t0="hours since 2000-01-01",
 
     # Change velocity to cm/s
     data = data.astype(np.float64)
-    data[data > fill] /= 10 
+    data[data > fill] /= 10
 
     # Change depth to positive
     depth = abs(depth)
@@ -320,12 +328,12 @@ def finalnc(outfile, depth, final_mask, time, data, t0="hours since 2000-01-01",
     wvel[:, :] = data[2, :, :].T
     evel[:, :] = data[3, :, :].T
     mvel[:, :] = final_mask.T
-    
+
     # Add global attributes if provided
     if attributes:
         for key, value in attributes.items():
             setattr(ncfile, key, str(value))  # Store attributes as strings
-    
+
     ncfile.mask_applied = "True"
 
     ncfile.close()

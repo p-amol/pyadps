@@ -1469,26 +1469,7 @@ class ReadFile:
             warning_array["Status"] = self.status.warning
             ensemble_array["Status"] = self.status.ensembles
 
-        self.error_codes = error_array
-        self.warnings = warning_array
-        self.ensemble_array = ensemble_array
-        self.ensemble_value_array = np.array(list(self.ensemble_array.values()))
-
-        self.isEnsembleEqual = check_equal(self.ensemble_value_array)
-        self.isFixedEnsemble = False
-
-        ec = np.array(list(self.error_codes.values()))
-
-        if np.all(ec == 0):
-            self.isWarning = False
-        else:
-            self.isWarning = True
-        # Add additional attributes
-        # Ensemble
-        dtens = self.ensemble_value_array
-        minens = np.min(dtens)
-        self.ensembles = minens
-        # Time
+        # Add Time Axis
         year = self.variableleader.vleader["RTC Year"]
         month = self.variableleader.vleader["RTC Month"]
         day = self.variableleader.vleader["RTC Day"]
@@ -1525,7 +1506,33 @@ class ReadFile:
         z = np.arange(first_depth, last_depth, sgn * depth_cell_len1)
         self.depth = z
 
+        # Add all attributes/method/data from FixedLeader and VariableLeader
         self._copy_attributes_from_var()
+
+        # Error Codes and Warnings
+        self.error_codes = error_array
+        self.warnings = warning_array
+        self.ensemble_array = ensemble_array
+        self.ensemble_value_array = np.array(list(self.ensemble_array.values()))
+
+        self.isEnsembleEqual = check_equal(self.ensemble_value_array)
+        self.isFixedEnsemble = False
+
+        ec = np.array(list(self.error_codes.values()))
+
+        if np.all(ec == 0):
+            self.isWarning = False
+        else:
+            self.isWarning = True
+
+        # Add additional attributes
+        # Ensemble
+        dtens = self.ensemble_value_array
+        minens = np.min(dtens)
+        self.ensembles = minens
+
+        # Add attribute that lists all variables/functions
+        self.list_vars = vars(self).keys()
 
     def _copy_attributes_from_var(self):
         for attr_name, attr_value in self.variableleader.__dict__.items():

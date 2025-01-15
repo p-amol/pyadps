@@ -270,7 +270,7 @@ def finalnc(
     data[data > fill] /= 10
 
     # Change depth to positive
-    depth = abs(depth)
+    # depth = abs(depth)
 
     # Reverse the arrays if depth in descending order
     if np.all(depth[:-1] >= depth[1:]):

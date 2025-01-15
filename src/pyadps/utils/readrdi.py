@@ -1483,10 +1483,12 @@ class ReadFile:
             self.isWarning = False
         else:
             self.isWarning = True
-
+        # Add additional attributes
+        # Ensemble
         dtens = self.ensemble_value_array
         minens = np.min(dtens)
         self.ensembles = minens
+        # Time
         year = self.variableleader.vleader["RTC Year"]
         month = self.variableleader.vleader["RTC Month"]
         day = self.variableleader.vleader["RTC Day"]
@@ -1505,6 +1507,24 @@ class ReadFile:
             }
         )
         self.time = pd.to_datetime(date_df)
+
+        # Depth
+        # Create a depth axis with mean depth in 'm'
+        cell1 = self.fixedleader.field()["Cells"]
+        bin1dist1 = self.fixedleader.field()["Bin 1 Dist"] / 100
+        depth_cell_len1 = self.fixedleader.field()["Depth Cell Len"] / 100
+        beam_direction1 = self.fixedleader.system_configuration()["Beam Direction"]
+        mean_depth = np.mean(self.variableleader.vleader["Depth of Transducer"]) / 10
+        mean_depth = np.trunc(mean_depth)
+        if beam_direction1.lower() == "up":
+            sgn = -1
+        else:
+            sgn = 1
+        first_depth = mean_depth + sgn * bin1dist1
+        last_depth = first_depth + sgn * cell1 * depth_cell_len1
+        z = np.arange(first_depth, last_depth, sgn * depth_cell_len1)
+        self.depth = z
+
         self._copy_attributes_from_var()
 
     def _copy_attributes_from_var(self):

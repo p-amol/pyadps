@@ -497,9 +497,9 @@ if generate_config_radio == "Yes":
     config["ProfileTest"]["water_depth"] = str(st.session_state.water_depth_PT)
 
     # Tab 3
-    config["ProfileTest"]["manual_cutbins"] = str(
-        st.session_state.isCutBinManualCheck_PT
-    )
+    # config["ProfileTest"]["manual_cutbins"] = str(
+    #     st.session_state.isCutBinManualCheck_PT
+    # )
 
     # Tab 4
     config["ProfileTest"]["regrid"] = str(st.session_state.isRegridCheck_PT)

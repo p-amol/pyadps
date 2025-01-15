@@ -245,22 +245,22 @@ def autoprocess(config_file, binary_file_path=None):
             print("Cutbins complete.")
 
         # Manual Cut Bins
-        isManual_cutbins = config.getboolean("ProfileTest", "manual_cutbins")
-        if isManual_cutbins:
-            raw_bins = config.get("ProfileTest", "manual_cut_bins")
-            bin_groups = raw_bins.split("]")
-
-            for group in bin_groups:
-                if group.strip():  # Ignore empty parts
-                    # Clean and split the values
-                    clean_group = group.replace("[", "").strip()
-                    values = list(map(int, clean_group.split(",")))
-                    min_cell, max_cell, min_ensemble, max_ensemble = values
-                    mask = manual_cut_bins(
-                        mask, min_cell, max_cell, min_ensemble, max_ensemble
-                    )
-
-            print("Manual cut bins applied.")
+        # isManual_cutbins = config.getboolean("ProfileTest", "manual_cutbins")
+        # if isManual_cutbins:
+        #     raw_bins = config.get("ProfileTest", "manual_cut_bins")
+        #     bin_groups = raw_bins.split("]")
+        #
+        #     for group in bin_groups:
+        #         if group.strip():  # Ignore empty parts
+        #             # Clean and split the values
+        #             clean_group = group.replace("[", "").strip()
+        #             values = list(map(int, clean_group.split(",")))
+        #             min_cell, max_cell, min_ensemble, max_ensemble = values
+        #             mask = manual_cut_bins(
+        #                 mask, min_cell, max_cell, min_ensemble, max_ensemble
+        #             )
+        #
+        #     print("Manual cut bins applied.")
 
         isRegrid = config.getboolean("ProfileTest", "regrid")
         if isRegrid:

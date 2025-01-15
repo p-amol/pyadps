@@ -38,6 +38,7 @@ tests = ["pytest"]
 [tool.poetry.scripts]
 run-pyadps = "pyadps.__main__:main"
 run-auto = "pyadps.utils.autoprocess:main"
+run-script = "pyadps.utils.script:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"

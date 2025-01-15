@@ -93,9 +93,13 @@ if not st.session_state.isRegridCheck_PT:
     cells = st.session_state.flead.field()["Cells"]
     cell_size = st.session_state.flead.field()["Depth Cell Len"] / 100
     bin1dist = st.session_state.flead.field()["Bin 1 Dist"] / 100
-    max_depth = mean_depth - bin1dist
-    min_depth = max_depth - cells * cell_size
-    z = np.arange(-1 * max_depth, -1 * min_depth, cell_size)
+    if st.session_state.beam_direction_QCT.lower() == "up":
+        sgn = -1
+    else:
+        sgn = 1
+    first_depth = mean_depth + sgn * bin1dist
+    last_depth = first_depth + sgn * cells * cell_size
+    z = np.arange(first_depth, last_depth, sgn * cell_size)
     st.session_state.final_depth_axis = z
 else:
     st.session_state.final_depth_axis = st.session_state.depth_axis
@@ -493,9 +497,9 @@ if generate_config_radio == "Yes":
     config["ProfileTest"]["water_depth"] = str(st.session_state.water_depth_PT)
 
     # Tab 3
-    config["ProfileTest"]["manual_cutbins"] = str(
-        st.session_state.isCutBinManualCheck_PT
-    )
+    # config["ProfileTest"]["manual_cutbins"] = str(
+    #     st.session_state.isCutBinManualCheck_PT
+    # )
 
     # Tab 4
     config["ProfileTest"]["regrid"] = str(st.session_state.isRegridCheck_PT)

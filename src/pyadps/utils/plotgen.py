@@ -1,13 +1,15 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.widgets import Button, Slider, TextBox
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Button, RadioButtons, Slider, TextBox
+
 
 class CutBins:
     def __init__(
         self, data, mask, newmask=False, t1=0, t2=200, tinc=500, z1=0, z2=-1, zinc=0
     ):
         # DATA SETUP
-        self.orig_data = data
+        self.orig_data = np.uint16(data)
         self.orig_shape = np.shape(self.orig_data)
         self.fill = 999
         self.maskarray = mask
@@ -501,7 +503,6 @@ class PlotEnds:
         plt.close()
 
 
-
 class PlotNoise:
     def __init__(self, echo):
         self.cutoff = 0
@@ -686,7 +687,6 @@ def plotmask(mask1, mask2):
 
 
 def plotvar(var, name, mask=None, alpha=True):
-
     shape = np.shape(var)
     cpal = "turbo"
     fig, axs = plt.subplots(2, 2, figsize=(12, 8), sharex=True, sharey=True)

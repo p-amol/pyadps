@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyadps"
-version = "0.3.1-beta"
+version = "0.3.2-beta"
 description = "A Python package for ADCP data processing"
 authors = ["P. Amol <prakashamol@gmail.com>"]
 readme = "README.md"
@@ -38,6 +38,7 @@ tests = ["pytest"]
 [tool.poetry.scripts]
 run-pyadps = "pyadps.__main__:main"
 run-auto = "pyadps.utils.autoprocess:main"
+run-script = "pyadps.utils.script:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

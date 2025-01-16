@@ -1532,7 +1532,7 @@ class ReadFile:
         self.ensembles = minens
 
         # Add attribute that lists all variables/functions
-        self.list_vars = vars(self).keys()
+        self.list_vars = list(vars(self).keys())
 
     def _copy_attributes_from_var(self):
         for attr_name, attr_value in self.variableleader.__dict__.items():

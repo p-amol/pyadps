@@ -302,48 +302,48 @@ with tab2:
         st.write(thresh)
 
     with right:
-        with st.form(key="my_form"):
-            st.write("Would you like to apply new threshold?")
+        # with st.form(key="my_form"):
+        st.write("Would you like to apply new threshold?")
 
-            st.session_state.ct_QCT = st.number_input(
-                "Select Correlation Threshold",
-                0,
-                255,
-                fdata["Correlation Thresh"],
-            )
+        st.session_state.ct_QCT = st.number_input(
+            "Select Correlation Threshold",
+            0,
+            255,
+            fdata["Correlation Thresh"],
+        )
 
-            st.session_state.evt_QCT = st.number_input(
-                "Select Error Velocity Threshold",
-                0,
-                9999,
-                fdata["Error Velocity Thresh"],
-            )
+        st.session_state.evt_QCT = st.number_input(
+            "Select Error Velocity Threshold",
+            0,
+            9999,
+            fdata["Error Velocity Thresh"],
+        )
 
-            st.session_state.et_QCT = st.number_input(
-                "Select Echo Intensity Threshold",
-                0,
-                255,
-                0,
-            )
+        st.session_state.et_QCT = st.number_input(
+            "Select Echo Intensity Threshold",
+            0,
+            255,
+            0,
+        )
 
-            st.session_state.ft_QCT = st.number_input(
-                "Select False Target Threshold",
-                0,
-                255,
-                fdata["False Target Thresh"],
-            )
+        st.session_state.ft_QCT = st.number_input(
+            "Select False Target Threshold",
+            0,
+            255,
+            fdata["False Target Thresh"],
+        )
 
-            st.session_state.is3beam_QCT = st.selectbox(
-                "Would you like to use a three-beam solution?", (True, False)
-            )
+        st.session_state.is3beam_QCT = st.selectbox(
+            "Would you like to use a three-beam solution?", (True, False)
+        )
 
-            st.session_state.pgt_QCT = st.number_input(
-                "Select Percent Good Threshold",
-                0,
-                100,
-                fdata["Percent Good Min"],
-            )
-            submit_button = st.form_submit_button(label="Submit", on_click=qc_submit)
+        st.session_state.pgt_QCT = st.number_input(
+            "Select Percent Good Threshold",
+            0,
+            101,
+            fdata["Percent Good Min"],
+        )
+        submit_button = st.button(label="Submit", on_click=qc_submit)
 
     # mask = st.session_state.qc_mask_temp
     with left:

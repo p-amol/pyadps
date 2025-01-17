@@ -782,10 +782,11 @@ with tab4:
         st.session_state.manualdepth_PT = boundary
 
         progress_text = "Regridding in progress. Please wait."
-        grid_bar = st.progress(0, text=progress_text)
+        grid_bar = st.progress(0, text="")
 
         regrid_button = st.button(label="Regrid Data")
         if regrid_button:
+            grid_bar.progress(1, text=progress_text)
             transdepth = st.session_state.depth
             z, st.session_state.velocity_regrid = regrid3d(
                 transdepth,

@@ -8,16 +8,22 @@ def main():
         layout="wide",
         initial_sidebar_state="auto",
         menu_items={
-            "Get Help": "http://github.com/p-amol/adps",
-            "Report a bug": "http://github.com/adps/issues",
+            "Get Help": "https://github.com/p-amol/pyadps",
+            "Report a bug": "https://github.com/p-amol/pyadps/issues",
             "About": "# Python ADCP Data Processing Software (PyADPS)",
         },
     )
 
     """
     # **Python ADCP Data Processing Software (pyadps)**
-    `pyadps` is a software for processing Teledyne RDI Acoustic Doppler Current Profiler (ADCP) PD0 files. Currently the software can process the data from Workhorse ADCPs.
+  
+    `pyadps` is a Python package for processing moored Acoustic Doppler Current Profiler (ADCP) data. It provides various functionalities such as data reading, quality control tests, NetCDF file creation, and visualization.
 
+    This software offers both a graphical interface (Streamlit) for those new to Python and direct Python package access for experienced users. Please note that pyadps is primarily designed for Teledyne RDI workhorse ADCPs. Other company's ADCP files are not compatible, and while some other RDI models may work, they might require additional considerations.
+
+    * Documentation: https://pyadps.readthedocs.io
+    * Source code: https://github.com/p-amol/pyadps
+    * Bug reports: https://github.com/p-amol/pyadps/issues
     ## Features
 
     * Access RDI ADCP binary files using Python 3
@@ -25,8 +31,8 @@ def main():
     * Process ADCP data 
 
     ## Contribute
-    Issue Tracker: http://github.com/adps/issues
-    Source Code: http://github.com/p-amol/adps
+    Issue Tracker: https://github.com/p-amol/pyadps/issues
+    Source Code: https://github.com/p-amol/pyadps
 
     ## Support
     If you are having issues, please let us know.

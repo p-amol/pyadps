@@ -505,7 +505,7 @@ with tab4:
 
     def reset_button_flatline():
         st.session_state.isFlatlineCheck = False
-        if st.sesion_state.isDespikeCheck_VT:
+        if st.session_state.isDespikeCheck_VT:
             st.session_state.velocity_mask_temp = np.copy(
                 st.session_state.velocity_mask_despike
             )

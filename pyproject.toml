@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyadps"
-version = "0.3.5-beta"
+version = "0.1.0"
 description = "A Python package for ADCP data processing"
 authors = ["P. Amol <prakashamol@gmail.com>"]
 readme = "README.md"

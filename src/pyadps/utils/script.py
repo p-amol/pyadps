@@ -188,6 +188,10 @@ def run_script(filename):
         mask = flatline(
             vel[2, :, :], mask, kernal_size=flatline_kernal, cutoff=flatline_cutoff
         )
+    apply_mask = input("Apply mask? [y/n]: ")
+    if apply_mask.lower() == "y":
+        for i in range(4):
+            vel[i, :, :] = np.where(mask == 0, vel[i, :, :], -32768)
 
     outfilepath = input("Enter output file name (*nc): ")
     if os.path.exists(outfilepath):

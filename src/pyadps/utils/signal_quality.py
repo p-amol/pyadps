@@ -240,7 +240,7 @@ def pg_check(ds, mask, cutoff=0, threebeam=True):
     if threebeam:
         pgood1 = pgood[0, :, :] + pgood[3, :, :]
     else:
-        pgood1 = pgood[:, :, :]
+        pgood1 = pgood[3, :, :]
 
     mask[pgood1[:, :] < cutoff] = 1
     return mask

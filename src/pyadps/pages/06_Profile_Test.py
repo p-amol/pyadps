@@ -135,7 +135,7 @@ beam_angle = int(flobj.system_configuration()["Beam Angle"])
 x = np.arange(0, ensembles, 1)
 y = np.arange(0, cells, 1)
 
-# Regrided data
+# Regridded data
 # if "velocity_regrid" not in st.session_state:
 #     st.session_state.echo_regrid = np.copy(echo)
 #     st.session_state.velocity_regrid = np.copy(velocity)
@@ -472,7 +472,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
         "Trim Ends",
         "Cut Bins - Sidelobe",
         "Cut Bins - Manual",
-        "Regriding",
+        "Regridding",
         "Save & Reset",
     ]
 )
@@ -731,7 +731,7 @@ with tab4:
         """
     When the ADCP buoy has vertical oscillations (greater than depth cell size), 
     the depth bins has to be regridded based on the pressure sensor data. The data
-    can be regrided either till the surface or till the last bin. 
+    can be regridded either till the surface or till the last bin. 
     If the `Cell` option is selected, ensure that the end data are trimmed.
     Manual option permits choosing the end cell depth.
     """
@@ -803,7 +803,7 @@ with tab4:
                 beams=beams,
             )
             grid_bar.progress(20, text=progress_text)
-            st.write(":grey[Regrided velocity ...]")
+            st.write(":grey[Regridded velocity ...]")
             z, st.session_state.echo_regrid = regrid3d(
                 transdepth,
                 echo,
@@ -819,7 +819,7 @@ with tab4:
                 beams=beams,
             )
             grid_bar.progress(40, text=progress_text)
-            st.write(":grey[Regrided echo intensity ...]")
+            st.write(":grey[Regridded echo intensity ...]")
             z, st.session_state.correlation_regrid = regrid3d(
                 transdepth,
                 correlation,
@@ -835,7 +835,7 @@ with tab4:
                 beams=beams,
             )
             grid_bar.progress(60, text=progress_text)
-            st.write(":grey[Regrided correlation...]")
+            st.write(":grey[Regridded correlation...]")
             z, st.session_state.pgood_regrid = regrid3d(
                 transdepth,
                 pgood,
@@ -851,7 +851,7 @@ with tab4:
                 beams=beams,
             )
             grid_bar.progress(80, text=progress_text)
-            st.write(":grey[Regrided percent good...]")
+            st.write(":grey[Regridded percent good...]")
 
             z, st.session_state.profile_mask_regrid = regrid2d(
                 transdepth,
@@ -868,13 +868,13 @@ with tab4:
             )
 
             grid_bar.progress(99, text=progress_text)
-            st.write(":grey[Regrided mask...]")
+            st.write(":grey[Regridded mask...]")
 
             st.session_state.depth_axis = z
             st.write(":grey[New depth axis created...]")
 
             grid_bar.progress(100, text="Completed")
-            st.write(":green[All data regrided!]")
+            st.write(":green[All data regridded!]")
 
             st.write(
                 "No. of grid depth bins before regridding: ", np.shape(velocity)[1]

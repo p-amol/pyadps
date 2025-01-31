@@ -160,33 +160,33 @@ def run_script(filename):
 
     affirm = input("Despike the data? [y/n]: ")
     if affirm.lower() == "y":
-        despike_kernal = input("Enter despike kernal size:")
-        despike_kernal = int(despike_kernal)
+        despike_kernel = input("Enter despike kernel size:")
+        despike_kernel = int(despike_kernel)
 
         despike_cutoff = input("Enter despike cutoff (mm/s): ")
         despike_cutoff = float(despike_cutoff)
 
         mask = despike(
-            vel[0, :, :], mask, kernal_size=despike_kernal, cutoff=despike_cutoff
+            vel[0, :, :], mask, kernel_size=despike_kernel, cutoff=despike_cutoff
         )
         mask = despike(
-            vel[1, :, :], mask, kernal_size=despike_kernal, cutoff=despike_cutoff
+            vel[1, :, :], mask, kernel_size=despike_kernel, cutoff=despike_cutoff
         )
 
     affirm = input("Remove flatlines? [y/n]: ")
     if affirm.lower() == "y":
-        flatline_kernal = input("Enter despike kernal size:")
-        flatline_kernal = int(flatline_kernal)
+        flatline_kernel = input("Enter despike kernel size:")
+        flatline_kernel = int(flatline_kernel)
         flatline_cutoff = input("Enter Flatline deviation: [y/n]")
         flatlineL_cutoff = int(flatline_cutoff)
         mask = flatline(
-            vel[0, :, :], mask, kernal_size=flatline_kernal, cutoff=flatline_cutoff
+            vel[0, :, :], mask, kernel_size=flatline_kernel, cutoff=flatline_cutoff
         )
         mask = flatline(
-            vel[1, :, :], mask, kernal_size=flatline_kernal, cutoff=flatline_cutoff
+            vel[1, :, :], mask, kernel_size=flatline_kernel, cutoff=flatline_cutoff
         )
         mask = flatline(
-            vel[2, :, :], mask, kernal_size=flatline_kernal, cutoff=flatline_cutoff
+            vel[2, :, :], mask, kernel_size=flatline_kernel, cutoff=flatline_cutoff
         )
     apply_mask = input("Apply mask? [y/n]: ")
     if apply_mask.lower() == "y":

@@ -379,7 +379,7 @@ def autoprocess(config_file, binary_file_path=None):
         isDespike = config.getboolean("VelocityTest", "despike")
         if isDespike:
             despike_kernel = config.getint("VelocityTest", "despike_kernel_size")
-            despike_cutoff = config.getint("VelocityTest", "despike_cutoff")
+            despike_cutoff = config.getfloat("VelocityTest", "despike_cutoff")
 
             mask = despike(
                 velocity[0, :, :],

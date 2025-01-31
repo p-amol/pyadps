@@ -312,12 +312,12 @@ st.session_state.maxwvel_VT = 15
 
 # Tab3: Despike
 st.session_state.isDespikeCheck_VT = False
-st.session_state.despike_kernal_VT = 5
+st.session_state.despike_kernel_VT = 5
 st.session_state.despike_cutoff_VT = 3
 
 # Tab4: Flatline
 st.session_state.isFlatlineCheck_VT = False
-st.session_state.flatline_kernal_VT = 5
+st.session_state.flatline_kernel_VT = 5
 st.session_state.flatline_cutoff_VT = 3
 
 # ------------------

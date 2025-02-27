@@ -1,12 +1,141 @@
 import pytest
-import random
+import random, _io
 import numpy as np
 from unittest import mock
-from pyadps.utils.pyreadrdi import fileheader, ErrorCode
+from pyadps.utils.pyreadrdi import fileheader, ErrorCode, safe_open, safe_read
 
 
-################ FileHeader ####################
-def test_fileheader_with_sample_file():
+############# pyfixtures #############
+@pytest.fixture
+def ErrorCode_data_collector():
+    defined_error_codes =  {"SUCCESS": (0, "Success"),
+                            "FILE_NOT_FOUND": (1, "Error: File not found."),
+                            "PERMISSION_DENIED": (2, "Error: Permission denied."),
+                            "IO_ERROR": (3, "IO Error: Unable to open file."),
+                            "OUT_OF_MEMORY": (4, "Error: Out of memory."),
+                            "WRONG_RDIFILE_TYPE": (5, "Error: Wrong RDI File Type."),
+                            "ID_NOT_FOUND": (6, "Error: Data type ID not found."),
+                            "DATATYPE_MISMATCH": (7, "Warning: Data type mismatch."),
+                            "FILE_CORRUPTED": (8, "Warning: File Corrupted."),
+                            "VALUE_ERROR": (9, "Value Error for incorrect argument."),
+                            "UNKNOWN_ERROR": (99, "Unknown error.")}
+    collected_error_codes = {}
+    for i in dir(ErrorCode):
+        if (i.startswith("__") or i.endswith("__")):
+            pass
+        else:
+            temp_error_code = getattr(ErrorCode, i)
+            collected_error_codes[i] = (temp_error_code.value[0], temp_error_code.value[1])
+            
+    return defined_error_codes, collected_error_codes
+
+@pytest.fixture
+def binfile(tmp_path):
+    ensemble = "tests/test_data/ensemble.000"
+    with open(ensemble, "rb") as f:
+        ensemble = f.read()
+
+    binfile = tmp_path/"binfile.000"
+    with open(binfile, "wb") as f:
+        f.write(ensemble)
+        print(binfile)
+    return binfile
+
+
+############# ErrorCode #############
+def test_ErrorCode(ErrorCode_data_collector):
+    defined_error_codes, collected_error_codes = ErrorCode_data_collector
+    # Checks wheter the number of attributes changed or not.
+    assert len(defined_error_codes) == len(collected_error_codes)
+    
+    # Checks each attributes with last updated attribute values.
+    for i in defined_error_codes:
+        assert defined_error_codes[i] == collected_error_codes[i]
+    
+    # Checks wheter the function get_message is working correctly.
+    random_error_code = random.randint(0, 10)
+    check = ErrorCode.get_message(random_error_code)
+    assert  any(check == value[1] for value in defined_error_codes.values())
+    
+    assert ErrorCode.get_message(15) == 'Error: Invalid error code.'
+
+############# safe_open #############
+def test_safe_open_without_parameter(binfile):
+    with pytest.raises(TypeError):
+        safe_open()
+
+def test_safe_open_with_wrong_parameter():
+    result = safe_open(123)
+    assert len(result) == 2
+    assert result[1] == ErrorCode.UNKNOWN_ERROR
+
+def test_safe_open_with_ghost_file():
+    result = safe_open("ghost_file.000")
+    assert result[1] == ErrorCode.FILE_NOT_FOUND
+
+def test_safe_open_with_pure_file(binfile):
+    result = safe_open(binfile)
+    assert result[1] == ErrorCode.SUCCESS
+    assert isinstance(result[0], _io.BufferedReader)
+
+def test_safe_open_without_file_permission(mocker):
+    mock_open = mocker.patch("builtins.open")
+    mock_open.side_effect=PermissionError("Permission deined")
+    result = safe_open("file.000")
+    assert result[1] == ErrorCode.PERMISSION_DENIED
+
+def test_safe_open_io_error(mocker):
+    mock_open = mocker.patch("builtins.open")
+    mock_open.side_effect=IOError("IOError")
+    result = safe_open("file.000")
+    print(result)
+    assert result[1] == ErrorCode.IO_ERROR
+
+def test_safe_open_memory_error(mocker):
+    mock_open = mocker.patch("builtins.open")
+    mock_open.side_effect=MemoryError("Out Of Memory")
+    result = safe_open("file.000")
+    print(result)
+    assert result[1] == ErrorCode.OUT_OF_MEMORY
+
+############# safe_read #############
+def test_safe_read_without_parameter():
+    with pytest.raises(TypeError):
+        safe_read()
+
+def test_safe_read_without_num_bytes(binfile):
+    with open (binfile, 'rb') as f:
+        with pytest.raises(TypeError):
+            safe_read(f, "abc")
+
+def test_safe_read_with_pure_file(binfile):
+    with open (binfile, 'rb') as f:
+        result = safe_read(f, 10)
+        f.seek(0)
+        assert result[0] == f.read(10)
+    assert result[1] == ErrorCode.SUCCESS
+
+def test_safe_read_less_bytes_to_read(binfile):
+    with open (binfile, 'rb') as f:
+        result = safe_read(f, 800)
+    assert result[0] == None
+    assert result[1] == ErrorCode.FILE_CORRUPTED
+
+############# FileHeader #############
+def test_fileheader_without_rdi_file():
+    with pytest.raises(TypeError):
+        result = fileheader()
+
+def test_fileheader_with_wrong_parameter():
+    result = fileheader(123)
+    result[6] == 99
+
+def test_fileheader_with_ghost_file():
+    result = fileheader('ghost_file.000')
+    _, _, _, _, _, _, error_code = result
+    assert error_code == 1 # Error code should indicate failure
+
+def test_fileheader_with_pure_file():
     result = fileheader('./tests/test_data/test.000')
     datatype, byte, byteskip, address_offset, dataid, ensemble, error_code = result
     assert error_code == 0
@@ -16,16 +145,16 @@ def test_fileheader_with_sample_file():
     assert isinstance(address_offset, np.ndarray)
     assert isinstance(dataid, np.ndarray)
     assert isinstance(ensemble, int)
-
     # Check specific values (if known, or check structure)
     assert len(datatype) > 0  # At least one datatype should be found
     assert ensemble > 0  # There should be at least one ensemble
 
-
-def test_fileheader_file_not_found():
-    result = fileheader('non_existent_file.bin')
-    _, _, _, _, _, _, error_code = result
-    assert error_code != 0 # Error code should indicate failure
+def test_fileheader_without_file_access():
+    # Mock the open function to raise a PermissionError when attempting to open the file
+    with mock.patch("builtins.open", side_effect=PermissionError("Permission Denied")):
+        result = fileheader("somefile.000")
+    # Assert that the function handles the PermissionError correctly
+    assert result[6] == 2
 
 def test_fileheader_wrong_format(tmp_path):
     temp_file = tmp_path/"test_file.bin"
@@ -36,21 +165,14 @@ def test_fileheader_wrong_format(tmp_path):
     # Assertions
     assert error_code == 5 # Error code should indicate wrong format
 
-def test_fileheader_permission_denied():
-    # Mock the open function to raise a PermissionError when attempting to open the file
-    with mock.patch("builtins.open", side_effect=PermissionError("Permission Denied")):
-        result = fileheader("somefile.000")
-    # Assert that the function handles the PermissionError correctly
-    assert result[6] == 2
-
-def test_fileheader_IO_Error():
+def test_fileheader_IO_error():
     # Mock the open function to raise a I/O Error when attempting to open the file
     with mock.patch("builtins.open", side_effect=OSError("I/O Error")):
         result = fileheader("somefile.000")
     # Assert that the function handles the I/O Error correctly
     assert result[6] == 3
 
-def test_fileheader_Memory_Error():
+def test_fileheader_Memory_error():
     # Mock the open function to raise a Memory Error when attempting to open the file
     with mock.patch("builtins.open", side_effect=MemoryError("Not enough memory")):
         result = fileheader("somefile.000")
@@ -96,48 +218,6 @@ def test_fileheader_datatype_mismatch(tmp_path):
     error_code = result[6]
     # Assertions
     assert error_code == 7
-
-
-
-################ unit -> ErrorCode ####################
-@pytest.fixture
-def ErrorCode_data_collector():
-    defined_error_codes =  {"SUCCESS": (0, "Success"),
-                            "FILE_NOT_FOUND": (1, "Error: File not found."),
-                            "PERMISSION_DENIED": (2, "Error: Permission denied."),
-                            "IO_ERROR": (3, "IO Error: Unable to open file."),
-                            "OUT_OF_MEMORY": (4, "Error: Out of memory."),
-                            "WRONG_RDIFILE_TYPE": (5, "Error: Wrong RDI File Type."),
-                            "ID_NOT_FOUND": (6, "Error: Data type ID not found."),
-                            "DATATYPE_MISMATCH": (7, "Warning: Data type mismatch."),
-                            "FILE_CORRUPTED": (8, "Warning: File Corrupted."),
-                            "VALUE_ERROR": (9, "Value Error for incorrect argument."),
-                            "UNKNOWN_ERROR": (99, "Unknown error.")}
-    collected_error_codes = {}
-    for i in dir(ErrorCode):
-        if (i.startswith("__") or i.endswith("__")):
-            pass
-        else:
-            temp_error_code = getattr(ErrorCode, i)
-            collected_error_codes[i] = (temp_error_code.value[0], temp_error_code.value[1])
-            
-    return defined_error_codes, collected_error_codes
-    
-def test_ErrorCode(ErrorCode_data_collector):
-    defined_error_codes, collected_error_codes = ErrorCode_data_collector
-    # Checks wheter the number of attributes changed or not.
-    assert len(defined_error_codes) == len(collected_error_codes)
-    
-    # Checks each attributes with last updated attribute values.
-    for i in defined_error_codes:
-        assert defined_error_codes[i] == collected_error_codes[i]
-    
-    # Checks wheter the function get_message is working correctly.
-    random_error_code = random.randint(0, 10)
-    check = ErrorCode.get_message(random_error_code)
-    assert  any(check == value[1] for value in defined_error_codes.values())
-    
-    assert ErrorCode.get_message(15) == 'Error: Invalid error code.'
 
 if __name__ == '__main__':
     pytest.main()

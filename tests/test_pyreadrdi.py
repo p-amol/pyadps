@@ -2,8 +2,9 @@ import pytest
 import random, _io
 import numpy as np
 from unittest import mock
-from pyadps.utils.pyreadrdi import fileheader, ErrorCode, safe_open, safe_read
-
+from pyadps.utils.pyreadrdi import  fileheader, ErrorCode, safe_open, \
+                                    safe_read, fixedleader, datatype, \
+                                    variableleader
 
 ############# pyfixtures #############
 @pytest.fixture
@@ -71,31 +72,34 @@ def test_safe_open_with_wrong_parameter():
 
 def test_safe_open_with_ghost_file():
     result = safe_open("ghost_file.000")
+    assert len(result) == 2
     assert result[1] == ErrorCode.FILE_NOT_FOUND
 
 def test_safe_open_with_pure_file(binfile):
     result = safe_open(binfile)
     assert result[1] == ErrorCode.SUCCESS
+    assert len(result) == 2
     assert isinstance(result[0], _io.BufferedReader)
 
 def test_safe_open_without_file_permission(mocker):
     mock_open = mocker.patch("builtins.open")
     mock_open.side_effect=PermissionError("Permission deined")
     result = safe_open("file.000")
+    assert len(result) == 2
     assert result[1] == ErrorCode.PERMISSION_DENIED
 
 def test_safe_open_io_error(mocker):
     mock_open = mocker.patch("builtins.open")
     mock_open.side_effect=IOError("IOError")
     result = safe_open("file.000")
-    print(result)
+    assert len(result) == 2
     assert result[1] == ErrorCode.IO_ERROR
 
 def test_safe_open_memory_error(mocker):
     mock_open = mocker.patch("builtins.open")
     mock_open.side_effect=MemoryError("Out Of Memory")
     result = safe_open("file.000")
-    print(result)
+    assert len(result) == 2
     assert result[1] == ErrorCode.OUT_OF_MEMORY
 
 ############# safe_read #############
@@ -113,32 +117,37 @@ def test_safe_read_with_pure_file(binfile):
         result = safe_read(f, 10)
         f.seek(0)
         assert result[0] == f.read(10)
+    assert len(result) == 2
     assert result[1] == ErrorCode.SUCCESS
 
 def test_safe_read_less_bytes_to_read(binfile):
     with open (binfile, 'rb') as f:
         result = safe_read(f, 800)
     assert result[0] == None
+    assert len(result) == 2
     assert result[1] == ErrorCode.FILE_CORRUPTED
 
-############# FileHeader #############
+############# fileheader #############
 def test_fileheader_without_rdi_file():
     with pytest.raises(TypeError):
         result = fileheader()
 
 def test_fileheader_with_wrong_parameter():
     result = fileheader(123)
-    result[6] == 99
+    assert len(result) == 7
+    assert result[6] == 99
 
 def test_fileheader_with_ghost_file():
     result = fileheader('ghost_file.000')
     _, _, _, _, _, _, error_code = result
+    assert len(result) == 7
     assert error_code == 1 # Error code should indicate failure
 
 def test_fileheader_with_pure_file():
     result = fileheader('./tests/test_data/test.000')
     datatype, byte, byteskip, address_offset, dataid, ensemble, error_code = result
     assert error_code == 0
+    assert len(result) == 7
     assert isinstance(datatype, np.ndarray)
     assert isinstance(byte, np.ndarray)
     assert isinstance(byteskip, np.ndarray)
@@ -154,6 +163,7 @@ def test_fileheader_without_file_access():
     with mock.patch("builtins.open", side_effect=PermissionError("Permission Denied")):
         result = fileheader("somefile.000")
     # Assert that the function handles the PermissionError correctly
+    assert len(result) == 7
     assert result[6] == 2
 
 def test_fileheader_wrong_format(tmp_path):
@@ -163,6 +173,7 @@ def test_fileheader_wrong_format(tmp_path):
     result = fileheader(temp_file)
     _, _, _, _, _, _, error_code = result
     # Assertions
+    assert len(result) == 7
     assert error_code == 5 # Error code should indicate wrong format
 
 def test_fileheader_IO_error():
@@ -170,6 +181,7 @@ def test_fileheader_IO_error():
     with mock.patch("builtins.open", side_effect=OSError("I/O Error")):
         result = fileheader("somefile.000")
     # Assert that the function handles the I/O Error correctly
+    assert len(result) == 7
     assert result[6] == 3
 
 def test_fileheader_Memory_error():
@@ -177,6 +189,7 @@ def test_fileheader_Memory_error():
     with mock.patch("builtins.open", side_effect=MemoryError("Not enough memory")):
         result = fileheader("somefile.000")
     # Assert that the function handles the Memory Error correctly
+    assert len(result) == 7
     assert result[6] == 4
 
 def test_fileheader_unknown_error():
@@ -184,6 +197,7 @@ def test_fileheader_unknown_error():
     with mock.patch("builtins.open", side_effect=Exception("Unknown error")):
         result = fileheader("somefile.000")
     # Assert that the function handles the unknown Error correctly
+    assert len(result) == 7
     assert result[6] == 99
 
 def test_fileheader_unexpected_end_of_file(tmp_path):
@@ -193,6 +207,7 @@ def test_fileheader_unexpected_end_of_file(tmp_path):
     result = fileheader(temp_file)
     error_code = result[6]
     # Assertions
+    assert len(result) == 7
     assert error_code == 8
 
 def test_fileheader_ID_not_found(tmp_path):
@@ -205,6 +220,7 @@ def test_fileheader_ID_not_found(tmp_path):
     result = fileheader(temp_file)
     error_code = result[6]
     # Assertions
+    assert len(result) == 7
     assert error_code == 6
 
 def test_fileheader_datatype_mismatch(tmp_path):
@@ -217,7 +233,142 @@ def test_fileheader_datatype_mismatch(tmp_path):
     result = fileheader(temp_file)
     error_code = result[6]
     # Assertions
+    assert len(result) == 7
     assert error_code == 7
+
+#############   fixedleader  #############
+def test_fixleader_without_rdi_file():
+    with pytest.raises(TypeError):
+        result = fixedleader()
+
+def test_fixleader_with_wrong_parameter():
+    result = fixedleader(123)
+    assert len(result) == 3
+    assert result[2] == 99
+
+def test_fixleader_with_ghost_file():
+    result = fixedleader('ghost_file.000')
+    assert len(result) == 3
+    assert result[2] == 1
+
+def test_fixleader_with_pure_file(binfile):
+    result = fixedleader(binfile)
+    assert len(result) == 3
+    assert result[2] == 0
+    assert result[1] >= 0
+
+def test_fixleader_without_file_access(mocker):
+    mock_open = mocker.patch("builtins.open")
+    mock_open.side_effect=PermissionError("Permission deined")
+    result = fixedleader("nofile.000")
+    assert len(result) == 3
+    assert result[2] == 2
+
+def test_fixleader_corrupted_file(binfile):
+    with open(binfile, "r+b") as f:
+        f.write(f.read())
+        f.seek(0)
+        f.truncate(839)
+        f.seek(0)
+        result = fixedleader(binfile)
+        assert len(result) == 3
+        assert result[2] == 8
+
+def test_fixleader_corrupted_fix_lead_data(binfile):
+    with open(binfile, "r+b") as f:
+        f.seek(0)
+        f.truncate(60)
+        result = fixedleader(binfile)
+        assert len(result) == 3
+        assert result[2] == 8
+
+def test_fixleader_corrupted_fix_lead_id(binfile):
+    with open(binfile, "r+b") as f:
+        f.seek(18)
+        f.write(b'\x70\x7f')
+        f.seek(0)
+        result = fixedleader(binfile)
+        assert len(result) == 3
+        assert result[2] == 6
+
+def test_fixleader_corrupted_fourth_fix_lead_id(binfile):
+    with open(binfile, "r+b") as f:
+        for i in range(2):
+            f.write(f.read())
+            f.seek(i*754)
+        f.seek(2280)
+        f.write(b'\x70\x7f')
+        f.seek(0)
+        result = fixedleader(binfile)
+        assert len(result) == 3
+        assert result[2] == 6
+
+############# Variableleader #############
+def test_varleader_without_rdi_file():
+    with pytest.raises(TypeError):
+        result = variableleader()
+
+def test_varleader_with_wrong_parameter():
+    result = variableleader(123)
+    assert len(result) == 3
+    assert result[2] == 99
+
+def test_varleader_with_ghost_file():
+    result = variableleader('ghost_file.000')
+    assert len(result) == 3
+    assert result[2] == 1
+
+def test_varleader_with_pure_file(binfile):
+    result = variableleader(binfile)
+    assert len(result) == 3
+    assert result[2] == 0
+    assert result[1] >= 0
+
+def test_varleader_without_file_access(mocker):
+    mock_open = mocker.patch("builtins.open")
+    mock_open.side_effect=PermissionError("Permission deined")
+    result = variableleader("nofile.000")
+    assert len(result) == 3
+    assert result[2] == 2
+
+def test_varleader_corrupted_file(binfile):
+    with open(binfile, "r+b") as f:
+        f.write(f.read())
+        f.seek(0)
+        f.truncate(894)
+        result = variableleader(binfile)
+        assert len(result) == 3
+        assert result[2] == 8
+
+def test_varleader_corrupted_var_lead_data(binfile):
+    with open(binfile, "r+b") as f:
+        f.seek(0)
+        f.truncate(138)
+        result = variableleader(binfile)
+        assert len(result) == 3
+        assert result[2] == 8
+
+def test_varleader_corrupted_var_lead_id(binfile):
+    with open(binfile, "r+b") as f:
+        f.seek(77)
+        f.write(b'\x70\x7f')
+        f.seek(0)
+        result = variableleader(binfile)
+        assert len(result) == 3
+        assert result[2] == 6
+
+def test_varleader_corrupted_fourth_var_lead_id(binfile):
+    with open(binfile, "r+b") as f:
+        for i in range(2):
+            f.write(f.read())
+            f.seek(i*754)
+        f.seek(2339)
+        f.write(b'\x70\x7f')
+        f.seek(0)
+        result = variableleader(binfile)
+        assert len(result) == 3
+        assert result[2] == 6
+
 
 if __name__ == '__main__':
     pytest.main()

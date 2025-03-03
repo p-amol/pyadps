@@ -378,44 +378,44 @@ def autoprocess(config_file, binary_file_path=None):
 
         isDespike = config.getboolean("VelocityTest", "despike")
         if isDespike:
-            despike_kernal = config.getint("VelocityTest", "despike_kernal_size")
-            despike_cutoff = config.getint("VelocityTest", "despike_cutoff")
+            despike_kernel = config.getint("VelocityTest", "despike_kernel_size")
+            despike_cutoff = config.getfloat("VelocityTest", "despike_cutoff")
 
             mask = despike(
                 velocity[0, :, :],
                 mask,
-                kernal_size=despike_kernal,
+                kernel_size=despike_kernel,
                 cutoff=despike_cutoff,
             )
             mask = despike(
                 velocity[1, :, :],
                 mask,
-                kernal_size=despike_kernal,
+                kernel_size=despike_kernel,
                 cutoff=despike_cutoff,
             )
             print("Velocity data despiked.")
 
         isFlatline = config.getboolean("VelocityTest", "flatline")
         if isFlatline:
-            despike_kernal = config.getint("VelocityTest", "flatline_kernal_size")
+            despike_kernel = config.getint("VelocityTest", "flatline_kernel_size")
             despike_cutoff = config.getint("VelocityTest", "flatline_deviation")
 
             mask = flatline(
                 velocity[0, :, :],
                 mask,
-                kernal_size=despike_kernal,
+                kernel_size=despike_kernel,
                 cutoff=despike_cutoff,
             )
             mask = flatline(
                 velocity[1, :, :],
                 mask,
-                kernal_size=despike_kernal,
+                kernel_size=despike_kernel,
                 cutoff=despike_cutoff,
             )
             mask = flatline(
                 velocity[2, :, :],
                 mask,
-                kernal_size=despike_kernal,
+                kernel_size=despike_kernel,
                 cutoff=despike_cutoff,
             )
 

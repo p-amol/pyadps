@@ -534,15 +534,15 @@ if generate_config_radio == "Yes":
 
     # Tab 3
     config["VelocityTest"]["despike"] = str(st.session_state.isDespikeCheck_VT)
-    config["VelocityTest"]["despike_kernal_size"] = str(
-        st.session_state.despike_kernal_VT
+    config["VelocityTest"]["despike_kernel_size"] = str(
+        st.session_state.despike_kernel_VT
     )
     config["VelocityTest"]["despike_cutoff"] = str(st.session_state.despike_cutoff_VT)
 
     # Tab 4
     config["VelocityTest"]["flatline"] = str(st.session_state.isFlatlineCheck_VT)
-    config["VelocityTest"]["flatline_kernal_size"] = str(
-        st.session_state.flatline_kernal_VT
+    config["VelocityTest"]["flatline_kernel_size"] = str(
+        st.session_state.flatline_kernel_VT
     )
     config["VelocityTest"]["flatline_cutoff"] = str(st.session_state.flatline_cutoff_VT)
 

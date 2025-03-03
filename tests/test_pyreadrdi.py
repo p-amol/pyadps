@@ -254,8 +254,9 @@ def test_fixleader_with_ghost_file():
 def test_fixleader_with_pure_file(binfile):
     result = fixedleader(binfile)
     assert len(result) == 3
-    assert result[2] == 0
+    assert len(result[0]) == 36
     assert result[1] >= 0
+    assert result[2] == 0
 
 def test_fixleader_without_file_access(mocker):
     mock_open = mocker.patch("builtins.open")
@@ -323,6 +324,7 @@ def test_varleader_with_pure_file(binfile):
     assert len(result) == 3
     assert result[2] == 0
     assert result[1] >= 0
+    assert len(result[0]) == 48
 
 def test_varleader_without_file_access(mocker):
     mock_open = mocker.patch("builtins.open")
@@ -369,6 +371,98 @@ def test_varleader_corrupted_fourth_var_lead_id(binfile):
         assert len(result) == 3
         assert result[2] == 6
 
+############# datatype #############
+def test_datatype_without_filename():
+    with pytest.raises(TypeError):
+        result = datatype(var_name="variable")
+
+def test_datatype_without_var_name():
+    with pytest.raises(TypeError):
+        result = datatype("file.000")
+
+def test_datatype_with_unknown_variable():
+    file = "tests/test_data/ensemble.000"
+    result = datatype(file, "unknown_variable")
+    assert len(result) == 2
+    assert result[1] == 9
+
+def test_datatype_wrong_filename():
+    result = datatype("file.000", "velocity")
+    assert len(result) == 2
+    assert result[1] == 1
+
+def test_datatype_with_wrong_rdi_file_type(binfile):
+    with open(binfile, "r+b") as f:
+        data = bytearray(f.read())
+        data[0] = 00
+        f.seek(0)
+        f.write(data)
+    result = datatype(binfile, "velocity")
+    assert len(result) == 2
+    assert result[1] == 5
+
+def test_datatype_with_pure_file_velocity(binfile):
+    result = datatype(binfile, "velocity")
+    assert len(result) == 5
+    assert len(result[0]) == 4
+    assert result[1] == 1
+    assert len(result[2]) == 1
+    assert result[2] == 30
+    assert len(result[3]) == 1
+    assert result[3] == 4
+    assert result[4] == 0
+    
+def test_datatype_with_cell_beam_input(binfile):
+    result = datatype(binfile, "velocity", np.array([30]), np.array([4]))
+    assert len(result) == 5
+    assert len(result[0]) == 4
+    assert result[1] == 1
+    assert len(result[2]) == 1
+    assert result[2] == 30
+    assert len(result[3]) == 1
+    assert result[3] == 4
+    assert result[4] == 0
+
+def test_datatype_with_safe_open_error(mocker):
+    mock_fileheader_return = [None, None, None, None, None, None, 0]
+    mock_fileheader_fncn = mocker.patch("pyadps.pyreadrdi.fileheader")
+    mock_fileheader_fncn.return_value = mock_fileheader_return
+    mock_fixedleader_return = [[[],[],[],[],[],[], [1, 1, 1,1], [1, 1, 1, 1]], 1, 0]
+    mock_fixedleader_fncn = mocker.patch("pyadps.pyreadrdi.fixedleader")
+    mock_fixedleader_fncn.return_value = mock_fixedleader_return
+    mock_safe_open_return = (None, ErrorCode.IO_ERROR)
+    mock_safe_open_fncn = mocker.patch("pyadps.pyreadrdi.safe_open")
+    mock_safe_open_fncn.return_value = mock_safe_open_return
+    result = datatype("random_file.000", "velocity")
+    print(result)
+    assert result[2] == 3
+
+def test_datatype_with_safe_open_error(mocker):
+    mock_fileheader_return = [None, None, None, None, None, None, 0]
+    mock_fileheader_fncn = mocker.patch("pyadps.pyreadrdi.fileheader")
+    mock_fileheader_fncn.return_value = mock_fileheader_return
+    mock_fixedleader_return = [[[],[],[],[],[],[], [1, 1, 1,1], [1, 1, 1, 1]], 1, 3]
+    mock_fixedleader_fncn = mocker.patch("pyadps.pyreadrdi.fixedleader")
+    mock_fixedleader_fncn.return_value = mock_fixedleader_return
+    mock_safe_open_return = (None, ErrorCode.IO_ERROR)
+    mock_safe_open_fncn = mocker.patch("pyadps.pyreadrdi.safe_open")
+    mock_safe_open_fncn.return_value = mock_safe_open_return
+    result = datatype("random_file.000", "velocity", cell= 30, beam=4)
+    print(result)
+    assert result[2] == 3
+
+def test_datatype_with_safe_open_error_code(mocker):
+    mock_fileheader_return = [None, None, None, None, None, None, 3]
+    mock_fileheader_fncn = mocker.patch("pyadps.pyreadrdi.fileheader")
+    mock_fileheader_fncn.return_value = mock_fileheader_return
+    mock_fixedleader_return = [[[],[],[],[],[],[], [1, 1, 1,1], [1, 1, 1, 1]], 1, 4]
+    mock_fixedleader_fncn = mocker.patch("pyadps.pyreadrdi.fixedleader")
+    mock_fixedleader_fncn.return_value = mock_fixedleader_return
+    mock_safe_open_return = (0, ErrorCode.SUCCESS)
+    mock_safe_open_fncn = mocker.patch("pyadps.pyreadrdi.safe_open")
+    mock_safe_open_fncn.return_value = mock_safe_open_return
+    result = datatype("random_file.000", "velocity")
+    assert result[1] == 3
 
 if __name__ == '__main__':
     pytest.main()

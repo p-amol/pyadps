@@ -379,15 +379,15 @@ with tab3:
     ############## DESPIKE DATA #################
     st.header("Despike Data", divider="blue")
     st.write("""A rolling median filter is applied to remove spikes from the data.
-    The kernal size determines the number of ensembles (time interval) for the filter window.
+    The kernel size determines the number of ensembles (time interval) for the filter window.
     The standard deviation specifies the maximum allowable deviation to remove the spike.""")
 
     # time_interval = pd.Timedelta(st.session_state.date[-1] - st.session_state.date[0]).seconds/(3600*st.session_state.head.ensembles)
 
     st.write("Time interval: ", st.session_state.date[1] - st.session_state.date[0])
 
-    despike_kernal = st.number_input(
-        "Enter Despike Kernal Size for Median Filter",
+    despike_kernel = st.number_input(
+        "Enter Despike kernel Size for Median Filter",
         0,
         st.session_state.head.ensembles,
         5,
@@ -399,19 +399,19 @@ with tab3:
     )
     despike_button = st.button("Despike")
     if despike_button:
-        st.session_state.despike_kernal_VT = despike_kernal
+        st.session_state.despike_kernel_VT = despike_kernel
         st.session_state.despike_cutoff_VT = despike_cutoff
 
         st.session_state.velocity_mask_despike = despike(
             velocity[0, :, :],
             st.session_state.velocity_mask_temp,
-            kernal_size=despike_kernal,
+            kernel_size=despike_kernel,
             cutoff=despike_cutoff,
         )
         st.session_state.velocity_mask_despike = despike(
             velocity[1, :, :],
             st.session_state.velocity_mask_temp,
-            kernal_size=despike_kernal,
+            kernel_size=despike_kernel,
             cutoff=despike_cutoff,
         )
 
@@ -424,7 +424,7 @@ with tab3:
     if st.session_state.isDespikeCheck_VT:
         st.success("Data Despiked")
         b = {
-            "Kernal Size": despike_kernal,
+            "kernel Size": despike_kernel,
             "Despike Cutoff": despike_cutoff,
         }
         st.write(b)
@@ -462,31 +462,31 @@ with tab4:
 
     st.write("Time interval: ", st.session_state.date[1] - st.session_state.date[0])
 
-    flatline_kernal = st.number_input("Enter Flatline Kernal Size", 0, 100, 13, 1)
+    flatline_kernel = st.number_input("Enter Flatline kernel Size", 0, 100, 13, 1)
     flatline_cutoff = st.number_input("Enter Flatline deviation (mm/s)", 0, 100, 1, 1)
 
     flatline_button = st.button("Remove Flatline")
 
     if flatline_button:
-        st.session_state.flatline_kernal_VT = flatline_kernal
+        st.session_state.flatline_kernel_VT = flatline_kernel
         st.session_state.flatline_cutoff_VT = flatline_cutoff
 
         st.session_state.velocity_mask_flatline = flatline(
             velocity[0, :, :],
             st.session_state.velocity_mask_temp,
-            kernal_size=flatline_kernal,
+            kernel_size=flatline_kernel,
             cutoff=flatline_cutoff,
         )
         st.session_state.velocity_mask_flatline = flatline(
             velocity[1, :, :],
             st.session_state.velocity_mask_temp,
-            kernal_size=flatline_kernal,
+            kernel_size=flatline_kernel,
             cutoff=flatline_cutoff,
         )
         st.session_state.velocity_mask_flatline = flatline(
             velocity[2, :, :],
             st.session_state.velocity_mask_temp,
-            kernal_size=flatline_kernal,
+            kernel_size=flatline_kernel,
             cutoff=flatline_cutoff,
         )
         # Modify the temporary mask file
@@ -498,7 +498,7 @@ with tab4:
     if st.session_state.isFlatlineCheck:
         st.success("Flatline Removed")
         b = {
-            "Kernal Size": flatline_kernal,
+            "kernel Size": flatline_kernel,
             "Flatline Cutoff": flatline_cutoff,
         }
         st.write(b)

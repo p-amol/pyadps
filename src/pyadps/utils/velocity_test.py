@@ -132,7 +132,7 @@ def velocity_cutoff(velocity, mask, cutoff=250):
     return mask
 
 
-def despike(velocity, mask, kernal_size=13, cutoff=3):
+def despike(velocity, mask, kernel_size=13, cutoff=3):
     """
     Function to remove anomalous spikes in the data over a period of time.
     A median filter is used to despike the data.
@@ -140,7 +140,7 @@ def despike(velocity, mask, kernal_size=13, cutoff=3):
     Args:
         velocity (numpy array, integer): Velocity(depth, time) in mm/s
         mask (numpy array, integer): Mask file
-        kernal_size (paramater, integer): Window size for rolling median filter
+        kernel_size (paramater, integer): Window size for rolling median filter
         cutoff (parameter, integer): Number of standard deviations to identify spikes
 
     Returns:
@@ -150,7 +150,7 @@ def despike(velocity, mask, kernal_size=13, cutoff=3):
     shape = np.shape(velocity)
     for j in range(shape[0]):
         # Apply median filter
-        filt = sp.signal.medfilt(velocity[j, :], kernal_size)
+        filt = sp.signal.medfilt(velocity[j, :], kernel_size)
         # Calculate absolute deviation from the rolling median
         diff = np.abs(velocity[j, :] - filt)
         # Calculate threshold for spikes based on standard deviation
@@ -164,7 +164,7 @@ def despike(velocity, mask, kernal_size=13, cutoff=3):
 def flatline(
     velocity,
     mask,
-    kernal_size=4,
+    kernel_size=4,
     cutoff=1,
 ):
     """
@@ -174,7 +174,7 @@ def flatline(
     Args:
         velocity (numpy arrray, integer): Velocity (depth, time)
         mask (numpy  array, integer): Mask file
-        kernal_size (parameter, integer): No. of ensembles over which flatline has to be detected
+        kernel_size (parameter, integer): No. of ensembles over which flatline has to be detected
         cutoff (parameter, integer): Permitted deviation in velocity
 
     Returns:
@@ -191,7 +191,7 @@ def flatline(
         for k, g in groupby(dummymask):
             # subset_size = sum(1 for i in g)
             subset_size = len(list(g))
-            if k == 1 and subset_size >= kernal_size:
+            if k == 1 and subset_size >= kernel_size:
                 mask[j, index : index + subset_size] = 1
             index = index + subset_size
         dummymask = np.zeros(shape[1])

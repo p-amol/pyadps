@@ -890,7 +890,7 @@ def datatype(
 
     # These arguments are outputs of fixedleader function.
     # Makes the code faster if the fixedheader function is already executed.
-    if cell == 0 or beam == 0:
+    if isinstance(cell, int) or isinstance(beam, int):
         flead, ensemble, fl_error_code = fixedleader(
             filename,
             byteskip=byteskip,
@@ -898,22 +898,23 @@ def datatype(
             idarray=idarray,
             ensemble=ensemble,
         )
-        cell = int(flead[7][0])
-        beam = int(flead[6][0])
+        cell = []
+        beam = []
+        cell = flead[7][:]
+        beam = flead[6][:]
         if fl_error_code != 0:
             error_code = fl_error_code
     else:
-        cell = int(cell)
-        beam = int(beam)
-
+        cell = cell
+        beam = beam
     # Velocity is 16 bits and all others are 8 bits.
     # Create empty array for the chosen variable name.
     if var_name == "velocity":
-        var_array = np.zeros((beam, cell, ensemble), dtype="int16")
+        var_array = np.zeros((max(beam), max(cell), ensemble), dtype="int16")
         bitstr = "<h"
         bitint = 2
     else:  # inserted
-        var_array = np.zeros((beam, cell, ensemble), dtype="uint8")
+        var_array = np.zeros((max(beam), max(cell), ensemble), dtype="uint8")
         bitstr = "<B"
         bitint = 1
     # -----------------------------
@@ -942,7 +943,9 @@ def datatype(
     fbyteskip = None
     for count, item in enumerate(idarray[0][:]):
         if item in vid:
-            fbyteskip = offset[0][count]
+            fbyteskip = []
+            for i in range(ensemble):
+                fbyteskip.append(int(offset[i][count]))
             break
     if fbyteskip is None:
         print(
@@ -955,10 +958,10 @@ def datatype(
 
     # READ DATA
     for i in range(ensemble):
-        bfile.seek(fbyteskip, 1)
+        bfile.seek(fbyteskip[i], 1)
         bdata = bfile.read(2)
-        for cno in range(cell):
-            for bno in range(beam):
+        for cno in range(cell[i]):
+            for bno in range(beam[i]):
                 bdata = bfile.read(bitint)
                 varunpack = unpack(bitstr, bdata)
                 var_array[bno][cno][i] = varunpack[0]

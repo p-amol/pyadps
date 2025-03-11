@@ -179,6 +179,74 @@ def rawnc(
 
     outnc.close()
 
+def flead_nc(
+    infile,
+    outfile,
+    time,
+    axis_option=None,
+    attributes=None,
+    t0="hours since 2000-01-01",
+):
+    """
+    Function to create ncfile containing Variable Leader.
+
+    Args:
+        infile (string): Input file path including filename
+        outfile (string): Output file path including filename
+    """
+    outnc = nc4.Dataset(outfile, "w", format="NETCDF4")
+
+    # Dimensions
+    # Define the primary axis based on axis_option
+    if axis_option == "ensemble":
+        outnc.createDimension("ensemble", None)
+        primary_axis = "ensemble"
+        ensemble = outnc.createVariable("ensemble", "i4", ("ensemble",))
+        ensemble.axis = "T"
+    elif axis_option == "time":
+        tsize = len(time)
+        outnc.createDimension("time", tsize)
+        primary_axis = "time"
+        time_var = outnc.createVariable("time", "i4", ("time",))
+        time_var.axis = "T"
+        time_var.units = t0
+        time_var.long_name = "time"
+
+        # Convert time_data to numerical format
+        nctime = pd2nctime(time, t0)
+        time_var[:] = nctime
+
+    else:
+        raise ValueError(f"Invalid axis_option: {axis_option}.")
+
+    # Variables
+
+    flead = rd.FixedLeader(infile)
+    fdict = flead.fleader
+    varid = [0] * len(fdict)
+
+    i = 0
+
+    for key, values in fdict.items():
+        format_item = key.replace(" ", "_")
+        varid[i] = outnc.createVariable(
+            format_item, "i4", primary_axis, fill_value=-32768
+        )
+        var = values
+        vshape = var.shape
+        if i == 0:
+            if primary_axis == "ensemble":
+                ensemble[:] = np.arange(1, vshape[0] + 1, 1)
+
+        varid[i][0 : vshape[0]] = var
+        i += 1
+
+    # Add global attributes if provided
+    if attributes:
+        for key, value in attributes.items():
+            setattr(outnc, key, str(value))  # Store attributes as strings
+
+    outnc.close()
 
 def vlead_nc(
     infile,

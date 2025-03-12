@@ -200,8 +200,18 @@ if st.session_state.mask_data_WF == "Yes":
     mask = st.session_state.final_mask
     st.session_state.write_velocity = np.copy(st.session_state.final_velocity)
     st.session_state.write_velocity[:, mask == 1] = -32768
+    st.session_state.write_echo = np.copy(st.session_state.final_echo)
+    st.session_state.write_echo[:, mask == 1] = -32768
+    st.session_state.write_correlation = np.copy(st.session_state.final_correlation)
+    st.session_state.write_correlation[:, mask == 1] = -32768
+    st.session_state.write_pgood = np.copy(st.session_state.final_pgood)
+    st.session_state.write_pgood[:, mask == 1] = -32768
+    
 else:
     st.session_state.write_velocity = np.copy(st.session_state.final_velocity)
+    st.session_state.write_echo = np.copy(st.session_state.final_echo)
+    st.session_state.write_correlation = np.copy(st.session_state.final_correlation)
+    st.session_state.write_pgood = np.copy(st.session_state.final_pgood)
 
 
 st.session_state.file_type_WF = st.radio(
@@ -262,7 +272,9 @@ if download_button:
     #    st.write(st.session_state.processed_filename)
     depth_axis = np.trunc(st.session_state.final_depth_axis)
     final_mask = st.session_state.final_mask
-
+    #final_echo = st.session_state.final_echo
+    #final_correlation = st.session_state.final_correlation
+    #final_pgood = st.session_state.final_pgood
     if st.session_state.file_type_WF == "NetCDF":
         if add_attr_button and st.session_state.attributes:
             # Generate file with attributes
@@ -270,6 +282,9 @@ if download_button:
                 st.session_state.processed_filename,
                 depth_axis,
                 final_mask,
+                st.session_state.write_echo,
+                st.session_state.write_correlation,
+                st.session_state.write_pgood,
                 st.session_state.date,
                 st.session_state.write_velocity,
                 attributes=st.session_state.attributes,  # Pass edited attributes
@@ -280,6 +295,9 @@ if download_button:
                 st.session_state.processed_filename,
                 depth_axis,
                 final_mask,
+                st.session_state.write_echo,
+                st.session_state.write_correlation,
+                st.session_state.write_pgood,
                 st.session_state.date,
                 st.session_state.write_velocity,
             )

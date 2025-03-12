@@ -198,13 +198,13 @@ st.session_state.mask_data_WF = st.radio(
 
 if st.session_state.mask_data_WF == "Yes":
     mask = st.session_state.final_mask
-    st.session_state.write_velocity = np.copy(st.session_state.final_velocity)
+    st.session_state.write_velocity = np.copy(st.session_state.final_velocity).astype(np.int16)
     st.session_state.write_velocity[:, mask == 1] = -32768
-    st.session_state.write_echo = np.copy(st.session_state.final_echo)
+    st.session_state.write_echo = np.copy(st.session_state.final_echo).astype(np.int16)
     st.session_state.write_echo[:, mask == 1] = -32768
-    st.session_state.write_correlation = np.copy(st.session_state.final_correlation)
+    st.session_state.write_correlation = np.copy(st.session_state.final_correlation).astype(np.int16)
     st.session_state.write_correlation[:, mask == 1] = -32768
-    st.session_state.write_pgood = np.copy(st.session_state.final_pgood)
+    st.session_state.write_pgood = np.copy(st.session_state.final_pgood).astype(np.int16)
     st.session_state.write_pgood[:, mask == 1] = -32768
     
 else:
@@ -272,9 +272,7 @@ if download_button:
     #    st.write(st.session_state.processed_filename)
     depth_axis = np.trunc(st.session_state.final_depth_axis)
     final_mask = st.session_state.final_mask
-    #final_echo = st.session_state.final_echo
-    #final_correlation = st.session_state.final_correlation
-    #final_pgood = st.session_state.final_pgood
+
     if st.session_state.file_type_WF == "NetCDF":
         if add_attr_button and st.session_state.attributes:
             # Generate file with attributes

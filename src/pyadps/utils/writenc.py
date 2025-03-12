@@ -348,12 +348,6 @@ def finalnc(
         final_echo = final_echo[:,::-1, :]
         final_corr = final_corr[:,::-1, :]
         final_pgood = final_pgood[:,::-1, :]
-    
-    # adding mask to echo,correlation,pgood 
-
-#    final_echo = final_echo * final_mask
-#    final_corr = final_corr * final_mask
-#    final_pgood = final_pgood * final_mask
 
     ncfile = nc4.Dataset(outfile, mode="w", format="NETCDF4")
     # Check if depth is scalar or array
@@ -396,17 +390,17 @@ def finalnc(
     mvel = ncfile.createVariable("mask", np.float32, ("time", "depth"), fill_value=fill)
     mvel.long_name = "Velocity Mask (1: bad value, 0: good value)"
 
-    AGC1 = ncfile.createVariable("AGC1", np.float32, ("time", "depth"), fill_value=-32768)
-    AGC1.long_name = "Echo intensity (AGC) Beam1"
+    ECHO1 = ncfile.createVariable("ECHO1", np.float32, ("time", "depth"), fill_value=-32768)
+    ECHO1.long_name = "Echo intensity Beam 1"
 
-    AGC2 = ncfile.createVariable("AGC2", np.float32, ("time", "depth"), fill_value=-32768)
-    AGC2.long_name = "Echo intensity (AGC) Beam1"
+    ECHO2 = ncfile.createVariable("ECHO2", np.float32, ("time", "depth"), fill_value=-32768)
+    ECHO2.long_name = "Echo intensity Beam 2"
 
-    AGC3 = ncfile.createVariable("AGC3", np.float32, ("time", "depth"), fill_value=-32768)
-    AGC3.long_name = "Echo intensity (AGC) Beam1"
+    ECHO3 = ncfile.createVariable("ECHO3", np.float32, ("time", "depth"), fill_value=-32768)
+    ECHO3.long_name = "Echo intensity Beam 3"
 
-    AGC4 = ncfile.createVariable("AGC4", np.float32, ("time", "depth"), fill_value=-32768)
-    AGC4.long_name = "Echo intensity (AGC) Beam1"
+    ECHO4 = ncfile.createVariable("ECHO4", np.float32, ("time", "depth"), fill_value=-32768)
+    ECHO4.long_name = "Echo intensity Beam 4"
 
     corr1 = ncfile.createVariable("corr1", np.float32, ("time", "depth"), fill_value=-32768)
     corr1.long_name = "Beam 1 correlation"
@@ -441,10 +435,10 @@ def finalnc(
     wvel[:, :] = data[2, :, :].T
     evel[:, :] = data[3, :, :].T
     mvel[:, :] = final_mask.T
-    AGC1[:, :] = final_echo[0, :, :].T
-    AGC2[:, :] = final_echo[1, :, :].T
-    AGC3[:, :] = final_echo[2, :, :].T
-    AGC4[:, :] = final_echo[3, :, :].T
+    ECHO1[:, :] = final_echo[0, :, :].T
+    ECHO2[:, :] = final_echo[1, :, :].T
+    ECHO3[:, :] = final_echo[2, :, :].T
+    ECHO4[:, :] = final_echo[3, :, :].T
     corr1[:, :] = final_corr[0, :, :].T
     corr2[:, :] = final_corr[1, :, :].T
     corr3[:, :] = final_corr[2, :, :].T

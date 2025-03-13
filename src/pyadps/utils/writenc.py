@@ -319,7 +319,7 @@ def vlead_nc(
 
 
 def finalnc(
-    outfile, depth, final_mask, time, data, t0="hours since 2000-01-01", attributes=None
+    outfile, depth, final_mask, final_echo, final_corr , final_pgood, time, data, t0="hours since 2000-01-01", attributes=None
 ):
     """
     Function to create the processed NetCDF file.
@@ -345,6 +345,9 @@ def finalnc(
         depth = depth[::-1]
         data = data[:, ::-1, :]
         final_mask = final_mask[::-1, :]
+        final_echo = final_echo[:,::-1, :]
+        final_corr = final_corr[:,::-1, :]
+        final_pgood = final_pgood[:,::-1, :]
 
     ncfile = nc4.Dataset(outfile, mode="w", format="NETCDF4")
     # Check if depth is scalar or array
@@ -387,6 +390,42 @@ def finalnc(
     mvel = ncfile.createVariable("mask", np.float32, ("time", "depth"), fill_value=fill)
     mvel.long_name = "Velocity Mask (1: bad value, 0: good value)"
 
+    ECHO1 = ncfile.createVariable("ECHO1", np.float32, ("time", "depth"), fill_value=-32768)
+    ECHO1.long_name = "Echo intensity Beam 1"
+
+    ECHO2 = ncfile.createVariable("ECHO2", np.float32, ("time", "depth"), fill_value=-32768)
+    ECHO2.long_name = "Echo intensity Beam 2"
+
+    ECHO3 = ncfile.createVariable("ECHO3", np.float32, ("time", "depth"), fill_value=-32768)
+    ECHO3.long_name = "Echo intensity Beam 3"
+
+    ECHO4 = ncfile.createVariable("ECHO4", np.float32, ("time", "depth"), fill_value=-32768)
+    ECHO4.long_name = "Echo intensity Beam 4"
+
+    corr1 = ncfile.createVariable("corr1", np.float32, ("time", "depth"), fill_value=-32768)
+    corr1.long_name = "Beam 1 correlation"
+
+    corr2 = ncfile.createVariable("corr2", np.float32, ("time", "depth"), fill_value=-32768)
+    corr2.long_name = "Beam 2 correlation"
+
+    corr3 = ncfile.createVariable("corr3", np.float32, ("time", "depth"), fill_value=-32768)
+    corr3.long_name = "Beam 3 correlation"
+
+    corr4 = ncfile.createVariable("corr4", np.float32, ("time", "depth"), fill_value=-32768)
+    corr4.long_name = "Beam 4 correlation"  
+
+    PGd1 = ncfile.createVariable("PGd1", np.float32, ("time", "depth"), fill_value=-32768)
+    PGd1.long_name = "Percent Good Beam 1"
+
+    PGd2 = ncfile.createVariable("PGd2", np.float32, ("time", "depth"), fill_value=-32768)
+    PGd2.long_name = "Percent Good Beam 2"
+
+    PGd3 = ncfile.createVariable("PGd3", np.float32, ("time", "depth"), fill_value=-32768)
+    PGd3.long_name = "Percent Good Beam 3"
+
+    PGd4 = ncfile.createVariable("PGd4", np.float32, ("time", "depth"), fill_value=-32768)
+    PGd4.long_name = "Percent Good Beam 4"   
+
     nctime = pd2nctime(time, t0)
     # write data
     z[:] = depth
@@ -396,6 +435,18 @@ def finalnc(
     wvel[:, :] = data[2, :, :].T
     evel[:, :] = data[3, :, :].T
     mvel[:, :] = final_mask.T
+    ECHO1[:, :] = final_echo[0, :, :].T
+    ECHO2[:, :] = final_echo[1, :, :].T
+    ECHO3[:, :] = final_echo[2, :, :].T
+    ECHO4[:, :] = final_echo[3, :, :].T
+    corr1[:, :] = final_corr[0, :, :].T
+    corr2[:, :] = final_corr[1, :, :].T
+    corr3[:, :] = final_corr[2, :, :].T
+    corr4[:, :] = final_corr[3, :, :].T
+    PGd1[:, :] = final_pgood[0, :, :].T
+    PGd2[:, :] = final_pgood[1, :, :].T
+    PGd3[:, :] = final_pgood[2, :, :].T
+    PGd4[:, :] = final_pgood[3, :, :].T
 
     # Add global attributes if provided
     if attributes:

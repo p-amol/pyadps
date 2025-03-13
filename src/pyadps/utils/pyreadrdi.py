@@ -890,7 +890,7 @@ def datatype(
 
     # These arguments are outputs of fixedleader function.
     # Makes the code faster if the fixedheader function is already executed.
-    if isinstance(cell, int) or isinstance(beam, int):
+    if isinstance(cell, (np.integer, int)) or isinstance(beam, (np.integer, int)):
         flead, ensemble, fl_error_code = fixedleader(
             filename,
             byteskip=byteskip,
@@ -910,11 +910,11 @@ def datatype(
     # Velocity is 16 bits and all others are 8 bits.
     # Create empty array for the chosen variable name.
     if var_name == "velocity":
-        var_array = np.zeros((max(beam), max(cell), ensemble), dtype="int16")
+        var_array = np.full((int(max(beam)), int(max(cell)), ensemble), -32768, dtype="int16")
         bitstr = "<h"
         bitint = 2
     else:  # inserted
-        var_array = np.zeros((max(beam), max(cell), ensemble), dtype="uint8")
+        var_array = np.zeros((int(max(beam)), int(max(cell)), ensemble), dtype="uint8")
         bitstr = "<B"
         bitint = 1
     # -----------------------------
@@ -960,8 +960,8 @@ def datatype(
     for i in range(ensemble):
         bfile.seek(fbyteskip[i], 1)
         bdata = bfile.read(2)
-        for cno in range(cell[i]):
-            for bno in range(beam[i]):
+        for cno in range(int(cell[i])):
+            for bno in range(int(beam[i])):
                 bdata = bfile.read(bitint)
                 varunpack = unpack(bitstr, bdata)
                 var_array[bno][cno][i] = varunpack[0]

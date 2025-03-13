@@ -9,6 +9,7 @@ from pyadps.utils.pyreadrdi import  fileheader, ErrorCode, safe_open, \
 ############# pyfixtures #############
 @pytest.fixture
 def ErrorCode_data_collector():
+    # Dictionary contain all the error codes.
     defined_error_codes =  {"SUCCESS": (0, "Success"),
                             "FILE_NOT_FOUND": (1, "Error: File not found."),
                             "PERMISSION_DENIED": (2, "Error: Permission denied."),
@@ -20,6 +21,7 @@ def ErrorCode_data_collector():
                             "FILE_CORRUPTED": (8, "Warning: File Corrupted."),
                             "VALUE_ERROR": (9, "Value Error for incorrect argument."),
                             "UNKNOWN_ERROR": (99, "Unknown error.")}
+    # Collects error code from the class
     collected_error_codes = {}
     for i in dir(ErrorCode):
         if (i.startswith("__") or i.endswith("__")):
@@ -29,19 +31,6 @@ def ErrorCode_data_collector():
             collected_error_codes[i] = (temp_error_code.value[0], temp_error_code.value[1])
             
     return defined_error_codes, collected_error_codes
-
-@pytest.fixture
-def binfile(tmp_path):
-    ensemble = "tests/test_data/ensemble.000"
-    with open(ensemble, "rb") as f:
-        ensemble = f.read()
-
-    binfile = tmp_path/"binfile.000"
-    with open(binfile, "wb") as f:
-        f.write(ensemble)
-        print(binfile)
-    return binfile
-
 
 ############# ErrorCode #############
 def test_ErrorCode(ErrorCode_data_collector):
@@ -54,10 +43,11 @@ def test_ErrorCode(ErrorCode_data_collector):
         assert defined_error_codes[i] == collected_error_codes[i]
     
     # Checks wheter the function get_message is working correctly.
-    random_error_code = random.randint(0, 10)
+    random_error_code = random.randint(0, 10) # Since it depend on random and sometime if fails
     check = ErrorCode.get_message(random_error_code)
-    assert  any(check == value[1] for value in defined_error_codes.values())
+    assert  any(check == value[1] for value in defined_error_codes.values()) # This may fail randomly !!!
     
+    # Checking invalid case
     assert ErrorCode.get_message(15) == 'Error: Invalid error code.'
 
 ############# safe_open #############
@@ -201,6 +191,7 @@ def test_fileheader_unknown_error():
     assert result[6] == 99
 
 def test_fileheader_unexpected_end_of_file(tmp_path):
+    # Create a temporaray file and write necessary binary data.
     temp_file = tmp_path/"test_file.bin"
     binary_data = (b'\x7f\x7f\xf0\x02\x00\x06\x12\x00\x4d\x00\x8e\x00\x80\x01\xfa\x01\x74')
     temp_file.write_bytes(binary_data)
@@ -211,6 +202,7 @@ def test_fileheader_unexpected_end_of_file(tmp_path):
     assert error_code == 8
 
 def test_fileheader_ID_not_found(tmp_path):
+    # Create a temporaray file and write necessary binary data.
     temp_file = tmp_path/"test_file.bin"
     binary_data = ( b'\x7f\x7f\x18\x00\x00\x06\x12\x00\x4d\x00\x8e\x00\x80'\
                     b'\x01\xfa\x01\x74\x02\x00\x00\x00\x00\x64\x00\x00\x00'\
@@ -224,6 +216,7 @@ def test_fileheader_ID_not_found(tmp_path):
     assert error_code == 6
 
 def test_fileheader_datatype_mismatch(tmp_path):
+    # Create a temporaray file and write necessary binary data.
     temp_file = tmp_path/"test_file.bin"
     binary_data = ( b'\x7f\x7f\x18\x00\x00\x06\x12\x00\x4d\x00\x8e\x00\x80'\
                     b'\x01\xfa\x01\x74\x02\x00\x00\x00\x00\x64\x00\x00\x00'\
@@ -260,12 +253,13 @@ def test_fixleader_with_pure_file(binfile):
 
 def test_fixleader_without_file_access(mocker):
     mock_open = mocker.patch("builtins.open")
-    mock_open.side_effect=PermissionError("Permission deined")
+    mock_open.side_effect=PermissionError("Permission denied")
     result = fixedleader("nofile.000")
     assert len(result) == 3
     assert result[2] == 2
 
 def test_fixleader_corrupted_file(binfile):
+    # Open a binary file and the trim the end to raise error
     with open(binfile, "r+b") as f:
         f.write(f.read())
         f.seek(0)
@@ -276,6 +270,7 @@ def test_fixleader_corrupted_file(binfile):
         assert result[2] == 8
 
 def test_fixleader_corrupted_fix_lead_data(binfile):
+    # Open a binary file and the trim the end to raise error
     with open(binfile, "r+b") as f:
         f.seek(0)
         f.truncate(60)
@@ -284,6 +279,7 @@ def test_fixleader_corrupted_fix_lead_data(binfile):
         assert result[2] == 8
 
 def test_fixleader_corrupted_fix_lead_id(binfile):
+    # Change the header id to raise error
     with open(binfile, "r+b") as f:
         f.seek(18)
         f.write(b'\x70\x7f')
@@ -334,6 +330,7 @@ def test_varleader_without_file_access(mocker):
     assert result[2] == 2
 
 def test_varleader_corrupted_file(binfile):
+    # Trim the end of the temporary bin file to raise error
     with open(binfile, "r+b") as f:
         f.write(f.read())
         f.seek(0)
@@ -343,6 +340,7 @@ def test_varleader_corrupted_file(binfile):
         assert result[2] == 8
 
 def test_varleader_corrupted_var_lead_data(binfile):
+    # Trim the end of the temporary bin file to raise error
     with open(binfile, "r+b") as f:
         f.seek(0)
         f.truncate(138)
@@ -351,6 +349,7 @@ def test_varleader_corrupted_var_lead_data(binfile):
         assert result[2] == 8
 
 def test_varleader_corrupted_var_lead_id(binfile):
+    # Change the header id to raise error
     with open(binfile, "r+b") as f:
         f.seek(77)
         f.write(b'\x70\x7f')
@@ -360,9 +359,10 @@ def test_varleader_corrupted_var_lead_id(binfile):
         assert result[2] == 6
 
 def test_varleader_corrupted_fourth_var_lead_id(binfile):
+    # Change the fourth header id to raise error
     with open(binfile, "r+b") as f:
         for i in range(2):
-            f.write(f.read())
+            f.write(f.read()) # increasing the number of ensembles
             f.seek(i*754)
         f.seek(2339)
         f.write(b'\x70\x7f')
@@ -434,7 +434,6 @@ def test_datatype_with_safe_open_error(mocker):
     mock_safe_open_fncn = mocker.patch("pyadps.pyreadrdi.safe_open")
     mock_safe_open_fncn.return_value = mock_safe_open_return
     result = datatype("random_file.000", "velocity")
-    print(result)
     assert result[2] == 3
 
 def test_datatype_with_safe_open_error(mocker):
@@ -448,7 +447,6 @@ def test_datatype_with_safe_open_error(mocker):
     mock_safe_open_fncn = mocker.patch("pyadps.pyreadrdi.safe_open")
     mock_safe_open_fncn.return_value = mock_safe_open_return
     result = datatype("random_file.000", "velocity", cell= 30, beam=4)
-    print(result)
     assert result[2] == 3
 
 def test_datatype_with_safe_open_error_code(mocker):

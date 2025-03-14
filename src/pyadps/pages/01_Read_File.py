@@ -182,6 +182,7 @@ date_df = pd.DataFrame(
 st.session_state.date = pd.to_datetime(date_df)
 st.session_state.date1 = pd.to_datetime(date_df)
 st.session_state.date2 = pd.to_datetime(date_df)
+st.session_state.date3 = pd.to_datetime(date_df)
 st.session_state.ensemble_axis = np.arange(0, st.session_state.head.ensembles, 1)
 st.session_state.axis_option = "time"
 

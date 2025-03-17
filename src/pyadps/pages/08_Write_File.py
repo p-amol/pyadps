@@ -198,11 +198,11 @@ st.session_state.mask_data_WF = st.radio(
 
 if st.session_state.mask_data_WF == "Yes":
     mask = st.session_state.final_mask
-    st.session_state.write_velocity = np.copy(st.session_state.final_velocity)
+    st.session_state.write_velocity = np.copy(st.session_state.final_velocity).astype(np.int16)
     st.session_state.write_velocity[:, mask == 1] = -32768
+    
 else:
     st.session_state.write_velocity = np.copy(st.session_state.final_velocity)
-
 
 st.session_state.file_type_WF = st.radio(
     "Select output file format:", ("NetCDF", "CSV")
@@ -262,6 +262,9 @@ if download_button:
     #    st.write(st.session_state.processed_filename)
     depth_axis = np.trunc(st.session_state.final_depth_axis)
     final_mask = st.session_state.final_mask
+    st.session_state.write_echo = np.copy(st.session_state.final_echo)
+    st.session_state.write_correlation = np.copy(st.session_state.final_correlation)
+    st.session_state.write_pgood = np.copy(st.session_state.final_pgood)
 
     if st.session_state.file_type_WF == "NetCDF":
         if add_attr_button and st.session_state.attributes:
@@ -270,6 +273,9 @@ if download_button:
                 st.session_state.processed_filename,
                 depth_axis,
                 final_mask,
+                st.session_state.write_echo,
+                st.session_state.write_correlation,
+                st.session_state.write_pgood,
                 st.session_state.date,
                 st.session_state.write_velocity,
                 attributes=st.session_state.attributes,  # Pass edited attributes
@@ -280,6 +286,9 @@ if download_button:
                 st.session_state.processed_filename,
                 depth_axis,
                 final_mask,
+                st.session_state.write_echo,
+                st.session_state.write_correlation,
+                st.session_state.write_pgood,
                 st.session_state.date,
                 st.session_state.write_velocity,
             )
@@ -534,15 +543,15 @@ if generate_config_radio == "Yes":
 
     # Tab 3
     config["VelocityTest"]["despike"] = str(st.session_state.isDespikeCheck_VT)
-    config["VelocityTest"]["despike_kernal_size"] = str(
-        st.session_state.despike_kernal_VT
+    config["VelocityTest"]["despike_kernel_size"] = str(
+        st.session_state.despike_kernel_VT
     )
     config["VelocityTest"]["despike_cutoff"] = str(st.session_state.despike_cutoff_VT)
 
     # Tab 4
     config["VelocityTest"]["flatline"] = str(st.session_state.isFlatlineCheck_VT)
-    config["VelocityTest"]["flatline_kernal_size"] = str(
-        st.session_state.flatline_kernal_VT
+    config["VelocityTest"]["flatline_kernel_size"] = str(
+        st.session_state.flatline_kernel_VT
     )
     config["VelocityTest"]["flatline_cutoff"] = str(st.session_state.flatline_cutoff_VT)
 

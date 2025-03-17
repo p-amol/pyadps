@@ -289,8 +289,8 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
         "Salinity",
         "Temperature",
         "Heading",
-        "Roll",
         "Pitch",
+        "Roll",
         "Corrections",
         "Save/Reset",
     ]

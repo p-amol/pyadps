@@ -20,6 +20,9 @@ if "fname" not in st.session_state:
 if "rawfilename" not in st.session_state:
     st.session_state.rawfilename = "rawfile.nc"
 
+if "fleadfilename" not in st.session_state:
+    st.session_state.fleadfilename = "flead.nc"
+
 if "vleadfilename" not in st.session_state:
     st.session_state.vleadfilename = "vlead.nc"
 
@@ -66,6 +69,23 @@ def file_write(path, axis_option, add_attributes=True):
             path, st.session_state.rawfilename, st.session_state.date1, axis_option
         )
 
+@st.cache_data
+def file_write_flead(path, axis_option, add_attributes=True):
+    tempvardirname = tempfile.TemporaryDirectory(delete=False)
+    st.session_state.fleadfilename = tempvardirname.name + "/flead.nc"
+
+    if add_attributes:
+        wr.flead_nc(
+            path,
+            st.session_state.fleadfilename,
+            st.session_state.date2,
+            axis_option,
+            attributes=st.session_state.attributes,
+        )
+    else:
+        wr.flead_nc(
+            path, st.session_state.fleadfilename, st.session_state.date2, axis_option
+        )
 
 @st.cache_data
 def file_write_vlead(path, axis_option, add_attributes=True):
@@ -76,13 +96,13 @@ def file_write_vlead(path, axis_option, add_attributes=True):
         wr.vlead_nc(
             path,
             st.session_state.vleadfilename,
-            st.session_state.date2,
+            st.session_state.date3,
             axis_option,
             attributes=st.session_state.attributes,
         )
     else:
         wr.vlead_nc(
-            path, st.session_state.vleadfilename, st.session_state.date2, axis_option
+            path, st.session_state.vleadfilename, st.session_state.date3, axis_option
         )
 
 
@@ -141,6 +161,9 @@ st.session_state.axis_option_DRW = st.selectbox(
 
 # Buttons to generate files
 st.session_state.rawnc_download_DRW = st.button("Generate Raw NetCDF File")
+st.session_state.fleadnc_download_DRW = st.button(
+    "Generate Raw Fixed Leader NetCDF File"
+)
 st.session_state.vleadnc_download_DRW = st.button(
     "Generate Raw Variable Leader NetCDF File"
 )
@@ -157,6 +180,20 @@ if st.session_state.rawnc_download_DRW:
             label="Download Raw File",
             data=file,
             file_name="rawfile.nc",
+        )
+
+if st.session_state.fleadnc_download_DRW:
+    file_write_flead(
+        st.session_state.fpath,
+        st.session_state.axis_option,
+        st.session_state.add_attributes_DRW == "Yes",
+    )
+    st.write(st.session_state.fleadfilename)
+    with open(st.session_state.fleadfilename, "rb") as file:
+        st.download_button(
+            label="Download Fixed Leader",
+            data=file,
+            file_name="flead.nc",
         )
 
 if st.session_state.vleadnc_download_DRW:

@@ -6,6 +6,8 @@ import json
 import streamlit as st
 from utils.autoprocess import autoprocess
 
+# To make the page wider if the user presses the reload button.
+st.set_page_config(layout="wide")
 
 @st.cache_data
 def file_access(uploaded_file):

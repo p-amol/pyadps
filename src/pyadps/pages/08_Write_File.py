@@ -379,6 +379,7 @@ if generate_config_radio == "Yes":
     config["FileSettings"]["input_file_name"] = st.session_state.fname
     config["FileSettings"]["output_file_path"] = ""
     config["FileSettings"]["output_file_name_raw_netcdf"] = ""
+    config["FileSettings"]["output_file_name_flead_netcdf"] = ""
     config["FileSettings"]["output_file_name_vlead_netcdf"] = ""
     config["FileSettings"]["output_file_name_raw_csv"] = ""
     config["FileSettings"]["output_file_name_processed_netcdf"] = ""
@@ -394,6 +395,9 @@ if generate_config_radio == "Yes":
     # ------------------
     config["DownloadOptions"]["download_raw_netcdf"] = str(
         st.session_state.rawnc_download_DRW
+    )
+    config["DownloadOptions"]["download_flead_netcdf"] = str(
+        st.session_state.fleadnc_download_DRW
     )
     config["DownloadOptions"]["download_vlead_netcdf"] = str(
         st.session_state.vleadnc_download_DRW

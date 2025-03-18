@@ -463,6 +463,7 @@ def autoprocess(config_file, binary_file_path=None):
     )
 
     date_raw = pd.to_datetime(date_df)
+    date_flead = pd.to_datetime(date_df)
     date_vlead = pd.to_datetime(date_df)
     date_final = pd.to_datetime(date_df)
 
@@ -477,6 +478,7 @@ def autoprocess(config_file, binary_file_path=None):
         attributes = None
 
     isWriteRawNC = config.getboolean("DownloadOptions", "download_raw_netcdf")
+    isWritefleadNc = config.getboolean("DownloadOptions", "download_flead_netcdf")
     isWriteVleadNC = config.getboolean("DownloadOptions", "download_vlead_netcdf")
     isWriteProcNC = config.getboolean("DownloadOptions", "download_processed_netcdf")
     filepath = config.get("FileSettings", "output_file_path")
@@ -495,6 +497,19 @@ def autoprocess(config_file, binary_file_path=None):
         )
 
         print("Raw file written.")
+
+    if isWritefleadNc:
+        filename = config.get("FileSettings", "output_file_name_flead_netcdf")
+        output_file_path = os.path.join(filepath, filename)
+        wr.flead_nc(
+            full_input_file_path,
+            output_file_path,
+            date_flead,
+            axis_option=axis_option,
+            attributes=attributes,
+        )
+
+        print("Flead File written")
 
     if isWriteVleadNC:
         filename = config.get("FileSettings", "output_file_name_vlead_netcdf")
@@ -519,6 +534,9 @@ def autoprocess(config_file, binary_file_path=None):
             output_file_path,
             depth1,
             mask,
+            echo,
+            correlation,
+            pgood,
             date_final,
             velocity,
             attributes=attributes,  # Pass edited attributes

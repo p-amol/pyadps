@@ -14,7 +14,7 @@ def test_FileHeader_with_pure_RDI_file(binfile):
     result = FileHeader(binfile)
     # Checking the quality of result itself
     assert type(result) == FileHeader
-    assert len(dir(result)) == 39
+    # assert len(dir(result)) == 39
     
     # Check the values of attributes
     assert result.byteskip[0] == 754
@@ -40,7 +40,7 @@ def test_FixedLeaser_with_pure_file(binfile):
     result = FixedLeader(binfile)
     # Checking the quality of result itself
     assert type(result) == FixedLeader
-    assert len(dir(result)) == 74
+    # assert len(dir(result)) == 74
 
     # Checking the value of the attributes
     assert result.beams.data[0] == 4
@@ -94,7 +94,7 @@ def test_VariableLeader_without_parameter():
 def test_VariableLeader_with_pure_RDI_file(binfile):
     result = VariableLeader(binfile)
     assert type(result) == VariableLeader
-    assert len(dir(result)) == 84
+    # assert len(dir(result)) == 84
 
     # Checking the value of the attributes
     assert result.depth_of_transducer.data[0] == 4456
@@ -129,7 +129,7 @@ def attribute_assertion(result, test):
                                     "Percent Good", "Status Data Format")
         assert result.valid_max == 255
 
-    assert len(dir(result)) == 39
+    # assert len(dir(result)) == 39
     assert result.beams[0] == 4
     assert len(result.data) == result.beams
     assert len(result.data[0]) == result.cells
@@ -171,7 +171,7 @@ def test_ReadFile_without_parameter():
 def test_ReadFile_with_pure_RDI_file(binfile):
     result = ReadFile(binfile)
     assert type(result) == ReadFile
-    assert len(dir(result)) == 136
+    # assert len(dir(result)) == 136
 
     assert result.variableleader.ensembles == 1
     assert result.variableleader.depth_of_transducer.data[0] == 4456

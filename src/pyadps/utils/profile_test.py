@@ -1,6 +1,6 @@
 import numpy as np
 import scipy as sp
-from pyadps.utils.readrdi import ReadFile
+from pyadps.utils.readrdi import ReadFile, check_equal
 from .plotgen import PlotEnds
 
 
@@ -214,7 +214,7 @@ def manual_cut_bins(mask, min_cell, max_cell, min_ensemble, max_ensemble):
     return mask
 
 
-def regrid2d(
+def modifiedRegrid2d(
     ds,
     data,
     fill_value,
@@ -228,7 +228,9 @@ def regrid2d(
     bin1dist=None,
 ):
     """
-    Regrids 2D data onto a new grid based on specified parameters.
+    Modified Regrids 2D data onto a new grid based on specified parameters.
+    The function is capable of handling data with non-uniform number of cells
+    and Depth cell length.
 
     Parameters:
     -----------
@@ -327,6 +329,228 @@ def regrid2d(
             raise ValueError("Input must include cell size.")
         else:
             cell_size = cell_size / 100
+
+        if bin1dist is None:
+            raise ValueError("Input must include bin 1 distance.")
+        else:
+            bin1dist = bin1dist / 100
+
+        if orientation.lower() != "up" and orientation.lower() != "down":
+            raise ValueError("Orientation must be `up` or `down`.")
+    else:
+        raise ValueError("Input must be a 1-D numpy array or a PyADPS instance")
+
+    if orientation.lower() == "up":
+        sgn = -1
+    else:
+        sgn = 1
+
+    # Create a regular grid
+
+    # Find depth of first cell
+    depth = transdepth + sgn * bin1dist
+    # print("depth: ", depth)
+
+    # Find the maximum and minimum depth for first cell for upward
+    # looking ADCP (minimum and maximum for downward looking)
+    if trimends is not None:
+        max_depth = abs(np.min(sgn * depth[trimends[0] : trimends[1]]))
+        min_depth = abs(np.max(sgn * depth[trimends[0] : trimends[1]]))
+    else:
+        max_depth = abs(np.min(sgn * depth))
+        min_depth = abs(np.max(sgn * depth))
+
+    # FIRST CELL
+    # Convert the first cell depth to the first regular grid depth
+    depthfirstcell = max_depth - max_depth % min(cell_size)
+    # print("depthfirstcell: ", depthfirstcell)
+
+    # LAST CELL
+    # Convert the last cell depth to last regular grid depth
+    if end_cell_option.lower() == "surface":
+        # Added one additional negative cell to accomodate 0 m.
+        depthlastcell = sgn * min(cell_size)
+        # print("depthlastcell: ", depthlastcell)
+    elif end_cell_option.lower() == "cell":
+        min_depth_regrid = min_depth - sgn * min_depth % min(cell_size)
+        depthlastcell = min_depth_regrid + sgn * (max(cells) + 1) * min(cell_size)
+        # print("depthlastcell: ", depthlastcell)
+        # Check if this is required. Use 'surface' option
+        if depthlastcell < 0:
+            depthlastcell = sgn * min(cell_size)
+    elif end_cell_option.lower() == "manual":
+        if sgn < 0 and boundary_limit > depthfirstcell:
+            print(
+                "ERROR: For upward looking ADCP, boundary limit should be less than transducer depth"
+            )
+            return
+        if sgn > 0 and boundary_limit < depthfirstcell:
+            print(
+                "ERROR: For downward looking ADCP, boundary limit should be greater than transducer depth"
+            )
+            return
+        # Set the last grid cell depth
+        depthlastcell = boundary_limit
+    else:
+        print("ERROR: `end_cell_option` not recognized.")
+        return
+
+    # Negative used for upward and positive for downward.
+    z = np.arange(sgn * depthfirstcell, sgn * depthlastcell, min(cell_size))
+    regbins = len(z)
+
+    regridded_data = np.zeros((regbins, ensembles))
+
+    # Create original depth array
+    for i, d in enumerate(depth):
+        n = d + sgn * cell_size[i] * cells[i]
+        # np.arange may include unexpected elements due to floating-point
+        # precision issues at the stopping point. Changed to np.linspace.
+        #
+        # depth_bins = np.arange(sgn*d, sgn*n, cell_size)
+        depth_bins = np.linspace(sgn * d, sgn * n, max(cells))
+        # print("depth_bins: ", depth_bins, "len: ", len(depth_bins))
+        # print("data:", data, "len:", len(data))
+        # print("i: ", i)
+        f = sp.interpolate.interp1d(
+            depth_bins,
+            data[:, i],
+            kind=method,
+            fill_value=fill_value,
+            bounds_error=False,
+        )
+        gridz = f(z)
+
+        regridded_data[:, i] = gridz
+
+    return abs(z), regridded_data
+
+def regrid2d(
+    ds,
+    data,
+    fill_value,
+    end_cell_option="cell",
+    trimends=None,
+    method="nearest",
+    orientation="default",
+    boundary_limit=0,
+    cells=None,
+    cell_size=None,
+    bin1dist=None,
+):
+    """
+    Regrids 2D data onto a new grid based on specified parameters.
+
+    Parameters:
+    -----------
+    ds : pyadps.dataset or numpy.ndarray
+        If pyadps dataframe is loaded, the data from the fixed and variable leader
+        is automatically obtained. This includes the depth of the transducer and other relevant information
+        for trimming the data.
+
+        If numpy.ndarray is loaded, the value should contain the transducer_depth.
+        In such cases provide cells, cell_size, and bin 1 distance.
+        Orientiation should be either 'up' or 'down' and not 'default'.
+
+
+    data : array-like
+        The 2D data array to be regridded.
+
+    fill_value : scalar
+        The value used to fill missing or undefined grid points.
+
+    end_cell_option : str or float, optional, default="cell"
+        The depth of the last bin or boundary for the grid.
+        Options include:
+        - "cell" : Calculates the depth of the default last bin for the grid.
+                   Truncates to surface for upward ADCP.
+        - "surface": The data is gridded till the surface
+        - "manual": User-defined depth for the grid.
+                      Use boundary_limit option to provide the value.
+        otherwise, a specific numerical depth value can be provided.
+
+    trimends : tuple of floats, optional, default=None
+        If provided, defines the ensemble range (start, end) for
+        calculating the maximum/minimum transducer depth.
+        Helps avoiding the deployment or retrieval data.
+        E.g. (10, 3000)
+
+    method : str, optional, default="nearest"
+        The interpolation method to use for regridding based
+        on scipy.interpolate.interp1d.
+        Options include:
+        - "nearest" : Nearest neighbor interpolation.
+        - "linear" : Linear interpolation.
+        - "cubic" : Cubic interpolation.
+
+    orientation : str, optional, default="up"
+        Defines the direction of the regridding for an upward/downward looking ADCP. Options include:
+        - "up" : Regrid upwards (for upward-looking ADCP).
+        - "down" : Regrid downwards (for downward-looking ADCP).
+
+    boundary_limit : float, optional, default=0
+        The limit for the boundary depth. This restricts the grid regridding to depths beyond the specified limit.
+
+    cells: int, optional
+        Number of cells
+
+    cell_size: int, optional
+        Cell size or depth cell length in cm
+
+    bin1dist: int, optional
+        Distance from the first bin in cm
+
+
+    Returns:
+    --------
+    z: regridded depth
+    regridded_data : array-like
+        The regridded 2D data array, based on the specified method,
+        orientation, and other parameters.
+
+    Notes:
+    ------
+    - If `end_cell_option == boundary`, then `boundary_limit` is used to regrid the data.
+    - This function allows for flexible regridding of 2D data to fit a new grid, supporting different interpolation methods.
+    - The `boundary_limit` parameter helps restrict regridding to depths above or below a certain threshold.
+    """
+
+    if isinstance(ds, ReadFile) or ds.__class__.__name__ == "ReadFile":
+        if not (check_equal(ds.fleader['Cells']) or check_equal(ds.fleader['Depth Cell Len'])):
+            print("i am here!")
+            return modifiedRegrid2d(ds, data, fill_value, end_cell_option, trimends, method, orientation,
+            boundary_limit, cells, cell_size, bin1dist)
+
+        flobj = ds.fixedleader
+        vlobj = ds.variableleader
+        # Get values and convert to 'm'
+        bin1dist = flobj.field()["Bin 1 Dist"] / 100
+        transdepth = vlobj.vleader["Depth of Transducer"] / 10
+        cell_size = flobj.field()["Depth Cell Len"] / 100
+        cells = flobj.field()["Cells"]
+        ensembles = flobj.ensembles
+        if orientation.lower() == "default":
+            orientation = flobj.system_configuration()["Beam Direction"]
+
+    elif isinstance(ds, np.ndarray) and np.squeeze(ds).ndim == 1:
+        transdepth = ds / 10
+        ensembles = np.size(ds)
+
+        if cells is None:
+            raise ValueError("Input must include number of cells.")
+        else:
+            if not check_equal(cells):
+                return modifiedRegrid2d(ds, data, fill_value, end_cell_option, trimends, method, orientation,
+                boundary_limit, cells, cell_size, bin1dist)
+            cells = cells[0]
+
+        if cell_size is None:
+            raise ValueError("Input must include cell size.")
+        else:
+            if not check_equal(cell_size):
+                return modifiedRegrid2d(ds, data, fill_value, end_cell_option, trimends, method, orientation,
+                boundary_limit, cells, cell_size, bin1dist)
+            cell_size = cell_size[0] / 100
 
         if bin1dist is None:
             raise ValueError("Input must include bin 1 distance.")

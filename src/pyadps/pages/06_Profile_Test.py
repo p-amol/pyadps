@@ -797,8 +797,8 @@ with tab4:
                 orientation=st.session_state.beam_direction_QCT,
                 method=st.session_state.interpolate_PT,
                 boundary_limit=boundary,
-                cells=cells,
-                cell_size=cell_size,
+                cells=fdata['Cells'],
+                cell_size=fdata['Depth Cell Len'],
                 bin1dist=bin1dist,
                 beams=beams,
             )
@@ -813,8 +813,8 @@ with tab4:
                 orientation=st.session_state.beam_direction_QCT,
                 method=st.session_state.interpolate_PT,
                 boundary_limit=boundary,
-                cells=cells,
-                cell_size=cell_size,
+                cells=fdata['Cells'],
+                cell_size=fdata['Depth Cell Len'],
                 bin1dist=bin1dist,
                 beams=beams,
             )
@@ -829,8 +829,8 @@ with tab4:
                 orientation=st.session_state.beam_direction_QCT,
                 method=st.session_state.interpolate_PT,
                 boundary_limit=boundary,
-                cells=cells,
-                cell_size=cell_size,
+                cells=fdata['Cells'],
+                cell_size=fdata['Depth Cell Len'],
                 bin1dist=bin1dist,
                 beams=beams,
             )
@@ -845,8 +845,8 @@ with tab4:
                 orientation=st.session_state.beam_direction_QCT,
                 method=st.session_state.interpolate_PT,
                 boundary_limit=boundary,
-                cells=cells,
-                cell_size=cell_size,
+                cells=fdata['Cells'],
+                cell_size=fdata['Depth Cell Len'],
                 bin1dist=bin1dist,
                 beams=beams,
             )
@@ -862,8 +862,8 @@ with tab4:
                 orientation=st.session_state.beam_direction_QCT,
                 method="nearest",
                 boundary_limit=boundary,
-                cells=cells,
-                cell_size=cell_size,
+                cells=fdata['Cells'],
+                cell_size=fdata['Depth Cell Len'],
                 bin1dist=bin1dist,
             )
 

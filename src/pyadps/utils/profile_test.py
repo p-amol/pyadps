@@ -517,7 +517,7 @@ def regrid2d(
 
     if isinstance(ds, ReadFile) or ds.__class__.__name__ == "ReadFile":
         if not (check_equal(ds.fleader['Cells']) or check_equal(ds.fleader['Depth Cell Len'])):
-            print("i am here!")
+            print("\033[93m Warning: The number of cells or depth cell length are not equal. Using the modifiedRegrid2d function, which may take some time.\033[0m")
             return modifiedRegrid2d(ds, data, fill_value, end_cell_option, trimends, method, orientation,
             boundary_limit, cells, cell_size, bin1dist)
 
@@ -540,6 +540,7 @@ def regrid2d(
             raise ValueError("Input must include number of cells.")
         else:
             if not check_equal(cells):
+                print("\033[93m Warning: The number of cells or depth cell length are not equal. Using the modifiedRegrid2d function, which may take some time.\033[0m")
                 return modifiedRegrid2d(ds, data, fill_value, end_cell_option, trimends, method, orientation,
                 boundary_limit, cells, cell_size, bin1dist)
             cells = cells[0]
@@ -548,6 +549,7 @@ def regrid2d(
             raise ValueError("Input must include cell size.")
         else:
             if not check_equal(cell_size):
+                # print("\033[93m Warning: The number of cells or depth cell length are not equal. Using the modifiedRegrid2d function, which may take some time.\033[0m")
                 return modifiedRegrid2d(ds, data, fill_value, end_cell_option, trimends, method, orientation,
                 boundary_limit, cells, cell_size, bin1dist)
             cell_size = cell_size[0] / 100

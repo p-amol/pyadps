@@ -20,10 +20,10 @@ if "fname" not in st.session_state:
     st.session_state.fname = "No file selected"
 
 if "rawfilename" not in st.session_state:
-    st.session_state.rawfilename = "rawfile.nc"
+    st.session_state.rawfilename = "RAW_DAT.nc"
 
 if "vleadfilename" not in st.session_state:
-    st.session_state.vleadfilename = "vlead.nc"
+    st.session_state.vleadfilename = "RAW_VAR.nc"
 
 
 ################ Functions #######################

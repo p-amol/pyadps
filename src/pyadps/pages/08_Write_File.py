@@ -16,10 +16,23 @@ if "fname" not in st.session_state:
     st.session_state.fname = "No file selected"
 
 if "rawfilename" not in st.session_state:
-    st.session_state.rawfilename = "rawfile.nc"
+    st.session_state.rawfilename = "RAW_DAT.nc"
 
 if "vleadfilename" not in st.session_state:
-    st.session_state.vleadfilename = "vlead.nc"
+    st.session_state.vleadfilename = "RAW_VAR.nc"
+
+if "file_prefix" not in st.session_state:
+    raw_basename = os.path.basename(st.session_state.fname)
+    st.session_state.filename = os.path.splitext(raw_basename)[0] 
+    st.session_state.file_prefix = st.session_state.filename
+
+
+if "prefix_saved" not in st.session_state:
+    st.session_state.prefix_saved = False
+
+if "filename" not in st.session_state:
+    st.session_state.filename = ""  # <-- Default file name if not passed
+
 
 
 # Check if attributes exist in session state
@@ -72,9 +85,15 @@ else:
 if "depth_axis" not in st.session_state:
     st.session_state.isRegridCheck_PT = False
 
+@st.cache_data
+def get_prefixed_filename(base_name):
+    """Generates the file name with the optional prefix."""
+    if st.session_state.file_prefix:
+        return f"{st.session_state.file_prefix}_{base_name}"
+    return base_name
 
 @st.cache_data
-def file_write(filename="processed_file.nc"):
+def file_write(filename=get_prefixed_filename("PRO_DAT.nc")):
     tempdirname = tempfile.TemporaryDirectory(delete=False)
     outfilepath = tempdirname.name + "/" + filename
     return outfilepath
@@ -297,7 +316,7 @@ if download_button:
             st.download_button(
                 label="Download NetCDF File",
                 data=file,
-                file_name="processed_file.nc",
+                file_name=get_prefixed_filename("PRO_DAT.nc"),
             )
 
     if st.session_state.file_type_WF == "CSV":

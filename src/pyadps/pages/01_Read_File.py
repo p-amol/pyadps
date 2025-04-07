@@ -132,6 +132,7 @@ if uploaded_file is not None:
     st.session_state.salinity = (
         ds.variableleader.salinity.data * ds.variableleader.salinity.scale
     )
+    st.session_state.filename = (ds.filename)
 
     # st.session_state.flead = flead
     # st.session_state.vlead = vlead

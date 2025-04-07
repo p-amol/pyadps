@@ -33,10 +33,17 @@ if "add_attributes_DRW" not in st.session_state:
     st.session_state.add_attributes_DRW = "No"  # Default value
 
 if "file_prefix" not in st.session_state:
-    st.session_state.file_prefix = ""
+    raw_basename = os.path.basename(st.session_state.fname)
+    st.session_state.filename = os.path.splitext(raw_basename)[0] 
+    st.session_state.file_prefix = st.session_state.filename
+
 
 if "prefix_saved" not in st.session_state:
-    st.session_state.prefix_saved = False  # This prevents the AttributeError
+    st.session_state.prefix_saved = False
+
+if "filename" not in st.session_state:
+    st.session_state.filename = ""  # <-- Default file name if not passed
+
 
 
 ################ Functions #######################
@@ -163,24 +170,31 @@ if st.session_state.add_attributes_DRW == "Yes":
 
     st.write("Attributes will be added to the NetCDF file once you submit.")
 
-# File name prefix selection
+
+st.info(f"Current file name: **{st.session_state.filename}**")
+
+# Prefix editing option
 st.session_state.use_custom_filename = st.radio(
-    "Do you want to add a file name prefix?", ["No", "Yes"], horizontal=True
+    "Do you want to edit Output Filename?",
+    ["No", "Yes"],
+    horizontal=True,
 )
 
 if st.session_state.use_custom_filename == "Yes" and not st.session_state.prefix_saved:
-    st.session_state.file_prefix = st.text_input("Enter file name prefix (e.g., GAN123)")
+    st.session_state.file_prefix = st.text_input(
+        "Enter file name (e.g., GD10A000)",
+        value=st.session_state.file_prefix,
+    )
 
-    if st.button("Save Prefix"):
-        if st.session_state.file_prefix.strip():  
+    if st.button("Save Filename"):
+        if st.session_state.file_prefix.strip():
             st.session_state.prefix_saved = True
-            st.rerun() 
+            st.rerun()
         else:
-            st.warning("Please enter a valid prefix before saving.")
+            st.warning("Please enter a valid filename before saving.")
 
-# If the prefix is saved, show it
 if st.session_state.prefix_saved:
-    st.success(f"File prefix saved as: **{st.session_state.file_prefix}**")
+    st.success(f"Filename saved as: **{st.session_state.file_prefix}**")
 
 # Dropdown for axis_option
 st.session_state.axis_option_DRW = st.selectbox(

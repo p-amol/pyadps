@@ -21,6 +21,19 @@ if "rawfilename" not in st.session_state:
 if "vleadfilename" not in st.session_state:
     st.session_state.vleadfilename = "RAW_VAR.nc"
 
+if "file_prefix" not in st.session_state:
+    raw_basename = os.path.basename(st.session_state.fname)
+    st.session_state.filename = os.path.splitext(raw_basename)[0] 
+    st.session_state.file_prefix = st.session_state.filename
+
+
+if "prefix_saved" not in st.session_state:
+    st.session_state.prefix_saved = False
+
+if "filename" not in st.session_state:
+    st.session_state.filename = ""  # <-- Default file name if not passed
+
+
 
 # Check if attributes exist in session state
 if "attributes" not in st.session_state:

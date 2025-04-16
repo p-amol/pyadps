@@ -18,19 +18,32 @@ if "fname" not in st.session_state:
     st.session_state.fname = "No file selected"
 
 if "rawfilename" not in st.session_state:
-    st.session_state.rawfilename = "rawfile.nc"
+    st.session_state.rawfilename = "RAW_DAT.nc"
 
 if "fleadfilename" not in st.session_state:
-    st.session_state.fleadfilename = "flead.nc"
+    st.session_state.fleadfilename = "RAW_FIX.nc"
 
 if "vleadfilename" not in st.session_state:
-    st.session_state.vleadfilename = "vlead.nc"
+    st.session_state.vleadfilename = "RAW_VAR.nc"
 
 if "attributes" not in st.session_state:
     st.session_state.attributes = {}
 
 if "add_attributes_DRW" not in st.session_state:
     st.session_state.add_attributes_DRW = "No"  # Default value
+
+if "file_prefix" not in st.session_state:
+    raw_basename = os.path.basename(st.session_state.fname)
+    st.session_state.filename = os.path.splitext(raw_basename)[0] 
+    st.session_state.file_prefix = st.session_state.filename
+
+
+if "prefix_saved" not in st.session_state:
+    st.session_state.prefix_saved = False
+
+if "filename" not in st.session_state:
+    st.session_state.filename = ""  # <-- Default file name if not passed
+
 
 
 ################ Functions #######################
@@ -50,11 +63,18 @@ def read_file(filepath):
         ds.fixensemble()
     st.session_state.ds = ds
 
+@st.cache_data
+def get_prefixed_filename(base_name):
+    """Generates the file name with the optional prefix."""
+    if st.session_state.file_prefix:
+        return f"{st.session_state.file_prefix}_{base_name}"
+    return base_name
+
 
 @st.cache_data
 def file_write(path, axis_option, add_attributes=True):
     tempdirname = tempfile.TemporaryDirectory(delete=False)
-    st.session_state.rawfilename = tempdirname.name + "/rawfile.nc"
+    st.session_state.rawfilename = os.path.join(tempdirname.name, get_prefixed_filename("RAW_DAT.nc"))
 
     if add_attributes:
         wr.rawnc(
@@ -72,7 +92,7 @@ def file_write(path, axis_option, add_attributes=True):
 @st.cache_data
 def file_write_flead(path, axis_option, add_attributes=True):
     tempvardirname = tempfile.TemporaryDirectory(delete=False)
-    st.session_state.fleadfilename = tempvardirname.name + "/flead.nc"
+    st.session_state.fleadfilename = os.path.join(tempvardirname.name, get_prefixed_filename("RAW_FIX.nc"))
 
     if add_attributes:
         wr.flead_nc(
@@ -90,7 +110,7 @@ def file_write_flead(path, axis_option, add_attributes=True):
 @st.cache_data
 def file_write_vlead(path, axis_option, add_attributes=True):
     tempvardirname = tempfile.TemporaryDirectory(delete=False)
-    st.session_state.vleadfilename = tempvardirname.name + "/vlead.nc"
+    st.session_state.vleadfilename = os.path.join(tempvardirname.name, get_prefixed_filename("RAW_VAR.nc"))
 
     if add_attributes:
         wr.vlead_nc(
@@ -104,6 +124,7 @@ def file_write_vlead(path, axis_option, add_attributes=True):
         wr.vlead_nc(
             path, st.session_state.vleadfilename, st.session_state.date3, axis_option
         )
+
 
 
 if "axis_option" not in st.session_state:
@@ -149,6 +170,32 @@ if st.session_state.add_attributes_DRW == "Yes":
 
     st.write("Attributes will be added to the NetCDF file once you submit.")
 
+
+st.info(f"Current file name: **{st.session_state.filename}**")
+
+# Prefix editing option
+st.session_state.use_custom_filename = st.radio(
+    "Do you want to edit Output Filename?",
+    ["No", "Yes"],
+    horizontal=True,
+)
+
+if st.session_state.use_custom_filename == "Yes" and not st.session_state.prefix_saved:
+    st.session_state.file_prefix = st.text_input(
+        "Enter file name (e.g., GD10A000)",
+        value=st.session_state.file_prefix,
+    )
+
+    if st.button("Save Filename"):
+        if st.session_state.file_prefix.strip():
+            st.session_state.prefix_saved = True
+            st.rerun()
+        else:
+            st.warning("Please enter a valid filename before saving.")
+
+if st.session_state.prefix_saved:
+    st.success(f"Filename saved as: **{st.session_state.file_prefix}**")
+
 # Dropdown for axis_option
 st.session_state.axis_option_DRW = st.selectbox(
     "Select x-axis option:",
@@ -179,7 +226,7 @@ if st.session_state.rawnc_download_DRW:
         st.download_button(
             label="Download Raw File",
             data=file,
-            file_name="rawfile.nc",
+            file_name=get_prefixed_filename("RAW_DAT.nc"),
         )
 
 if st.session_state.fleadnc_download_DRW:
@@ -193,7 +240,7 @@ if st.session_state.fleadnc_download_DRW:
         st.download_button(
             label="Download Fixed Leader",
             data=file,
-            file_name="flead.nc",
+            file_name=get_prefixed_filename("RAW_FIX.nc"),
         )
 
 if st.session_state.vleadnc_download_DRW:
@@ -207,7 +254,7 @@ if st.session_state.vleadnc_download_DRW:
         st.download_button(
             label="Download Variable Leader",
             data=file,
-            file_name="vlead.nc",
+            file_name=get_prefixed_filename("RAW_VAR.nc"),
         )
 
 

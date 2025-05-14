@@ -92,9 +92,10 @@ def qc_submit():
     evt = st.session_state.evt_QCT
     ft = st.session_state.ft_QCT
     is3beam = st.session_state.is3beam_QCT
+    beam_ignore = st.session_state.beam_to_ignore
     mask = pg_check(ds, mask, pgt, threebeam=is3beam)
-    mask = correlation_check(ds, mask, ct)
-    mask = echo_check(ds, mask, et)
+    mask = correlation_check(ds, mask, ct,is3beam,beam_ignore=beam_ignore)
+    mask = echo_check(ds, mask, et,is3beam,beam_ignore=beam_ignore)
     mask = ev_check(ds, mask, evt)
     mask = false_target(ds, mask, ft, threebeam=True)
     # Store the processed mask in a temporary mask
@@ -336,6 +337,22 @@ with tab2:
         st.session_state.is3beam_QCT = st.selectbox(
             "Would you like to use a three-beam solution?", (True, False)
         )
+
+        if st.session_state.is3beam_QCT:
+            beam_label_to_value = {
+                "None": None,
+                "Beam 1": 0,
+                "Beam 2": 1,
+                "Beam 3": 2,
+                "Beam 4": 3
+            }
+
+            selected_beam = st.selectbox(
+                "Select Beam to Ignore",
+                options=list(beam_label_to_value.keys()),
+                index=0  # Default is "None"
+            )
+            st.session_state.beam_to_ignore =  beam_label_to_value[selected_beam]
 
         st.session_state.pgt_QCT = st.number_input(
             "Select Percent Good Threshold",

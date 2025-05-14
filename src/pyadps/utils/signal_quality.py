@@ -54,7 +54,7 @@ def qc_check(var, mask, cutoff=0):
     return mask
 
 
-def correlation_check(ds, mask, cutoff=64):
+def correlation_check(ds, mask, cutoff,threebeam,beam_ignore=None):
     """
     Perform an correlation check on the provided variable and update the 
     mask to mark valid and invalid values based on a cutoff threshold.
@@ -93,10 +93,15 @@ def correlation_check(ds, mask, cutoff=64):
     >>> outmask = correlation_check(ds, mask, cutoff=9999)
     """
     correlation = ds.correlation.data
+    if threebeam ==True:
+        if beam_ignore == None:
+            correlation = correlation
+        else:
+            correlation = np.delete(correlation,beam_ignore,axis=0) 
     mask = qc_check(correlation, mask, cutoff=cutoff)
     return mask
 
-def echo_check(ds, mask, cutoff=40):
+def echo_check(ds, mask, cutoff, threebeam, beam_ignore=None):
     """
     Perform an echo intensity check on the provided variable and update the 
     mask to mark valid and invalid values based on a cutoff threshold.
@@ -137,6 +142,11 @@ def echo_check(ds, mask, cutoff=40):
     """
 
     echo = ds.echo.data
+    if threebeam ==True:
+        if beam_ignore == None:
+           echo  = echo
+        else:
+            echo = np.delete(echo,beam_ignore,axis=0)
     mask = qc_check(echo, mask, cutoff=cutoff)
     return mask
 

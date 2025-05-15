@@ -97,7 +97,7 @@ def qc_submit():
     mask = correlation_check(ds, mask, ct,is3beam,beam_ignore=beam_ignore)
     mask = echo_check(ds, mask, et,is3beam,beam_ignore=beam_ignore)
     mask = ev_check(ds, mask, evt)
-    mask = false_target(ds, mask, ft, threebeam=True)
+    mask = false_target(ds, mask, ft, threebeam=is3beam, beam_ignore=beam_ignore)
     # Store the processed mask in a temporary mask
     st.session_state.qc_mask_temp = mask
 

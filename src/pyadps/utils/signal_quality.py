@@ -256,7 +256,7 @@ def pg_check(ds, mask, cutoff=0, threebeam=True):
     return mask
 
 
-def false_target(ds, mask, cutoff=255, threebeam=True):
+def false_target(ds, mask, cutoff=255, threebeam=True, beam_ignore=None):
     """
     Apply a false target detection algorithm based on echo intensity values. 
     This function identifies invalid or false targets in the data and updates 
@@ -302,12 +302,14 @@ def false_target(ds, mask, cutoff=255, threebeam=True):
     """
 
     echo = ds.echo.data
+    if beam_ignore != None:
+        echo = np.delete(echo,beam_ignore, axis=0)
 
     shape = np.shape(echo)
     for i in range(shape[1]):
         for j in range(shape[2]):
             x = np.sort(echo[:, i, j])
-            if threebeam:
+            if threebeam and beam_ignore is None:
                 if x[-1] - x[1] > cutoff:
                     mask[i, j] = 1
             else:

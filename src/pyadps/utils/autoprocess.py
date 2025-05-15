@@ -192,15 +192,20 @@ def autoprocess(config_file, binary_file_path=None):
             evt = config.getint("QCTest", "error_velocity")
             et = config.getint("QCTest", "echo_intensity")
             ft = config.getint("QCTest", "false_target")
-            is3Beam = config.getboolean("QCTest", "three_beam")
+            is3beam = config.getboolean("QCTest", "three_beam")
+            if is3beam != None:
+                is3beam = int(is3beam)
+            beam_ignore = config.get("QCTest","beam_ignore")
             pgt = config.getint("QCTest", "percent_good")
             orientation = config.get("QCTest", "orientation")
+            beam_ignore = config.getboolean("QCTest",)
 
-            mask = pg_check(ds, mask, pgt, threebeam=is3Beam)
-            mask = correlation_check(ds, mask, ct)
-            mask = echo_check(ds, mask, et)
+            mask = pg_check(ds, mask, pgt, threebeam=is3beam)
+            mask = correlation_check(ds, mask, ct,is3beam,beam_ignore=beam_ignore)
+            mask = echo_check(ds, mask, et,is3beam,beam_ignore=beam_ignore)
             mask = ev_check(ds, mask, evt)
-            mask = false_target(ds, mask, ft, threebeam=True)
+            mask = false_target(ds, mask, ft, threebeam=is3beam, beam_ignore=beam_ignore)
+        
 
             print("QC Check Complete.")
 

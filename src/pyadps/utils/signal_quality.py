@@ -54,7 +54,7 @@ def qc_check(var, mask, cutoff=0):
     return mask
 
 
-def correlation_check(ds, mask, cutoff=64):
+def correlation_check(ds, mask, cutoff,threebeam,beam_ignore=None):
     """
     Perform an correlation check on the provided variable and update the 
     mask to mark valid and invalid values based on a cutoff threshold.
@@ -93,10 +93,15 @@ def correlation_check(ds, mask, cutoff=64):
     >>> outmask = correlation_check(ds, mask, cutoff=9999)
     """
     correlation = ds.correlation.data
+    if threebeam ==True:
+        if beam_ignore == None:
+            correlation = correlation
+        else:
+            correlation = np.delete(correlation,beam_ignore,axis=0) 
     mask = qc_check(correlation, mask, cutoff=cutoff)
     return mask
 
-def echo_check(ds, mask, cutoff=40):
+def echo_check(ds, mask, cutoff, threebeam, beam_ignore=None):
     """
     Perform an echo intensity check on the provided variable and update the 
     mask to mark valid and invalid values based on a cutoff threshold.
@@ -137,6 +142,11 @@ def echo_check(ds, mask, cutoff=40):
     """
 
     echo = ds.echo.data
+    if threebeam ==True:
+        if beam_ignore == None:
+           echo  = echo
+        else:
+            echo = np.delete(echo,beam_ignore,axis=0)
     mask = qc_check(echo, mask, cutoff=cutoff)
     return mask
 
@@ -246,7 +256,7 @@ def pg_check(ds, mask, cutoff=0, threebeam=True):
     return mask
 
 
-def false_target(ds, mask, cutoff=255, threebeam=True):
+def false_target(ds, mask, cutoff=255, threebeam=True, beam_ignore=None):
     """
     Apply a false target detection algorithm based on echo intensity values. 
     This function identifies invalid or false targets in the data and updates 
@@ -292,12 +302,14 @@ def false_target(ds, mask, cutoff=255, threebeam=True):
     """
 
     echo = ds.echo.data
+    if beam_ignore != None:
+        echo = np.delete(echo,beam_ignore, axis=0)
 
     shape = np.shape(echo)
     for i in range(shape[1]):
         for j in range(shape[2]):
             x = np.sort(echo[:, i, j])
-            if threebeam:
+            if threebeam and beam_ignore is None:
                 if x[-1] - x[1] > cutoff:
                     mask[i, j] = 1
             else:

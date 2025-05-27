@@ -34,7 +34,7 @@ if "add_attributes_DRW" not in st.session_state:
 
 if "file_prefix" not in st.session_state:
     raw_basename = os.path.basename(st.session_state.fname)
-    st.session_state.filename = os.path.splitext(raw_basename)[0] 
+    st.session_state.filename = os.path.splitext(raw_basename)[0]
     st.session_state.file_prefix = st.session_state.filename
 
 
@@ -43,7 +43,6 @@ if "prefix_saved" not in st.session_state:
 
 if "filename" not in st.session_state:
     st.session_state.filename = ""  # <-- Default file name if not passed
-
 
 
 ################ Functions #######################
@@ -63,6 +62,7 @@ def read_file(filepath):
         ds.fixensemble()
     st.session_state.ds = ds
 
+
 @st.cache_data
 def get_prefixed_filename(base_name):
     """Generates the file name with the optional prefix."""
@@ -74,57 +74,55 @@ def get_prefixed_filename(base_name):
 @st.cache_data
 def file_write(path, axis_option, add_attributes=True):
     tempdirname = tempfile.TemporaryDirectory(delete=False)
-    st.session_state.rawfilename = os.path.join(tempdirname.name, get_prefixed_filename("RAW_DAT.nc"))
+    st.session_state.rawfilename = os.path.join(
+        tempdirname.name, get_prefixed_filename("RAW_DAT.nc")
+    )
 
     if add_attributes:
         wr.rawnc(
             path,
             st.session_state.rawfilename,
-            st.session_state.date1,
-            axis_option,
+            axis_option=axis_option,
             attributes=st.session_state.attributes,
         )
     else:
-        wr.rawnc(
-            path, st.session_state.rawfilename, st.session_state.date1, axis_option
-        )
+        wr.rawnc(path, st.session_state.rawfilename, axis_option)
+
 
 @st.cache_data
 def file_write_flead(path, axis_option, add_attributes=True):
     tempvardirname = tempfile.TemporaryDirectory(delete=False)
-    st.session_state.fleadfilename = os.path.join(tempvardirname.name, get_prefixed_filename("RAW_FIX.nc"))
+    st.session_state.fleadfilename = os.path.join(
+        tempvardirname.name, get_prefixed_filename("RAW_FIX.nc")
+    )
 
     if add_attributes:
         wr.flead_nc(
             path,
             st.session_state.fleadfilename,
-            st.session_state.date2,
-            axis_option,
+            axis_option=axis_option,
             attributes=st.session_state.attributes,
         )
     else:
-        wr.flead_nc(
-            path, st.session_state.fleadfilename, st.session_state.date2, axis_option
-        )
+        wr.flead_nc(path, st.session_state.fleadfilename, axis_option)
+
 
 @st.cache_data
 def file_write_vlead(path, axis_option, add_attributes=True):
     tempvardirname = tempfile.TemporaryDirectory(delete=False)
-    st.session_state.vleadfilename = os.path.join(tempvardirname.name, get_prefixed_filename("RAW_VAR.nc"))
+    st.session_state.vleadfilename = os.path.join(
+        tempvardirname.name, get_prefixed_filename("RAW_VAR.nc")
+    )
 
     if add_attributes:
         wr.vlead_nc(
             path,
             st.session_state.vleadfilename,
-            st.session_state.date3,
-            axis_option,
+            axis_option=axis_option,
             attributes=st.session_state.attributes,
         )
     else:
-        wr.vlead_nc(
-            path, st.session_state.vleadfilename, st.session_state.date3, axis_option
-        )
-
+        wr.vlead_nc(path, st.session_state.vleadfilename, axis_option)
 
 
 if "axis_option" not in st.session_state:

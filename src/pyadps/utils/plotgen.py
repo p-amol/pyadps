@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, RadioButtons, Slider, TextBox
 from matplotlib.widgets import RectangleSelector
 
-mpl.use("TkAgg")
+# mpl.use("TkAgg")
 
 
 class CutBins:

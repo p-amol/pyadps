@@ -3,17 +3,17 @@ pyreadrdi.py
 
 Module Overview
 ---------------
-This module provides functionalities to read and parse RDI ADCP files. 
-It includes functions for reading file headers, fixed and variable leaders, 
+This module provides functionalities to read and parse RDI ADCP files.
+It includes functions for reading file headers, fixed and variable leaders,
 and data types like velocity, correlation, echo intensity, and percent good.
-Currently reads only PD0 format. 
+Currently reads only PD0 format.
 
 Modules
 -------------------
 - fileheader: Function to read and parse the file header information.
 - fixedleader: Function to read and parse the fixed leader section of an RDI file.
 - variableleader: Function to read and parse the variable leader section of an RDI file.
-- datatype: Function to read and parse 3D data types. 
+- datatype: Function to read and parse 3D data types.
 - ErrorCode: Enum class to define and manage error codes for file operations.
 
 Creation Date
@@ -57,7 +57,7 @@ Examples
 >>> vel_data = datatype('example.rdi', "velocity")
 >>> vel_data = datatype('example.rdi', "echo", beam=4, cell=20)
 
-Other add-on functions and classes inlcude bcolors, safe_open, and ErrorCode. 
+Other add-on functions and classes inlcude bcolors, safe_open, and ErrorCode.
 Examples (add-on)
 -------------------
 >>> error = ErrorCode.FILE_NOT_FOUND
@@ -403,72 +403,85 @@ def fileheader(rdi_file):
     bfile.seek(0, 0)
     bskip = i = 0
     hid = [None] * 5
-    while byt := bfile.read(6):
-        hid[0], hid[1], hid[2], hid[3], hid[4] = unpack("<BBHBB", byt)
-        headerid = np.append(headerid, np.int8(hid[0]))
-        sourceid = np.append(sourceid, np.int16(hid[1]))
-        byte = np.append(byte, np.int16(hid[2]))
-        spare = np.append(spare, np.int16(hid[3]))
-        datatype = np.append(datatype, np.int16(hid[4]))
+    try:
+        while byt := bfile.read(6):
+            hid[0], hid[1], hid[2], hid[3], hid[4] = unpack("<BBHBB", byt)
+            headerid = np.append(headerid, np.int8(hid[0]))
+            sourceid = np.append(sourceid, np.int16(hid[1]))
+            byte = np.append(byte, np.int16(hid[2]))
+            spare = np.append(spare, np.int16(hid[3]))
+            datatype = np.append(datatype, np.int16(hid[4]))
 
-        # dbyte = bfile.read(2 * datatype[i])
-        dbyte, error = safe_read(bfile, 2 * datatype[i])
-        if dbyte is None:
+            # dbyte = bfile.read(2 * datatype[i])
+            dbyte, error = safe_read(bfile, 2 * datatype[i])
+            if dbyte is None:
+                if i == 0:
+                    error_code = error.code
+                    dummytuple = ([], [], [], [], [], ensemble, error_code)
+                    return dummytuple
+                else:
+                    break
+
+            # Check for id and datatype errors
             if i == 0:
-                error_code = error.code
-                dummytuple = ([], [], [], [], [], ensemble, error_code)
-                return dummytuple
+                if headerid[0] != 127 or sourceid[0] != 127:
+                    error = ErrorCode.WRONG_RDIFILE_TYPE
+                    print(bcolors.FAIL + error.message + bcolors.ENDC)
+                    error_code = error.code
+                    dummytuple = ([], [], [], [], [], ensemble, error_code)
+                    return dummytuple
             else:
-                break
+                if headerid[i] != 127 or sourceid[i] != 127:
+                    error = ErrorCode.ID_NOT_FOUND
+                    print(bcolors.FAIL + error.message)
+                    print(f"Ensembles reset to {i}" + bcolors.ENDC)
+                    break
 
-        # Check for id and datatype errors
-        if i == 0:
-            if headerid[0] != 127 or sourceid[0] != 127:
-                error = ErrorCode.WRONG_RDIFILE_TYPE
-                print(bcolors.FAIL + error.message + bcolors.ENDC)
+                if datatype[i] != datatype[i - 1]:
+                    error = ErrorCode.DATATYPE_MISMATCH
+                    print(bcolors.FAIL + error.message)
+                    print(f"Data Types for ensemble {i} is {datatype[i - 1]}.")
+                    print(f"Data Types for ensemble {i + 1} is {datatype[i]}.")
+                    print(f"Ensembles reset to {i}" + bcolors.ENDC)
+                    break
+
+            try:
+                data = unpack("H" * datatype[i], dbyte)
+                address_offset.append(data)
+            except:
+                error = ErrorCode.FILE_CORRUPTED
                 error_code = error.code
                 dummytuple = ([], [], [], [], [], ensemble, error_code)
                 return dummytuple
-        else:
-            if headerid[i] != 127 or sourceid[i] != 127:
-                error = ErrorCode.ID_NOT_FOUND
-                print(bcolors.FAIL + error.message + bcolors.ENDC)
-                break
 
-            if datatype[i] != datatype[i - 1]:
-                error = ErrorCode.DATATYPE_MISMATCH
-                print(bcolors.FAIL + error.message)
-                print(f"Data Types for ensemble {i} is {datatype[i - 1]}.")
-                print(f"Data Types for ensemble {i + 1} is {datatype[i]}.")
-                print(f"Ensembles reset to {i}" + bcolors.ENDC)
-                break
+            skip_array = [None] * datatype[i]
+            for dtype in range(datatype[i]):
+                bseek = int(bskip) + int(address_offset[i][dtype])
+                bfile.seek(bseek, 0)
+                readbyte = bfile.read(2)
+                skip_array[dtype] = int.from_bytes(
+                    readbyte, byteorder="little", signed=False
+                )
 
-        try:
-            data = unpack("H" * datatype[i], dbyte)
-            address_offset.append(data)
-        except:
-            error = ErrorCode.FILE_CORRUPTED
-            error_code = error.code
-            dummytuple = ([], [], [], [], [], ensemble, error_code)
-            return dummytuple
-
-        skip_array = [None] * datatype[i]
-        for dtype in range(datatype[i]):
-            bseek = int(bskip) + int(address_offset[i][dtype])
-            bfile.seek(bseek, 0)
-            readbyte = bfile.read(2)
-            skip_array[dtype] = int.from_bytes(
-                readbyte, byteorder="little", signed=False
-            )
-
-        dataid.append(skip_array)
-        # bytekip is the number of bytes to skip to reach
-        # an ensemble from beginning of file.
-        # ?? Should byteskip be from current position ??
-        bskip = int(bskip) + int(byte[i]) + 2
-        bfile.seek(bskip, 0)
-        byteskip = np.append(byteskip, np.int32(bskip))
-        i += 1
+            dataid.append(skip_array)
+            # bytekip is the number of bytes to skip to reach
+            # an ensemble from beginning of file.
+            # ?? Should byteskip be from current position ??
+            bskip = int(bskip) + int(byte[i]) + 2
+            bfile.seek(bskip, 0)
+            byteskip = np.append(byteskip, np.int32(bskip))
+            i += 1
+    except (ValueError, StructError, OverflowError) as e:
+        # except:
+        print(bcolors.WARNING + "WARNING: The file is broken.")
+        print(
+            f"Function `fileheader` unable to extract data for ensemble {i + 1}. Total ensembles reset to {i}."
+        )
+        print(bcolors.UNDERLINE + "Details from struct function" + bcolors.ENDC)
+        print(f"  Error Type: {type(e).__name__}")
+        print(f"  Error Details: {e}")
+        error = ErrorCode.FILE_CORRUPTED
+        ensemble = i
 
     ensemble = i
     bfile.close()
@@ -612,13 +625,14 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
 
                 bfile.seek(byteskip[i], 0)
 
-            except (ValueError, StructError) as e:
+            except (ValueError, StructError, OverflowError) as e:
                 print(bcolors.WARNING + "WARNING: The file is broken.")
                 print(
                     f"Function `fixedleader` unable to extract data for ensemble {i + 1}. Total ensembles reset to {i}."
                 )
-                print("Details from struct function:")
-                print(f"An error occurred: {e}" + bcolors.ENDC)
+                print(bcolors.UNDERLINE + "Details from struct function" + bcolors.ENDC)
+                print(f"  Error Type: {type(e).__name__}")
+                print(f"  Error Details: {e}")
                 error = ErrorCode.FILE_CORRUPTED
                 ensemble = i
 
@@ -794,13 +808,14 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
 
                 bfile.seek(byteskip[i], 0)
 
-            except (ValueError, StructError) as e:
+            except (ValueError, StructError, OverflowError) as e:
                 print(bcolors.WARNING + "WARNING: The file is broken.")
                 print(
                     f"Function `variableleader` unable to extract data for ensemble {i + 1}. Total ensembles reset to {i}."
                 )
-                print("Details from struct function:")
-                print(f"An error occurred: {e}" + bcolors.ENDC)
+                print(bcolors.UNDERLINE + "Details from struct function" + bcolors.ENDC)
+                print(f"  Error Type: {type(e).__name__}")
+                print(f"  Error Details: {e}")
                 error = ErrorCode.FILE_CORRUPTED
                 ensemble = i
 
@@ -910,7 +925,9 @@ def datatype(
     # Velocity is 16 bits and all others are 8 bits.
     # Create empty array for the chosen variable name.
     if var_name == "velocity":
-        var_array = np.full((int(max(beam)), int(max(cell)), ensemble), -32768, dtype="int16")
+        var_array = np.full(
+            (int(max(beam)), int(max(cell)), ensemble), -32768, dtype="int16"
+        )
         bitstr = "<h"
         bitint = 2
     else:  # inserted
@@ -957,16 +974,28 @@ def datatype(
         return (var_array, error.code)
 
     # READ DATA
-    for i in range(ensemble):
-        bfile.seek(fbyteskip[i], 1)
-        bdata = bfile.read(2)
-        for cno in range(int(cell[i])):
-            for bno in range(int(beam[i])):
-                bdata = bfile.read(bitint)
-                varunpack = unpack(bitstr, bdata)
-                var_array[bno][cno][i] = varunpack[0]
-        bfile.seek(byteskip[i], 0)
-    bfile.close()
+    i = 0
+    try:
+        for i in range(ensemble):
+            bfile.seek(fbyteskip[i], 1)
+            bdata = bfile.read(2)
+            for cno in range(int(cell[i])):
+                for bno in range(int(beam[i])):
+                    bdata = bfile.read(bitint)
+                    varunpack = unpack(bitstr, bdata)
+                    var_array[bno][cno][i] = varunpack[0]
+            bfile.seek(byteskip[i], 0)
+        bfile.close()
+    except (ValueError, StructError, OverflowError) as e:
+        print(bcolors.WARNING + "WARNING: The file is broken.")
+        print(
+            f"Function `datatype` unable to extract {var_name} for ensemble {i + 1}. Total ensembles reset to {i}."
+        )
+        print(bcolors.UNDERLINE + "Details from struct function" + bcolors.ENDC)
+        print(f"  Error Type: {type(e).__name__}")
+        print(f"  Error Details: {e}")
+        error = ErrorCode.FILE_CORRUPTED
+        ensemble = i
 
-    data = var_array
+    data = var_array[:, :, :ensemble]
     return (data, ensemble, cell, beam, error_code)

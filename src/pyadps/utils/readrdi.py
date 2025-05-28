@@ -103,6 +103,7 @@ import sys
 import numpy as np
 import pandas as pd
 from pyadps.utils import pyreadrdi
+from pyadps.utils.pyreadrdi import bcolors
 
 
 class DotDict:
@@ -773,7 +774,7 @@ def vlead_dict(vid):
         "MPT Minute": "int16",
         "MPT Second": "int16",
         "MPT Hundredth": "int16",
-        "Hdg Std Dev": "int16",
+        "Head Std Dev": "int16",
         "Pitch Std Dev": "int16",
         "Roll Std Dev": "int16",
         "ADC Channel 0": "int16",
@@ -1358,7 +1359,7 @@ class ReadFile:
         The RDI ADCP binary file to be read.
     """
 
-    def __init__(self, filename):
+    def __init__(self, filename, is_fix_ensemble=True):
         """
         Initializes the ReadFile object and extracts data from the RDI ADCP binary file.
         """
@@ -1534,6 +1535,10 @@ class ReadFile:
         # Add attribute that lists all variables/functions
         self.list_vars = list(vars(self).keys())
 
+        # By default fix ensemble
+        if is_fix_ensemble and not self.isEnsembleEqual:
+            self.fixensemble()
+
     def _copy_attributes_from_var(self):
         for attr_name, attr_value in self.variableleader.__dict__.items():
             # Copy each attribute of var into self
@@ -1551,6 +1556,18 @@ class ReadFile:
         raise AttributeError(
             f"'{self.__class__.__name__}' object has no attribute '{name}'"
         )
+
+    def resize_fixedleader(self, newshape):
+        for key in self.fixedleader.fleader:
+            attr_name = key.lower().replace(" ", "_")
+            attr_obj = getattr(self.fixedleader, attr_name)
+            attr_obj.data = attr_obj.data[:newshape]
+
+    def resize_variableleader(self, newshape):
+        for key in self.variableleader.vleader:
+            attr_name = key.lower().replace(" ", "_")
+            attr_obj = getattr(self.variableleader, attr_name)
+            attr_obj.data = attr_obj.data[:newshape]
 
     def fixensemble(self, min_cutoff=0):
         """
@@ -1582,10 +1599,18 @@ class ReadFile:
             self.fileheader.dataid = self.fileheader.dataid[:minens, :]
             if "Fixed Leader" in datatype_array:
                 self.fixedleader.data = self.fixedleader.data[:, :minens]
+                self.fixedleader.fleader = {
+                    k: v[:minens] for k, v in self.fixedleader.fleader.items()
+                }
                 self.fixedleader.ensembles = minens
+                self.resize_fixedleader(minens)
             if "Variable Leader" in datatype_array:
                 self.variableleader.data = self.variableleader.data[:, :minens]
+                self.variableleader.vleader = {
+                    k: v[:minens] for k, v in self.variableleader.vleader.items()
+                }
                 self.variableleader.ensembles = minens
+                self.resize_variableleader(minens)
             if "Velocity" in datatype_array:
                 self.velocity.data = self.velocity.data[:, :, :minens]
                 self.velocity.ensembles = minens
@@ -1601,7 +1626,13 @@ class ReadFile:
             if "Status" in datatype_array:
                 self.status.data = self.status.data[:, :, :minens]
                 self.status.ensembles = minens
-            print(f"Ensembles fixed to {minens}. All data types have same ensembles.")
+
+            self.time = self.time[:minens]
+            print(
+                bcolors.OKBLUE
+                + f"Ensembles fixed to {minens}. All data types have same ensembles."
+                + bcolors.ENDC
+            )
         else:
             print(
                 "WARNING: No response was initiated. All data types have same ensemble."

@@ -70,8 +70,8 @@ def flead_ncatt(fl_obj, ncfile_id, ens=0):
 def rawnc(
     infile,
     outfile,
-    time,
-    axis_option=None,
+    axis_option="time",
+    fixensemble=True,
     attributes=None,
     t0="hours since 2000-01-01",
 ):
@@ -91,7 +91,12 @@ def rawnc(
 
     outnc = nc4.Dataset(outfile, "w", format="NETCDF4")
 
-    flead = rd.FixedLeader(infile)
+    ds = rd.ReadFile(infile)
+    if fixensemble and not ds.isFixedEnsemble:
+        ds.fixensemble()
+
+    head = ds.fileheader
+    flead = ds.fixedleader
     cell_list = flead.fleader["Cells"]
     beam_list = flead.fleader["Beams"]
 
@@ -102,8 +107,11 @@ def rawnc(
         primary_axis = "ensemble"
         ensemble = outnc.createVariable("ensemble", "i4", ("ensemble",))
         ensemble.axis = "T"
+        # Add ensemble
+        total_ensembles = ds.ensembles
+        ensemble = np.arange(1, total_ensembles + 1, 1)
     elif axis_option == "time":
-        tsize = len(time)
+        tsize = ds.ensembles
         outnc.createDimension("time", tsize)
         primary_axis = "time"
         time_var = outnc.createVariable("time", "i4", ("time",))
@@ -112,6 +120,7 @@ def rawnc(
         time_var.long_name = "time"
 
         # Convert time_data to numerical format
+        time = ds.time
         nctime = pd2nctime(time, t0)
         time_var[:] = nctime
 
@@ -134,7 +143,7 @@ def rawnc(
     cell[:] = np.arange(1, max(cell_list) + 1, 1)
     beam[:] = np.arange(1, max(beam_list) + 1, 1)
 
-    varlist = rd.FileHeader(infile).data_types(1)
+    varlist = head.data_types(1)
     varlist.remove("Fixed Leader")
     varlist.remove("Variable Leader")
 
@@ -145,10 +154,8 @@ def rawnc(
             varid[i] = outnc.createVariable(
                 item, "i2", (primary_axis, "cell", "beam"), fill_value=-32768
             )
-            # varid[i].missing_value = -32768
-            vel = getattr(rd, item)
-            var = vel(infile).data
-            # var = rd.variables(infile, item)
+            vel = getattr(ds, item.lower())
+            var = vel.data
 
         else:
             # Unsigned integers might be assigned for future netcdf versions
@@ -156,14 +163,10 @@ def rawnc(
             varid[i] = outnc.createVariable(
                 format_item, "i2", (primary_axis, "cell", "beam")
             )
-            datatype = getattr(rd, format_item)
-            var = np.array(datatype(infile).data, dtype="int16")
-            # var = np.array(rd.variables(infile, item), dtype="int16")
+            datatype = getattr(ds, format_item.lower())
+            var = np.array(datatype.data, dtype="int16")
 
         vshape = var.T.shape
-        if i == 0:
-            if primary_axis == "ensemble":
-                ensemble[:] = np.arange(1, vshape[0] + 1, 1)
 
         varid[i][0 : vshape[0], 0 : vshape[1], 0 : vshape[2]] = var.T
 
@@ -179,11 +182,12 @@ def rawnc(
 
     outnc.close()
 
+
 def flead_nc(
     infile,
     outfile,
-    time,
-    axis_option=None,
+    axis_option="time",
+    fixensemble=True,
     attributes=None,
     t0="hours since 2000-01-01",
 ):
@@ -196,6 +200,11 @@ def flead_nc(
     """
     outnc = nc4.Dataset(outfile, "w", format="NETCDF4")
 
+    # Read Binary File
+    ds = rd.ReadFile(infile)
+    if fixensemble:
+        ds.fixensemble()
+    flead = ds.fixedleader
     # Dimensions
     # Define the primary axis based on axis_option
     if axis_option == "ensemble":
@@ -203,8 +212,12 @@ def flead_nc(
         primary_axis = "ensemble"
         ensemble = outnc.createVariable("ensemble", "i4", ("ensemble",))
         ensemble.axis = "T"
+        # Add ensemble
+        total_ensembles = ds.ensembles
+        ensemble = np.arange(1, total_ensembles + 1, 1)
+
     elif axis_option == "time":
-        tsize = len(time)
+        tsize = ds.ensembles
         outnc.createDimension("time", tsize)
         primary_axis = "time"
         time_var = outnc.createVariable("time", "i4", ("time",))
@@ -213,6 +226,7 @@ def flead_nc(
         time_var.long_name = "time"
 
         # Convert time_data to numerical format
+        time = ds.time
         nctime = pd2nctime(time, t0)
         time_var[:] = nctime
 
@@ -220,8 +234,6 @@ def flead_nc(
         raise ValueError(f"Invalid axis_option: {axis_option}.")
 
     # Variables
-
-    flead = rd.FixedLeader(infile)
     fdict = flead.fleader
     varid = [0] * len(fdict)
 
@@ -234,9 +246,6 @@ def flead_nc(
         )
         var = values
         vshape = var.shape
-        if i == 0:
-            if primary_axis == "ensemble":
-                ensemble[:] = np.arange(1, vshape[0] + 1, 1)
 
         varid[i][0 : vshape[0]] = var
         i += 1
@@ -248,11 +257,12 @@ def flead_nc(
 
     outnc.close()
 
+
 def vlead_nc(
     infile,
     outfile,
-    time,
-    axis_option=None,
+    axis_option="time",
+    fixensemble=True,
     attributes=None,
     t0="hours since 2000-01-01",
 ):
@@ -263,8 +273,14 @@ def vlead_nc(
         infile (string): Input file path including filename
         outfile (string): Output file path including filename
     """
+    # Create output NetCDF File
     outnc = nc4.Dataset(outfile, "w", format="NETCDF4")
 
+    # Read Binary File
+    ds = rd.ReadFile(infile)
+    if fixensemble:
+        ds.fixensemble()
+    vlead = ds.variableleader
     # Dimensions
     # Define the primary axis based on axis_option
     if axis_option == "ensemble":
@@ -272,8 +288,11 @@ def vlead_nc(
         primary_axis = "ensemble"
         ensemble = outnc.createVariable("ensemble", "i4", ("ensemble",))
         ensemble.axis = "T"
+        # Add ensemble
+        total_ensembles = ds.ensembles
+        ensemble = np.arange(1, total_ensembles + 1, 1)
     elif axis_option == "time":
-        tsize = len(time)
+        tsize = ds.ensembles
         outnc.createDimension("time", tsize)
         primary_axis = "time"
         time_var = outnc.createVariable("time", "i4", ("time",))
@@ -282,15 +301,14 @@ def vlead_nc(
         time_var.long_name = "time"
 
         # Convert time_data to numerical format
+        time = ds.time
         nctime = pd2nctime(time, t0)
         time_var[:] = nctime
 
     else:
         raise ValueError(f"Invalid axis_option: {axis_option}.")
 
-    # Variables
-
-    vlead = rd.VariableLeader(infile)
+    # Read Data
     vdict = vlead.vleader
     varid = [0] * len(vdict)
 
@@ -302,12 +320,10 @@ def vlead_nc(
             format_item, "i4", primary_axis, fill_value=-32768
         )
         var = values
-        vshape = var.shape
-        if i == 0:
-            if primary_axis == "ensemble":
-                ensemble[:] = np.arange(1, vshape[0] + 1, 1)
+        # vshape = var.shape
 
-        varid[i][0 : vshape[0]] = var
+        varid[i][0 : ds.ensembles] = var
+        # varid[i][0 : vshape[0]] = var
         i += 1
 
     # Add global attributes if provided
@@ -319,7 +335,16 @@ def vlead_nc(
 
 
 def finalnc(
-    outfile, depth, final_mask, final_echo, final_corr , final_pgood, time, data, t0="hours since 2000-01-01", attributes=None
+    outfile,
+    depth,
+    final_mask,
+    final_echo,
+    final_corr,
+    final_pgood,
+    time,
+    data,
+    t0="hours since 2000-01-01",
+    attributes=None,
 ):
     """
     Function to create the processed NetCDF file.
@@ -345,9 +370,9 @@ def finalnc(
         depth = depth[::-1]
         data = data[:, ::-1, :]
         final_mask = final_mask[::-1, :]
-        final_echo = final_echo[:,::-1, :]
-        final_corr = final_corr[:,::-1, :]
-        final_pgood = final_pgood[:,::-1, :]
+        final_echo = final_echo[:, ::-1, :]
+        final_corr = final_corr[:, ::-1, :]
+        final_pgood = final_pgood[:, ::-1, :]
 
     ncfile = nc4.Dataset(outfile, mode="w", format="NETCDF4")
     # Check if depth is scalar or array
@@ -390,41 +415,65 @@ def finalnc(
     mvel = ncfile.createVariable("mask", np.float32, ("time", "depth"), fill_value=fill)
     mvel.long_name = "Velocity Mask (1: bad value, 0: good value)"
 
-    echo1 = ncfile.createVariable("echo1", np.float32, ("time", "depth"), fill_value=-32768)
+    echo1 = ncfile.createVariable(
+        "echo1", np.float32, ("time", "depth"), fill_value=-32768
+    )
     echo1.long_name = "Echo intensity Beam 1"
 
-    echo2 = ncfile.createVariable("echo2", np.float32, ("time", "depth"), fill_value=-32768)
+    echo2 = ncfile.createVariable(
+        "echo2", np.float32, ("time", "depth"), fill_value=-32768
+    )
     echo2.long_name = "Echo intensity Beam 2"
 
-    echo3 = ncfile.createVariable("echo3", np.float32, ("time", "depth"), fill_value=-32768)
+    echo3 = ncfile.createVariable(
+        "echo3", np.float32, ("time", "depth"), fill_value=-32768
+    )
     echo3.long_name = "Echo intensity Beam 3"
 
-    echo4 = ncfile.createVariable("echo4", np.float32, ("time", "depth"), fill_value=-32768)
+    echo4 = ncfile.createVariable(
+        "echo4", np.float32, ("time", "depth"), fill_value=-32768
+    )
     echo4.long_name = "Echo intensity Beam 4"
 
-    corr1 = ncfile.createVariable("corr1", np.float32, ("time", "depth"), fill_value=-32768)
+    corr1 = ncfile.createVariable(
+        "corr1", np.float32, ("time", "depth"), fill_value=-32768
+    )
     corr1.long_name = "Beam 1 correlation"
 
-    corr2 = ncfile.createVariable("corr2", np.float32, ("time", "depth"), fill_value=-32768)
+    corr2 = ncfile.createVariable(
+        "corr2", np.float32, ("time", "depth"), fill_value=-32768
+    )
     corr2.long_name = "Beam 2 correlation"
 
-    corr3 = ncfile.createVariable("corr3", np.float32, ("time", "depth"), fill_value=-32768)
+    corr3 = ncfile.createVariable(
+        "corr3", np.float32, ("time", "depth"), fill_value=-32768
+    )
     corr3.long_name = "Beam 3 correlation"
 
-    corr4 = ncfile.createVariable("corr4", np.float32, ("time", "depth"), fill_value=-32768)
-    corr4.long_name = "Beam 4 correlation"  
+    corr4 = ncfile.createVariable(
+        "corr4", np.float32, ("time", "depth"), fill_value=-32768
+    )
+    corr4.long_name = "Beam 4 correlation"
 
-    pgd1 = ncfile.createVariable("pgd1", np.float32, ("time", "depth"), fill_value=-32768)
+    pgd1 = ncfile.createVariable(
+        "pgd1", np.float32, ("time", "depth"), fill_value=-32768
+    )
     pgd1.long_name = "Percent Good Beam 1"
 
-    pgd2 = ncfile.createVariable("pgd2", np.float32, ("time", "depth"), fill_value=-32768)
+    pgd2 = ncfile.createVariable(
+        "pgd2", np.float32, ("time", "depth"), fill_value=-32768
+    )
     pgd2.long_name = "Percent Good Beam 2"
 
-    pgd3 = ncfile.createVariable("pgd3", np.float32, ("time", "depth"), fill_value=-32768)
+    pgd3 = ncfile.createVariable(
+        "pgd3", np.float32, ("time", "depth"), fill_value=-32768
+    )
     pgd3.long_name = "Percent Good Beam 3"
 
-    pgd4 = ncfile.createVariable("pgd4", np.float32, ("time", "depth"), fill_value=-32768)
-    pgd4.long_name = "Percent Good Beam 4"   
+    pgd4 = ncfile.createVariable(
+        "pgd4", np.float32, ("time", "depth"), fill_value=-32768
+    )
+    pgd4.long_name = "Percent Good Beam 4"
 
     nctime = pd2nctime(time, t0)
     # write data

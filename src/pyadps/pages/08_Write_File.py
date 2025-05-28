@@ -1,6 +1,6 @@
 import configparser
 import tempfile
-
+import os
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -506,6 +506,8 @@ if generate_config_radio == "Yes":
     config["QCTest"]["error_velocity"] = str(st.session_state.evt_QCT)
     config["QCTest"]["false_target"] = str(st.session_state.ft_QCT)
     config["QCTest"]["three_beam"] = str(st.session_state.is3beam_QCT)
+    if st.session_state.is3beam_QCT:
+        config["QCTest"]["beam_ignore"] = str(st.session_state.beam_to_ignore)
     config["QCTest"]["percent_good"] = str(st.session_state.pgt_QCT)
 
     # Tab 4

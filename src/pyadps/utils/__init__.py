@@ -9,4 +9,6 @@ from pyadps.utils.signal_quality import *
 from pyadps.utils.velocity_test import *
 from pyadps.utils.writenc import *
 from pyadps.utils.autoprocess import *
+from pyadps.utils.logging_utils import *
+from pyadps.utils.multifile import *
 from pyadps.utils.script import *

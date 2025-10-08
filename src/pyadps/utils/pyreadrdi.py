@@ -22,15 +22,15 @@ Creation Date
 
 Last Modified Date
 --------------
-2024-09-01
+2025-10-01
 
 Version
 -------
-0.2.0
+0.3.0
 
 Author
 ------
-[P. Amol] <your.email@example.com>
+[P. Amol] <prakashamol@gmail.com>
 
 License
 -------
@@ -569,9 +569,9 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
         error.message = error.get_message(error.code)
 
     # Note: When processing data from ADCPs with older firmware,
-    # the instrument serial number may be missing. As a result
-    # garbage value is recorded, which sometimes is too large for a standard 64 bit integer.
-    # The following variables are defined to replace garbage value with missing value.
+    # the instrument serial number may be missing. As a result,
+    # garbage value is recorded, which sometimes is too large for a standard 64-bit integer.
+    # The following variables are defined to replace garbage value with a missing value.
     # Flag to track if a missing serial number is detected
     is_serial_missing = False
     # Define the maximum value for a standard signed int64
@@ -585,7 +585,7 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
         for count, item in enumerate(idarray[i]):
             if item in (0, 1):
                 fbyteskip = offset[0][count]
-        if fbyteskip == None:
+        if fbyteskip is None:
             error = ErrorCode.ID_NOT_FOUND
             ensemble = i
             print(bcolors.WARNING + error.message)

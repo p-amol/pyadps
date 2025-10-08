@@ -1,13 +1,10 @@
 [tool.poetry]
 name = "pyadps"
-version = "0.1.4.dev0"
+version = "0.2.0.dev0"
 description = "A Python package for ADCP data processing"
 authors = ["P. Amol <prakashamol@gmail.com>"]
 readme = "README.md"
 license = "MIT"
-homepage = "https://pyadps.readthedocs.io/en/latest/index.html" # You can add your homepage URL or GitHub URL here
-repository = "https://github.com/p-amol/pyadps" # Replace with your repository link
-documentation = "https://pyadps.readthedocs.io/en/latest/index.html" # Optional documentation link
 keywords = ["adcp", "data-processing", "oceanography"]
 include = ["utils/metadata/*.json"]
 classifiers = [
@@ -16,24 +13,28 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 
+[tool.poetry.urls]
+homepage = "https://pyadps.readthedocs.io/en/latest/index.html"
+repository = "https://github.com/p-amol/pyadps"
+documentation = "https://pyadps.readthedocs.io/en/latest/index.html"
 
 [tool.poetry.dependencies]
 python = "<4.0.0,>=3.12"
-streamlit = ">=1.36.0"
-numpy = ">=1.26.4"
-matplotlib = ">=3.8.4"
-scipy = ">=1.14.0"
+streamlit = "~=1.36.0"
+numpy = "~=1.26.4"
+matplotlib = "~=3.8.4"
+scipy = "~=1.14.0"
 cmake = ">=3.30.2"
-pandas = ">=2.2.2"
-netCDF4 = ">=1.7.1"
-plotly = ">=5.22.0"
-plotly-resampler = ">=0.10.0"
+pandas = "~=2.2.2"
+netCDF4 = "~=1.7.1"
+plotly = "~=5.22.0"
+plotly-resampler = "~=0.10.0"
 meson = ">=1.4.1"
 pygeomag = "^1.1.0"
 
-
-[tool.poetry.extras]
-tests = ["pytest"]
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4"
+ruff = "^0.5.0"
 
 [tool.poetry.scripts]
 run-pyadps = "pyadps.__main__:main"

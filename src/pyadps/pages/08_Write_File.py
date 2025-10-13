@@ -23,7 +23,7 @@ if "vleadfilename" not in st.session_state:
 
 if "file_prefix" not in st.session_state:
     raw_basename = os.path.basename(st.session_state.fname)
-    st.session_state.filename = os.path.splitext(raw_basename)[0] 
+    st.session_state.filename = os.path.splitext(raw_basename)[0]
     st.session_state.file_prefix = st.session_state.filename
 
 
@@ -32,7 +32,6 @@ if "prefix_saved" not in st.session_state:
 
 if "filename" not in st.session_state:
     st.session_state.filename = ""  # <-- Default file name if not passed
-
 
 
 # Check if attributes exist in session state
@@ -85,12 +84,14 @@ else:
 if "depth_axis" not in st.session_state:
     st.session_state.isRegridCheck_PT = False
 
+
 @st.cache_data
 def get_prefixed_filename(base_name):
     """Generates the file name with the optional prefix."""
     if st.session_state.file_prefix:
         return f"{st.session_state.file_prefix}_{base_name}"
     return base_name
+
 
 @st.cache_data
 def file_write(filename=get_prefixed_filename("PRO_DAT.nc")):
@@ -217,9 +218,11 @@ st.session_state.mask_data_WF = st.radio(
 
 if st.session_state.mask_data_WF == "Yes":
     mask = st.session_state.final_mask
-    st.session_state.write_velocity = np.copy(st.session_state.final_velocity).astype(np.int16)
+    st.session_state.write_velocity = np.copy(st.session_state.final_velocity).astype(
+        np.int16
+    )
     st.session_state.write_velocity[:, mask == 1] = -32768
-    
+
 else:
     st.session_state.write_velocity = np.copy(st.session_state.final_velocity)
 
@@ -385,6 +388,7 @@ if generate_config_radio == "Yes":
     # Main section
     config["FileSettings"] = {}
     config["DownloadOptions"] = {}
+    config["FixTime"] = {"is_time_modified": "False"}
     config["SensorTest"] = {"sensor_test": "False"}
     config["QCTest"] = {"qc_test": "False"}
     config["ProfileTest"] = {"profile_test": "False"}
@@ -439,6 +443,17 @@ if generate_config_radio == "Yes":
     config["DownloadOptions"]["axis_option"] = str(st.session_state.axis_option_DRW)
     config["DownloadOptions"]["apply_mask"] = "True"
     config["DownloadOptions"]["download_mask"] = "True"
+
+    # -----------------
+    # PAGE: Read File (Fix Time)
+    # -----------------
+
+    config["FixTime"]["is_time_modified"] = str(st.session_state.isTimeAxisModified)
+    config["FixTime"]["is_snap_time_axis"] = str(st.session_state.isSnapTimeAxis)
+    config["FixTime"]["time_snap_frequency"] = str(st.session_state.time_snap_frequency)
+    config["FixTime"]["time_snap_tolerance"] = str(st.session_state.time_snap_tolerance)
+    config["FixTime"]["time_target_minute"] = str(st.session_state.time_target_minute)
+    config["FixTime"]["is_time_gap_filled"] = str(st.session_state.isTimeGapFilled)
 
     # ------------------
     # PAGE: Sensor Test

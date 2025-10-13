@@ -75,14 +75,12 @@ def autoprocess(config_file, binary_file_path=None):
     echo = ds.echo.data
     correlation = ds.correlation.data
     pgood = ds.percentgood.data
-    roll = ds.variableleader.roll.data
-    pitch = ds.variableleader.pitch.data
-    sound = ds.variableleader.speed_of_sound.data
-    depth = ds.variableleader.depth_of_transducer.data
-    temperature = (
-        ds.variableleader.temperature.data * ds.variableleader.temperature.scale
-    )
-    salinity = ds.variableleader.salinity.data * ds.variableleader.salinity.scale
+    roll = ds.roll.data
+    pitch = ds.pitch.data
+    sound = ds.speed_of_sound.data
+    depth = ds.depth_of_transducer.data
+    temperature = ds.temperature.data * ds.temperature.scale
+    salinity = ds.salinity.data * ds.salinity.scale
     orientation = ds.fixedleader.system_configuration()["Beam Direction"]
     ensembles = header.ensembles
     cells = flobj.field()["Cells"]
@@ -90,18 +88,37 @@ def autoprocess(config_file, binary_file_path=None):
     cell_size = flobj.field()["Depth Cell Len"]
     bin1dist = flobj.field()["Bin 1 Dist"]
     beam_angle = int(flobj.system_configuration()["Beam Angle"])
-    fdata = flobj.fleader
-    vdata = vlobj.vleader
-    #  depth = ds.variableleader.depth_of_transducer
 
     # Initialize mask
     mask = default_mask(ds)
 
     # Debugging statement
     x = np.arange(0, ensembles, 1)
-    y = np.arange(0, cells, 1)
 
     axis_option = config.get("DownloadOptions", "axis_option")
+
+    # Time Correction
+    isTimeAxisModified = config.getboolean("FixTime", "is_time_axis_modified")
+
+    if isTimeAxisModified:
+        isSnapTimeAxis = config.getboolean("FixTime", "is_snap_time_axis")
+        if isSnapTimeAxis:
+            time_snap_frequency = config.get("FixTime", "time_snap_frequency")
+            time_snap_tolerance = config.get("FixTime", "time_snap_tolerance")
+            time_target_minute = config.get("FixTime", "time_target_minute")
+            success, message = ds.snap_time_axis(
+                freq=time_snap_frequency,
+                tolerance=time_snap_tolerance,
+                target_minute=time_target_minute,
+            )
+            if success:
+                print(message)
+
+        isTimeGapFilled = config.getboolean("FixTime", "is_time_gap_filled")
+        if isTimeGapFilled:
+            success, message = ds.fill_time_axis()
+            if success:
+                print(message)
 
     # Sensor Test
     isSensorTest = config.getboolean("SensorTest", "sensor_test")
@@ -195,17 +212,20 @@ def autoprocess(config_file, binary_file_path=None):
             is3beam = config.getboolean("QCTest", "three_beam")
             if is3beam != None:
                 is3beam = int(is3beam)
-            beam_ignore = config.get("QCTest","beam_ignore")
+            beam_ignore = config.get("QCTest", "beam_ignore")
             pgt = config.getint("QCTest", "percent_good")
             orientation = config.get("QCTest", "orientation")
-            beam_ignore = config.getboolean("QCTest",)
+            beam_ignore = config.getboolean(
+                "QCTest",
+            )
 
             mask = pg_check(ds, mask, pgt, threebeam=is3beam)
-            mask = correlation_check(ds, mask, ct,is3beam,beam_ignore=beam_ignore)
-            mask = echo_check(ds, mask, et,is3beam,beam_ignore=beam_ignore)
+            mask = correlation_check(ds, mask, ct, is3beam, beam_ignore=beam_ignore)
+            mask = echo_check(ds, mask, et, is3beam, beam_ignore=beam_ignore)
             mask = ev_check(ds, mask, evt)
-            mask = false_target(ds, mask, ft, threebeam=is3beam, beam_ignore=beam_ignore)
-        
+            mask = false_target(
+                ds, mask, ft, threebeam=is3beam, beam_ignore=beam_ignore
+            )
 
             print("QC Check Complete.")
 

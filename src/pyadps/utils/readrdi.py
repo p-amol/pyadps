@@ -485,14 +485,15 @@ class FixedLeader:
             output[key] = check_equal(value)
         return output
 
-    def system_configuration(self, ens=0):
+    def system_configuration(self, ens=-1):
         """
         Extracts and interprets the system configuration from the Fixed Leader data.
 
         Parameters
         ----------
         ens : int, optional
-            Ensemble number to extract system configuration for, by default 0.
+            Ensemble number to extract system configuration for.
+            Use -1 to extract the most common configuration (default).
 
         Returns
         -------
@@ -516,7 +517,19 @@ class FixedLeader:
                                           "5 Beam CFIG 2 DEMOD"]
         """
 
-        binary_bits = format(int(self.fleader["System Config Code"][ens]), "016b")
+        if ens == -1:
+            syscode = self.fleader["System Config Code"]
+            most_common_syscode = Counter(syscode).most_common()[0][0]
+            binary_bits = format(int(most_common_syscode), "016b")
+        elif ens > -1:
+            binary_bits = format(int(self.fleader["System Config Code"][ens]), "016b")
+        else:
+            raise ValueError(
+                bcolors.FAIL
+                + "Ensemble number should be greater than or equal to -1"
+                + bcolors.ENDC
+            )
+
         # convert integer to binary format
         # In '016b': 0 adds extra zeros to the binary string
         #          : 16 is the total number of binary bits

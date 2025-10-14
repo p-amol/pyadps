@@ -15,8 +15,8 @@ classifiers = [
 
 [tool.poetry.urls]
 homepage = "https://pyadps.readthedocs.io/en/latest/index.html"
-repository = "https://github.com/p-amol/pyadps"
-documentation = "https://pyadps.readthedocs.io/en/latest/index.html"
+Documentation = "https://pyadps.readthedocs.io/en/latest/index.html"
+Repository = "https://github.com/p-amol/pyadps"
 
 [tool.poetry.dependencies]
 python = "<4.0.0,>=3.12"

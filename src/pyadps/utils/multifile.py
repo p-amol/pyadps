@@ -1,11 +1,13 @@
 """
 ADCP (Acoustic Doppler Current Profiler) File Processor
-A clean, maintainable implementation for processing and combining ADCP binary files.
+A Python implementation for processing and combining ADCP binary files.
 """
 
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Union
+import argparse  # Import argparse module
+
 
 # Import from our separate logging module
 from .logging_utils import LogLevel, get_console_logger
@@ -45,9 +47,14 @@ class CorruptedFileError(ADCPError):
 class ADCPFileValidator:
     """Validates ADCP files and headers"""
 
-    def __init__(self, config: ADCPConfig, logger_name: str = "adcp_validator"):
+    def __init__(
+        self,
+        config: ADCPConfig,
+        logger_name: str = "adcp_validator",
+        logger_level: LogLevel = LogLevel.INFO,
+    ):
         self.config = config
-        self.logger = get_console_logger(logger_name, LogLevel.INFO)
+        self.logger = get_console_logger(logger_name, logger_level)
 
     def find_header_start(self, data: bytes) -> int:
         """Find the first occurrence of the extended header signature"""
@@ -70,10 +77,15 @@ class ADCPFileValidator:
 class ADCPFileProcessor:
     """Processes individual ADCP files"""
 
-    def __init__(self, config: ADCPConfig = None, logger_name: str = "adcp_processor"):
+    def __init__(
+        self,
+        config: ADCPConfig = None,
+        logger_name: str = "adcp_processor",
+        logger_level: LogLevel = LogLevel.INFO,
+    ):
         self.config = config or ADCPConfig()
         self.validator = ADCPFileValidator(self.config, f"{logger_name}_validator")
-        self.logger = get_console_logger(logger_name, LogLevel.INFO)
+        self.logger = get_console_logger(logger_name, logger_level)
 
     def _calculate_ensemble_size(self, data: bytes) -> int:
         """Calculate size of single ensemble from header"""
@@ -143,10 +155,18 @@ class ADCPFileProcessor:
 class ADCPBinFileCombiner:
     """Combines or joins multiple ADCP files"""
 
-    def __init__(self, config: ADCPConfig = None, logger_name: str = "adcp_combiner"):
+    # Assuming logging_utils.py has a get_console_logger function
+    # that accepts a log level as an argument.
+
+    def __init__(
+        self,
+        config: ADCPConfig = None,
+        logger_name: str = "adcp_combiner",
+        logger_level: LogLevel = LogLevel.INFO,
+    ):
         self.config = config or ADCPConfig()
         self.processor = ADCPFileProcessor(self.config, f"{logger_name}_processor")
-        self.logger = get_console_logger(logger_name, LogLevel.INFO)
+        self.logger = get_console_logger(logger_name, logger_level)
 
     def get_adcp_files(self, folder_path: Union[str, Path]) -> List[Path]:
         """Get all ADCP files from folder"""
@@ -214,30 +234,58 @@ class ADCPBinFileCombiner:
 
 
 def main():
-    """Main entry point for CLI usage"""
+    """Main entry point for CLI usage using argparse"""
+    parser = argparse.ArgumentParser(
+        description="Combine multiple ADCP binary files into a single file."
+    )
+
+    # Positional argument for the input folder
+    parser.add_argument(
+        "folder", type=str, help="Path to the folder containing ADCP files (*.000)."
+    )
+    # Optional argument for the output filename
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default="merged_000.000",
+        help="Output filename for the combined ADCP data (default: merged_000.000).",
+    )
+    # Optional argument for verbosity (logging level)
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",  # 'count' action increments the value for each -v
+        default=0,
+        help="Increase verbosity level. Use -v for INFO, -vv for DEBUG. (Default: WARNING)",
+    )
+
+    args = parser.parse_args()
+
+    # Determine logging level based on verbosity count
+    if args.verbose == 0:
+        log_level = LogLevel.WARNING  # Default if no -v is given
+    elif args.verbose == 1:
+        log_level = LogLevel.INFO
+    elif args.verbose >= 2:
+        log_level = LogLevel.DEBUG
+    else:
+        log_level = (
+            LogLevel.INFO
+        )  # Fallback, though 'action="count"' makes this less likely
+
     try:
-        folder = input("Enter folder containing ADCP files (*.000): ").strip()
-        if not folder:
-            print("No folder specified. Exiting.")
-            return
-
-        output = input("Enter output filename (default: merged_000.000): ").strip()
-        if not output:
-            output = "merged_000.000"
-
-        # Create combiner with custom logger configuration
-        combiner = ADCPBinFileCombiner(logger_name="adcp_main")
-        success = combiner.combine_folder(folder, output)
+        # Initialize the combiner, passing the determined logging level
+        combiner = ADCPBinFileCombiner(logger_name="adcp_main", logger_level=log_level)
+        success = combiner.combine_folder(args.folder, args.output)
 
         if success:
-            print(f"✅ Files successfully combined to {output}")
+            print(f"\n✅ Files successfully combined to {args.output}")
         else:
-            print("❌ Failed to combine files. Check logs for details.")
+            print("\n❌ Failed to combine files. Check logs for details.")
 
-    except KeyboardInterrupt:
-        print("\n⚠️  Operation cancelled by user.")
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"\n❌ An unhandled error occurred during script execution: {e}")
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "CPU Firmware Version Number",
+    "long_name": "CPU Version",
     "description": "Contains the version number of the CPU firmware."
   },
   "cpu_revision": {
@@ -20,7 +20,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "CPU Firmware Revision Number",
+    "long_name": "CPU Revision",
     "description": "Contains the revision number of the CPU firmware."
   },
   "system_config_code": {
@@ -32,7 +32,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "System Configuration Code",
+    "long_name": "System Config Code",
     "description": "This field defines the WorkHorse ADCP hardware configuration. Check RDI manual for details."
   },
   "real_flag": {
@@ -44,7 +44,7 @@
     "command": "PD",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Real/Sim Flag",
+    "long_name": "Real Flag",
     "description": "This field is set by default as real data (0)."
   },
   "lag_length": {
@@ -68,7 +68,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Number of Beams",
+    "long_name": "Beams",
     "description": "Contains the number of beams used to calculate velocity data (not physical beams). The WorkHorse ADCP needs only three beams to calculate water-current velocities. The fourth beam provides an error velocity that determines data validity. If only three beams are available, the WorkHorse ADCP does not make this validity check."
   },
   "cells": {
@@ -80,7 +80,7 @@
     "command": "WN",
     "valid_min": "1",
     "valid_max": "255",
-    "long_name": "Number of Cells",
+    "long_name": "Cells",
     "description": "Contains the number of depth cells over which the WorkHorse ADCP collects data"
   },
   "pings": {
@@ -92,7 +92,7 @@
     "command": "WP",
     "valid_min": "0",
     "valid_max": "16384",
-    "long_name": "Pings Per Ensemble",
+    "long_name": "Pings",
     "description": "Contains the number of pings averaged together during a data ensemble (WP command). If WP = 0, the WorkHorse ADCP does not collect the WD water-profile data "
   },
   "depth_cell_len": {
@@ -104,7 +104,7 @@
     "command": "WS",
     "valid_min": "1",
     "valid_max": "6400",
-    "long_name": "Depth Cell Length",
+    "long_name": "Depth Cell Len",
     "description": "Contains the length of one depth cell"
   },
   "blank_transmit": {
@@ -116,7 +116,7 @@
     "command": "WF",
     "valid_min": "0",
     "valid_max": "9999",
-    "long_name": "Blank After Transmit",
+    "long_name": "Blank Transmit",
     "description": "Contains the blanking distance used by the WorkHorse ADCP to allow the transmit circuits time to recover before the receive cycle begins (WF command)."
   },
   "signal_mode": {
@@ -128,7 +128,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Signal Processing Mode",
+    "long_name": "Signal Mode",
     "description": "Contains the Signal Processing Mode. This field will always be set to 1."
   },
   "correlation_thresh": {
@@ -140,7 +140,7 @@
     "command": "WC",
     "valid_min": "0",
     "valid_max": "255",
-    "long_name": "Low Correlation Threshold",
+    "long_name": "Correlation Thresh",
     "description": "Contains the minimum threshold of correlation that water-profile data can have to be considered good data (WC command)"
   },
   "code_reps": {
@@ -152,7 +152,7 @@
     "command": "",
     "valid_min": "0",
     "valid_max": "255",
-    "long_name": "Number of Code Repetitions",
+    "long_name": "Code Reps",
     "description": "Contains the number of code repetitions in the transmit pulse."
   },
   "percent_good_min": {
@@ -164,7 +164,7 @@
     "command": "WG",
     "valid_min": "1",
     "valid_max": "100",
-    "long_name": "Percentage Good Minimum",
+    "long_name": "Percent Good Min",
     "description": "Contains the minimum percentage of water-profiling pings in an ensemble that must be considered good to output velocity data."
   },
   "error_velocity_thresh": {
@@ -176,7 +176,7 @@
     "command": "WE",
     "valid_min": "0",
     "valid_max": "5000",
-    "long_name": "Error Velocity Threshold",
+    "long_name": "Error Velocity Thresh",
     "description": "This field, initially set by the WE command, contains the actual threshold value used to flag water-current data as good or bad. If the error velocity value exceeds this threshold, the WorkHorse ADCP flags all four beams of the affected bin as bad."
   },
   "tp_minute": {
@@ -188,7 +188,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Minutes Between Ping Groups",
+    "long_name": "TP Minute",
     "description": "These fields, set by the TP command, contain the amount of time between ping groups in the ensemble. NOTE: The WorkHorse ADCP automatically extends the ensemble interval (set by TE) if (WP x TP > TE)."
   },
   "tp_second": {
@@ -200,7 +200,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Seconds Between Ping Groups",
+    "long_name": "TP Second",
     "description": "These fields, set by the TP command, contain the amount of time between ping groups in the ensemble. NOTE: The WorkHorse ADCP automatically extends the ensemble interval (set by TE) if (WP x TP > TE)."
   },
   "tp_hundredth": {
@@ -212,7 +212,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Hundredth Between Ping Groups",
+    "long_name": "TP Hundredth",
     "description": "Contains the minute portion of the WorkHorse ADCP’s elapsed time measurement of the amount of time needed to complete the pinging of the current ensemble."
   },
   "coord_transform_code": {
@@ -224,7 +224,7 @@
     "command": "EX",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Coordinate Trasnformation Code",
+    "long_name": "Coord Transform Code",
     "description": "Contains the coordinate transformation processing parameters (EX command). These firmware switches indicate how the WorkHorse ADCP collected data."
   },
   "head_alignment": {
@@ -272,7 +272,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Sensor Available Code",
+    "long_name": "Sensor Avail Code",
     "description": "This field reflects which sensors are available"
   },
   "bin_1_dist": {
@@ -284,7 +284,7 @@
     "command": "",
     "valid_min": "0",
     "valid_max": "65535",
-    "long_name": "Bin 1 Distance",
+    "long_name": "Bin 1 Dist",
     "description": "This field contains the distance to the middle of the first depth cell (bin). This distance is a function of depth cell length (WS), the profiling mode (WM), the blank after transmit distance (WF), and speed of sound."
   },
   "xmit_pulse_len": {
@@ -296,7 +296,7 @@
     "command": "WT",
     "valid_min": "0",
     "valid_max": "65535",
-    "long_name": "Transmit Pulse Length",
+    "long_name": "Xmit Pulse Len",
     "description": "This field, set by the WT command, contains the length of the transmit pulse. When the WorkHorse ADCP receives a <BREAK> signal, it sets the transmit pulse length as close as possible to the depth cell length (WS command). This means the WorkHorse ADCP uses a WT command of zero. However, the WT field contains the actual length of the transmit pulse used."
   },
   "ref_layer_avg": {
@@ -308,7 +308,7 @@
     "command": "WL",
     "valid_min": "1",
     "valid_max": "128",
-    "long_name": "Reference Layer Average",
+    "long_name": "Ref Layer Avg",
     "description": "Contains the starting depth cell (LSB, byte 37) and the ending depth cell (MSB, byte 38) used for water reference layer averaging (WL command)."
   },
   "false_target_thresh": {
@@ -320,7 +320,7 @@
     "command": "",
     "valid_min": "0",
     "valid_max": "255",
-    "long_name": "False Target Threshold",
+    "long_name": "False Target Thresh",
     "description": "Contains the threshold value used to reject data received from a false target, usually fish."
   },
   "spare_1": {
@@ -332,7 +332,7 @@
     "command": "CX",
     "valid_min": "0",
     "valid_max": "5",
-    "long_name": "Spare",
+    "long_name": "Spare 1",
     "description": "Contains the CX command setting. Range = 0 to 5"
   },
   "transmit_lag_dist": {
@@ -344,7 +344,7 @@
     "command": "WM",
     "valid_min": "0",
     "valid_max": "65535",
-    "long_name": "ADC Channel 4",
+    "long_name": "Transmit Lag Dist",
     "description": "These fields contain the outputs of the Analog-to-Digital Converter (ADC) located on the DSP board. The ADC sequentially samples one of the eight channels per ping group (the number of ping groups per ensemble is the maximum of the WP). These fields are zeroed at the beginning of the deployment and updated each ensemble at the rate of one channel per ping group."
   },
   "cpu_serial_no": {
@@ -356,7 +356,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "CPU Board Serial Number",
+    "long_name": "CPU Serial No",
     "description": "Contains the serial number of the CPU board. The CPU Board Serial number is stored in Big Endian (MSB sent first)."
   },
   "system_bandwidth": {
@@ -392,7 +392,7 @@
     "command": "",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Spare",
+    "long_name": "Spare 2",
     "description": "Spare"
   },
   "instrument_no": {
@@ -404,7 +404,7 @@
     "command": "CY",
     "valid_min": "",
     "valid_max": "",
-    "long_name": "Instrument Serial Number",
+    "long_name": "Instrument No",
     "description": "Contains the instrument serial number."
   },
   "beam_angle": {

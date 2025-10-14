@@ -61,11 +61,12 @@ def fillplot_plotly(data, colorscale="balance", title="Data", xaxis="time"):
 
 @st.cache_data
 def lineplot(data, title, xaxis="time"):
+    data1 = np.where(data == -32768, np.nan, data)
     if xaxis == "time":
-        df = pd.DataFrame({"date": st.session_state.date, title: data})
+        df = pd.DataFrame({"date": st.session_state.date, title: data1})
         fig = px.line(df, x="date", y=title)
     else:
-        df = pd.DataFrame({"ensemble": x, title: data})
+        df = pd.DataFrame({"ensemble": x, title: data1})
         fig = px.line(df, x="ensemble", y=title)
 
     st.plotly_chart(fig)
@@ -84,23 +85,28 @@ The ordinate (y-axis) for the heatmap is `bins` as the depth correction is not a
 xbutton = st.radio("Select an x-axis to plot", ["time", "ensemble"], horizontal=True)
 
 
-tab1, tab2, tab3, tab4 = st.tabs(["Primary Data", "Variable Leader", "Fixed Leader", "Advanced"])
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["Primary Data", "Variable Leader", "Fixed Leader", "Advanced"]
+)
 
 with tab3:
-# Fixed Leader Plots
+    # Fixed Leader Plots
     st.header("Fixed Leader", divider="blue")
-    fbutton = st.radio("Select a dynamic variable to plot:", fdata.keys(), horizontal=True)
+    fbutton = st.radio(
+        "Select a dynamic variable to plot:", fdata.keys(), horizontal=True
+    )
     lineplot(fdata[fbutton], fbutton, xaxis=str(xbutton))
 
 with tab2:
-# Variable Leader Plots
+    # Variable Leader Plots
     st.header("Variable Leader", divider="blue")
-    vbutton = st.radio("Select a dynamic variable to plot:", vdata.keys(), horizontal=True)
+    vbutton = st.radio(
+        "Select a dynamic variable to plot:", vdata.keys(), horizontal=True
+    )
     lineplot(vdata[vbutton], vbutton, xaxis=str(xbutton))
 
 with tab1:
     st.header("Velocity, Echo Intensity, Correlation & Percent Good", divider="blue")
-
 
     def call_plot(varname, beam, xaxis="time"):
         if varname == "Velocity":
@@ -112,7 +118,6 @@ with tab1:
         elif varname == "Percent Good":
             fillplot_plotly(pgood[beam - 1, :, :], title=varname, xaxis=xaxis)
 
-
     var_option = st.selectbox(
         "Select a data type", ("Velocity", "Echo", "Correlation", "Percent Good")
     )
@@ -123,42 +128,57 @@ with tab1:
 with tab4:
     st.header("Advanced Data", divider="blue")
     adv_option = st.selectbox(
-        "Select a data type", ("Bit Result", 
-                            "ADC Channel", 
-                            "Error Status Word 1", 
-                            "Error Status Word 2",
-                            "Error Status Word 3",
-                            "Error Status Word 4"))
-    if adv_option == "Bit Result": 
-        bitdata = st.session_state.vlead.bitresult()
+        "Select a data type",
+        (
+            "Bit Result",
+            "ADC Channel",
+            "Error Status Word 1",
+            "Error Status Word 2",
+            "Error Status Word 3",
+            "Error Status Word 4",
+        ),
+    )
+    if adv_option == "Bit Result":
+        bitdata = st.session_state.ds.variableleader.bitresult()
         st.subheader("BIT Result", divider="orange")
         st.write("""
         This field contains the results of Workhorse ADCPs builtin test functions.
         A zero indicates a successful BIT result.
         """)
-        bitbutton = st.radio("Select a dynamic variable to plot:", bitdata.keys(), horizontal=True)
+        bitbutton = st.radio(
+            "Select a dynamic variable to plot:", bitdata.keys(), horizontal=True
+        )
         lineplot(bitdata[bitbutton], bitbutton, xaxis=str(xbutton))
 
     elif adv_option == "ADC Channel":
         adcdata = st.session_state.vlead.adc_channel()
         st.subheader("ADC Channel", divider="orange")
-        adcbutton = st.radio("Select a dynamic variable to plot:", adcdata.keys(), horizontal=True)
+        adcbutton = st.radio(
+            "Select a dynamic variable to plot:", adcdata.keys(), horizontal=True
+        )
         lineplot(adcdata[adcbutton], adcbutton, xaxis=str(xbutton))
     elif adv_option == "Error Status Word 1":
         errordata1 = st.session_state.vlead.error_status_word(esw=1)
         st.subheader("Error Status Word", divider="orange")
-        errorbutton = st.radio("Select a dynamic variable to plot:", errordata1.keys(), horizontal=True)
+        errorbutton = st.radio(
+            "Select a dynamic variable to plot:", errordata1.keys(), horizontal=True
+        )
         lineplot(errordata1[errorbutton], errorbutton, xaxis=str(xbutton))
     elif adv_option == "Error Status Word 2":
         errordata2 = st.session_state.vlead.error_status_word(esw=2)
-        errorbutton = st.radio("Select a dynamic variable to plot:", errordata2.keys(), horizontal=True)
+        errorbutton = st.radio(
+            "Select a dynamic variable to plot:", errordata2.keys(), horizontal=True
+        )
         lineplot(errordata2[errorbutton], errorbutton, xaxis=str(xbutton))
     elif adv_option == "Error Status Word 3":
         errordata3 = st.session_state.vlead.error_status_word(esw=3)
-        errorbutton = st.radio("Select a dynamic variable to plot:", errordata3.keys(), horizontal=True)
+        errorbutton = st.radio(
+            "Select a dynamic variable to plot:", errordata3.keys(), horizontal=True
+        )
         lineplot(errordata3[errorbutton], errorbutton, xaxis=str(xbutton))
     elif adv_option == "Error Status Word 4":
         errordata4 = st.session_state.vlead.error_status_word(esw=4)
-        errorbutton = st.radio("Select a dynamic variable to plot:", errordata4.keys(), horizontal=True)
+        errorbutton = st.radio(
+            "Select a dynamic variable to plot:", errordata4.keys(), horizontal=True
+        )
         lineplot(errordata4[errorbutton], errorbutton, xaxis=str(xbutton))
-

@@ -22,15 +22,15 @@ Creation Date
 
 Last Modified Date
 --------------
-2024-09-01
+2025-10-01
 
 Version
 -------
-0.2.0
+0.3.0
 
 Author
 ------
-[P. Amol] <your.email@example.com>
+[P. Amol] <prakashamol@gmail.com>
 
 License
 -------
@@ -568,13 +568,24 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
         error.code = error_code
         error.message = error.get_message(error.code)
 
+    # Note: When processing data from ADCPs with older firmware,
+    # the instrument serial number may be missing. As a result,
+    # garbage value is recorded, which sometimes is too large for a standard 64-bit integer.
+    # The following variables are defined to replace garbage value with a missing value.
+    # Flag to track if a missing serial number is detected
+    is_serial_missing = False
+    # Define the maximum value for a standard signed int64
+    INT64_MAX = 2**63 - 1
+    # Define a missing value flag (0 is a safe unsigned integer choice)
+    MISSING_VALUE_FLAG = 0
+
     bfile.seek(0, 0)
     for i in range(ensemble):
         fbyteskip = None
         for count, item in enumerate(idarray[i]):
             if item in (0, 1):
                 fbyteskip = offset[0][count]
-        if fbyteskip == None:
+        if fbyteskip is None:
             error = ErrorCode.ID_NOT_FOUND
             ensemble = i
             print(bcolors.WARNING + error.message)
@@ -616,6 +627,14 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
                 (fid[27][i], fid[28][i], fid[29][i]) = unpack("<BBH", bdata[38:42])
                 # CPU board serial number (Big Endian)
                 (fid[30][i]) = unpack(">Q", bdata[42:50])[0]
+                # Check for overflow only once to set the flag
+                if not is_serial_missing and fid[30][i] > INT64_MAX:
+                    print(
+                        bcolors.WARNING
+                        + "WARNING: Missing serial number detected (old firmware). Flagging for replacement."
+                        + bcolors.ENDC
+                    )
+                    is_serial_missing = True
                 # (fid[30][i], fid[31][i])= struct.unpack('>II', packed_data)
                 # fid[30][i] = int.from_bytes(bdata[42:50], byteorder="big", signed=False)
                 # System bandwidth, system power & Spare
@@ -646,6 +665,20 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
                 ensemble = i
     bfile.close()
     error_code = error.code
+
+    if is_serial_missing:
+        print(
+            bcolors.OKBLUE
+            + "INFO: Replacing entire serial number array with missing value flag."
+            + bcolors.ENDC
+        )
+        # If Serial No. is missing, flag all data after Serial No.
+        fid[30] = [MISSING_VALUE_FLAG] * ensemble  # Serial No.
+        fid[31] = [MISSING_VALUE_FLAG] * ensemble  # System Bandwidth
+        fid[32] = [MISSING_VALUE_FLAG] * ensemble  # System Power
+        fid[33] = [MISSING_VALUE_FLAG] * ensemble  # Spare 2
+        fid[34] = [MISSING_VALUE_FLAG] * ensemble  # Instrument No
+        fid[35] = [MISSING_VALUE_FLAG] * ensemble  # Beam Angle
     fid = np.array(fid)
     data = fid[:, :ensemble]
     return (data, ensemble, error_code)

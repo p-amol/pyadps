@@ -42,11 +42,11 @@ Creation Date
 
 Last Modified Date
 --------------
-2024-09-05
+2025-08-14
 
 Version
 -------
-0.3.0
+0.4.0
 
 Author
 ------
@@ -102,6 +102,7 @@ import sys
 
 import numpy as np
 import pandas as pd
+from collections import Counter
 from pyadps.utils import pyreadrdi
 from pyadps.utils.pyreadrdi import bcolors
 
@@ -386,85 +387,6 @@ class FileHeader:
 
 
 # FIXED LEADER CODES #
-
-
-def flead_dict(fid, dim=2):
-    """
-    Extracts Fixed Leader data from a file and assigns it a identifiable name.
-
-    Parameters
-    ----------
-    fid : file object or array-like
-        The data source to extract Fixed Leader information from.
-    dim : int, optional
-        The dimension of the data, by default 2.
-
-    Returns
-    -------
-    dict
-        A dictionary containing Fixed Leader field and data.
-    """
-
-    fname = {
-        "CPU Version": "int64",
-        "CPU Revision": "int64",
-        "System Config Code": "int64",
-        "Real Flag": "int64",
-        "Lag Length": "int64",
-        "Beams": "int64",
-        "Cells": "int64",
-        "Pings": "int64",
-        "Depth Cell Len": "int64",
-        "Blank Transmit": "int64",
-        "Signal Mode": "int64",
-        "Correlation Thresh": "int64",
-        "Code Reps": "int64",
-        "Percent Good Min": "int64",
-        "Error Velocity Thresh": "int64",
-        "TP Minute": "int64",
-        "TP Second": "int64",
-        "TP Hundredth": "int64",
-        "Coord Transform Code": "int64",
-        "Head Alignment": "int64",
-        "Head Bias": "int64",
-        "Sensor Source Code": "int64",
-        "Sensor Avail Code": "int64",
-        "Bin 1 Dist": "int64",
-        "Xmit Pulse Len": "int64",
-        "Ref Layer Avg": "int64",
-        "False Target Thresh": "int64",
-        "Spare 1": "int64",
-        "Transmit Lag Dist": "int64",
-        "CPU Serial No": "int128",
-        "System Bandwidth": "int64",
-        "System Power": "int64",
-        "Spare 2": "int64",
-        "Instrument No": "int64",
-        "Beam Angle": "int64",
-    }
-
-    flead = dict()
-    counter = 1
-    for key, value in fname.items():
-        if dim == 2:
-            if key == "CPU Serial No":
-                flead[key] = np.uint64(fid[:][counter])
-            else:
-                flead[key] = np.int64(fid[:][counter])
-        elif dim == 1:
-            if key == "CPU Serial No":
-                flead[key] = np.uint64(fid[counter])
-            else:
-                flead[key] = np.int64(fid[counter])
-        else:
-            print("ERROR: Higher dimensions not allowed")
-            sys.exit()
-
-        counter += 1
-
-    return flead
-
-
 class FixedLeader:
     """
     The class extracts Fixed Leader data from RDI File.
@@ -511,8 +433,8 @@ class FixedLeader:
         )
         self.warning = pyreadrdi.ErrorCode.get_message(self.error)
 
-        self.data = np.uint64(self.data)
-        self.fleader = flead_dict(self.data)
+        # self.data = self.data.astype(np.uint64)
+        self.fleader = dict()
         self._initialize_from_dict(DotDict(json_file_path="flmeta.json"))
 
     def _initialize_from_dict(self, dotdict):
@@ -527,7 +449,9 @@ class FixedLeader:
         i = 1
         for key, value in dotdict.__dict__.items():
             setattr(self, key, value)
-            setattr(getattr(self, key), "data", self.data[i])
+            data_slice = self.data[i]
+            setattr(getattr(self, key), "data", data_slice)
+            self.fleader[value.long_name] = data_slice
             i = i + 1
 
     def field(self, ens=0):
@@ -545,8 +469,7 @@ class FixedLeader:
             A dictionary of Fixed Leader data for the specified ensemble.
         """
 
-        f1 = np.array(self.data)
-        return flead_dict(f1[:, ens], dim=1)
+        return {key: value[ens] for key, value in self.fleader.items()}
 
     def is_uniform(self):
         """
@@ -562,14 +485,15 @@ class FixedLeader:
             output[key] = check_equal(value)
         return output
 
-    def system_configuration(self, ens=0):
+    def system_configuration(self, ens=-1):
         """
         Extracts and interprets the system configuration from the Fixed Leader data.
 
         Parameters
         ----------
         ens : int, optional
-            Ensemble number to extract system configuration for, by default 0.
+            Ensemble number to extract system configuration for.
+            Use -1 to extract the most common configuration (default).
 
         Returns
         -------
@@ -593,7 +517,19 @@ class FixedLeader:
                                           "5 Beam CFIG 2 DEMOD"]
         """
 
-        binary_bits = format(self.fleader["System Config Code"][ens], "016b")
+        if ens == -1:
+            syscode = self.fleader["System Config Code"]
+            most_common_syscode = Counter(syscode).most_common()[0][0]
+            binary_bits = format(int(most_common_syscode), "016b")
+        elif ens > -1:
+            binary_bits = format(int(self.fleader["System Config Code"][ens]), "016b")
+        else:
+            raise ValueError(
+                bcolors.FAIL
+                + "Ensemble number should be greater than or equal to -1"
+                + bcolors.ENDC
+            )
+
         # convert integer to binary format
         # In '016b': 0 adds extra zeros to the binary string
         #          : 16 is the total number of binary bits
@@ -679,7 +615,7 @@ class FixedLeader:
             A dictionary of coordinate transformation details.
         """
 
-        bit_group = format(self.fleader["Coord Transform Code"][ens], "08b")
+        bit_group = format(int(self.fleader["Coord Transform Code"][ens]), "08b")
         transform = dict()
 
         trans_code = {
@@ -716,9 +652,9 @@ class FixedLeader:
 
         """
         if field == "source":
-            bit_group = format(self.fleader["Sensor Source Code"][ens], "08b")
+            bit_group = format(int(self.fleader["Sensor Source Code"][ens]), "08b")
         elif field == "avail":
-            bit_group = format(self.fleader["Sensor Avail Code"][ens], "08b")
+            bit_group = format(int(self.fleader["Sensor Avail Code"][ens]), "08b")
         else:
             sys.exit("ERROR (function ez_sensor): Enter valid argument.")
 
@@ -738,82 +674,6 @@ class FixedLeader:
 
 
 # VARIABLE LEADER CODES #
-def vlead_dict(vid):
-    """
-    Extracts Variable Leader data from a file and assigns it a identifiable name.
-
-    Parameters
-    ----------
-    fid : file object or array-like
-        The data source to extract Fixed Leader information from.
-
-    Returns
-    -------
-    dict
-        A dictionary containing Variable Leader field and data.
-    """
-
-    vname = {
-        "RDI Ensemble": "int16",
-        "RTC Year": "int16",
-        "RTC Month": "int16",
-        "RTC Day": "int16",
-        "RTC Hour": "int16",
-        "RTC Minute": "int16",
-        "RTC Second": "int16",
-        "RTC Hundredth": "int16",
-        "Ensemble MSB": "int16",
-        "Bit Result": "int16",
-        "Speed of Sound": "int16",
-        "Depth of Transducer": "int16",
-        "Heading": "int32",
-        "Pitch": "int16",
-        "Roll": "int16",
-        "Salinity": "int16",
-        "Temperature": "int16",
-        "MPT Minute": "int16",
-        "MPT Second": "int16",
-        "MPT Hundredth": "int16",
-        "Head Std Dev": "int16",
-        "Pitch Std Dev": "int16",
-        "Roll Std Dev": "int16",
-        "ADC Channel 0": "int16",
-        "ADC Channel 1": "int16",
-        "ADC Channel 2": "int16",
-        "ADC Channel 3": "int16",
-        "ADC Channel 4": "int16",
-        "ADC Channel 5": "int16",
-        "ADC Channel 6": "int16",
-        "ADC Channel 7": "int16",
-        "Error Status Word 1": "int16",
-        "Error Status Word 2": "int16",
-        "Error Status Word 3": "int16",
-        "Error Status Word 4": "int16",
-        "Reserved": "int16",
-        "Pressure": "int32",
-        "Pressure Variance": "int32",
-        "Spare": "int16",
-        "Y2K Century": "int16",
-        "Y2K Year": "int16",
-        "Y2K Month": "int16",
-        "Y2K Day": "int16",
-        "Y2K Hour": "int16",
-        "Y2K Minute": "int16",
-        "Y2K Second": "int16",
-        "Y2K Hundredth": "int16",
-    }
-
-    vlead = dict()
-
-    counter = 1
-    for key, value in vname.items():
-        # vlead[key] = getattr(np, value)(vid[:][counter])
-        vlead[key] = vid[:][counter]
-        counter += 1
-
-    return vlead
-
-
 class VariableLeader:
     """
     The class extracts Variable Leader Data.
@@ -866,8 +726,7 @@ class VariableLeader:
         )
         self.warning = pyreadrdi.ErrorCode.get_message(self.error)
 
-        # self.vdict = DotDict()
-        self.vleader = vlead_dict(self.data)
+        self.vleader = dict()
         self._initialize_from_dict(DotDict(json_file_path="vlmeta.json"))
 
     def _initialize_from_dict(self, dotdict):
@@ -882,7 +741,9 @@ class VariableLeader:
         i = 1
         for key, value in dotdict.__dict__.items():
             setattr(self, key, value)
-            setattr(getattr(self, key), "data", self.data[i])
+            data_slice = self.data[i]
+            setattr(getattr(self, key), "data", data_slice)
+            self.vleader[value.long_name] = data_slice
             i = i + 1
 
     def bitresult(self):
@@ -921,7 +782,7 @@ class VariableLeader:
             test_field[key] = np.array([], dtype=value)
 
         for item in bit_array:
-            bit_group = format(item, "016b")
+            bit_group = format(int(item), "016b")
             bitpos = 8
             for key, value in tfname.items():
                 bitappend = getattr(np, value)(bit_group[bitpos])
@@ -1044,13 +905,17 @@ class VariableLeader:
             errorstatus[item] = np.array([])
 
         for data in errorarray:
-            byte_split = format(data, "08b")
-            bitposition = 0
-            for item in bitset:
-                errorstatus[item] = np.append(
-                    errorstatus[item], byte_split[bitposition]
-                )
-                bitposition += 1
+            if data != -32768:
+                byte_split = format(int(data), "08b")
+                bitposition = 0
+                for item in bitset:
+                    errorstatus[item] = np.append(
+                        errorstatus[item], int(byte_split[bitposition])
+                    )
+                    bitposition += 1
+            else:
+                for item in bitset:
+                    errorstatus[item] = np.append(errorstatus[item], 0)
 
         return errorstatus
 
@@ -1359,7 +1224,7 @@ class ReadFile:
         The RDI ADCP binary file to be read.
     """
 
-    def __init__(self, filename, is_fix_ensemble=True):
+    def __init__(self, filename, is_fix_ensemble=True, fix_time=False):
         """
         Initializes the ReadFile object and extracts data from the RDI ADCP binary file.
         """
@@ -1384,8 +1249,8 @@ class ReadFile:
         error_array["Fixed Leader"] = self.fixedleader.error
         warning_array["Fixed Leader"] = self.fixedleader.warning
         ensemble_array["Fixed Leader"] = self.fixedleader.ensembles
-        cells = self.fixedleader.fleader["Cells"][0]
-        beams = self.fixedleader.fleader["Beams"][0]
+        cells = int(self.fixedleader.fleader["Cells"][0])
+        beams = int(self.fixedleader.fleader["Beams"][0])
         ensemble = self.fixedleader.ensembles
 
         self.variableleader = VariableLeader(
@@ -1403,8 +1268,8 @@ class ReadFile:
         if "Velocity" in datatype_array:
             self.velocity = Velocity(
                 filename,
-                cell=cells,
-                beam=beams,
+                cell=int(cells),
+                beam=int(beams),
                 byteskip=byteskip,
                 offset=offset,
                 idarray=idarray,
@@ -1489,6 +1354,7 @@ class ReadFile:
             }
         )
         self.time = pd.to_datetime(date_df)
+        self.isTimeRegular = self.is_time_regular()
 
         # Depth
         # Create a depth axis with mean depth in 'm'
@@ -1535,6 +1401,10 @@ class ReadFile:
         # Add attribute that lists all variables/functions
         self.list_vars = list(vars(self).keys())
 
+        # By default, fix the time axis if requested
+        if fix_time:
+            self.fix_time_axis()
+
         # By default fix ensemble
         if is_fix_ensemble and not self.isEnsembleEqual:
             self.fixensemble()
@@ -1556,6 +1426,209 @@ class ReadFile:
         raise AttributeError(
             f"'{self.__class__.__name__}' object has no attribute '{name}'"
         )
+
+    # Add this method inside your ReadFile class
+
+    def get_time_component_frequency(self, component="minute"):
+        """
+        Calculates the frequency of a specific time component (hour, minute, or second).
+
+        This is a diagnostic tool to help identify irregularities in the time axis.
+        For example, for ideal hourly data, the minute and second frequencies
+        should show a single entry (0) with a count equal to the number of ensembles.
+
+        Parameters
+        ----------
+        component : str, optional
+            The time component to analyze. Must be one of 'hour', 'minute',
+            or 'second', by default "minute".
+
+        Returns
+        -------
+        pandas.Series
+            A pandas Series with the time component values as the index and
+            their frequency (count) as the values, sorted in descending order.
+        """
+        if component not in ["hour", "minute", "second"]:
+            print(
+                bcolors.FAIL
+                + "Error: Component must be 'hour', 'minute', or 'second'."
+                + bcolors.ENDC
+            )
+            return
+
+        if component == "hour":
+            return self.time.dt.hour.value_counts()
+        elif component == "minute":
+            return self.time.dt.minute.value_counts()
+        else:  # second
+            return self.time.dt.second.value_counts()
+
+    # In readrdi.py, replace the snap_time_axis method inside the ReadFile class
+
+    def snap_time_axis(self, freq="h", tolerance="5min", target_minute=None):
+        """
+        Rounds the time axis, returning a status and message for the UI.
+        """
+        if target_minute is not None:
+            action_msg = f"snapping to nearest minute '{target_minute}'"
+            try:
+                offset = pd.to_timedelta(target_minute, unit="m")
+                snapped_time = (self.time - offset).dt.round("h") + offset
+            except Exception as e:
+                return False, f"Error during rounding: {e}"
+        else:
+            action_msg = f"snapping to nearest frequency '{freq}'"
+            try:
+                snapped_time = self.time.dt.round(freq)
+            except Exception as e:
+                return False, f"Error during rounding: {e}"
+
+        tolerance_delta = pd.to_timedelta(tolerance)
+
+        # Safety Check 1: Tolerance
+        max_diff = (self.time - snapped_time).abs().max()
+        if max_diff > tolerance_delta:
+            message = f"Operation Aborted: Maximum required correction is {max_diff}, which exceeds the tolerance of {tolerance}."
+            return False, message
+
+        # Safety Check 2: Duplicates
+        if snapped_time.duplicated().any():
+            message = "Operation Aborted: Snapping would create duplicate timestamps. The data may be too irregular or have large gaps."
+            return False, message
+
+        # Success Case
+        self.time = snapped_time
+        self.isTimeRegular = self.is_time_regular()
+        success_message = f"Successfully snapped time axis. Maximum correction applied was {max_diff}."
+        return True, success_message
+
+    def is_time_regular(self, tolerance_s=1):
+        """
+        Checks if the time axis has a regular, equal interval.
+
+        Args:
+            tolerance_ns (int): Tolerance in nanoseconds to consider intervals equal.
+                                Defaults to 1 second.
+
+        Returns:
+            bool: True if the time axis is regular, False otherwise.
+        """
+        if len(self.time) < 2:
+            return False  # Not enough data to determine regularity
+
+        diffs = pd.Series(self.time).diff().dropna()
+        if diffs.empty:
+            return False
+
+        # Get the most common difference (mode)
+        common_interval = diffs.mode()[0]
+
+        # Check if all differences are approximately equal to the common_interval
+        max_deviation_ns = (diffs - common_interval).abs().max().total_seconds()
+
+        return max_deviation_ns <= tolerance_s
+
+    def get_time_interval(self):
+        """
+        Calculates the most common time interval (frequency) in the data.
+
+        Returns:
+            pd.Timedelta or None: The detected modal interval, or None if insufficient data.
+        """
+        if len(self.time) < 2:
+            return None
+
+        diffs = pd.Series(self.time).diff().dropna()
+        if diffs.empty:
+            return None
+
+        # Find the most common interval (mode)
+        return diffs.mode()[0]
+
+    def get_time_interval_frequency(self):
+        if len(self.time) < 2:
+            return None
+
+        diffs = pd.Series(self.time).diff().dropna()
+        if diffs.empty:
+            return None
+        all_diffs = diffs.tolist()
+        frequency = Counter(all_diffs)
+        # return dict(frequency)
+        return {str(td): count for td, count in frequency.items()}
+
+    def fill_time_axis(self):
+        """
+        Resamples all data to a regular time axis, filling gaps with missing values.
+        Returns a status and message for the UI.
+        """
+        # 1. Determine the expected frequency
+        frequency = self.get_time_interval()
+        if frequency is None:
+            return (
+                False,
+                "Operation Aborted: Could not determine a regular time interval from the data.",
+            )
+
+        # 2. Create the new, complete time index
+        full_time_index = pd.date_range(
+            start=self.time.min(), end=self.time.max(), freq=frequency
+        )
+
+        if len(full_time_index) == len(self.time) and self.isTimeRegular:
+            return (
+                False,
+                "No action taken: The time axis is already regular and has no gaps.",
+            )
+
+        # --- Handle Fixed Leader Data ---
+        fleader_df = pd.DataFrame(self.fixedleader.fleader, index=self.time)
+        fleader_df_resampled = fleader_df.reindex(full_time_index)
+        for key in fleader_df_resampled.columns:
+            mode_value = fleader_df[key].mode().iloc[0]
+            original_dtype = fleader_df[key].dtype
+            fleader_df_resampled[key] = (
+                fleader_df_resampled[key].fillna(mode_value).astype(original_dtype)
+            )
+        for key in self.fixedleader.fleader:
+            self.fixedleader.fleader[key] = fleader_df_resampled[key].values
+
+        # --- Handle Variable Leader Data ---
+        vleader_df = pd.DataFrame(self.variableleader.vleader, index=self.time)
+        vleader_df_resampled = vleader_df.reindex(full_time_index)
+        for key, attrs in self.variableleader.vleader.items():
+            missing_val = getattr(attrs, "missing_value", -32768)
+            self.variableleader.vleader[key] = (
+                vleader_df_resampled[key].fillna(missing_val).values.astype(np.int64)
+            )
+
+        # --- Handle 3D/4D data types ---
+        missing_indices = np.where(full_time_index.isin(self.time) == False)[0]
+        data_to_resize = {
+            "velocity": -32768,
+            "correlation": 255,
+            "echo": 255,
+            "percentgood": 255,
+            "status": 0,
+        }
+        for name, missing_val in data_to_resize.items():
+            if hasattr(self, name):
+                obj = getattr(self, name)
+                if np.issubdtype(obj.data.dtype, np.integer):
+                    new_data = np.insert(
+                        obj.data, missing_indices, missing_val, axis=-1
+                    )
+                    obj.data = new_data
+                    obj.ensembles = new_data.shape[-1]
+
+        # --- Update the main object's state ---
+        self.time = pd.Series(full_time_index)
+        self.ensembles = len(full_time_index)
+        self.isTimeRegular = True
+
+        message = f"Successfully filled time axis gaps. Total ensembles are now {self.ensembles}."
+        return True, message
 
     def resize_fixedleader(self, newshape):
         for key in self.fixedleader.fleader:

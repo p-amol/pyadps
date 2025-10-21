@@ -65,12 +65,11 @@ Examples (add-on)
 
 import io
 import os
-import sys
 from enum import Enum
 from pathlib import Path
 from struct import error as StructError
 from struct import unpack
-from typing import BinaryIO, Literal, NamedTuple, Optional, Tuple, Union, cast
+from typing import BinaryIO, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
 

@@ -559,7 +559,7 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
     ):
         _, _, byteskip, offset, idarray, ensemble, error_code = fileheader(filename)
 
-    fid = [[0] * ensemble for _ in range(36)]
+    fid = np.zeros((36, ensemble), dtype="int64")
 
     bfile, error = safe_open(filename, "rb")
     if bfile is None:
@@ -584,7 +584,7 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
         fbyteskip = None
         for count, item in enumerate(idarray[i]):
             if item in (0, 1):
-                fbyteskip = offset[0][count]
+                fbyteskip = offset[i][count]
         if fbyteskip is None:
             error = ErrorCode.ID_NOT_FOUND
             ensemble = i
@@ -626,17 +626,26 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
                 # False target threshold, Spare & Transmit lag distance
                 (fid[27][i], fid[28][i], fid[29][i]) = unpack("<BBH", bdata[38:42])
                 # CPU board serial number (Big Endian)
-                (fid[30][i]) = unpack(">Q", bdata[42:50])[0]
-                # Check for overflow only once to set the flag
-                if not is_serial_missing and fid[30][i] > INT64_MAX:
-                    print(
-                        bcolors.WARNING
-                        + "WARNING: Missing serial number detected (old firmware). Flagging for replacement."
-                        + bcolors.ENDC
-                    )
-                    is_serial_missing = True
-                # (fid[30][i], fid[31][i])= struct.unpack('>II', packed_data)
-                # fid[30][i] = int.from_bytes(bdata[42:50], byteorder="big", signed=False)
+                try:
+                    (fid[30][i]) = unpack(">Q", bdata[42:50])[0]
+                    # Check for overflow only once to set the flag
+                    if not is_serial_missing and fid[30][i] > INT64_MAX:
+                        print(
+                            bcolors.WARNING
+                            + "WARNING: Invalid serial number detected (old firmware). Flagging for replacement."
+                            + "DETAILS: Value exceeds expected range."
+                            + bcolors.ENDC
+                        )
+                        is_serial_missing = True
+                except (ValueError, OverflowError) as e:
+                    if not is_serial_missing:
+                        print(
+                            bcolors.WARNING
+                            + "WARNING: Failed to read serial number (old firmware). Flagging for replacement. \n"
+                            + f"DETAILS: {e}"
+                            + bcolors.ENDC
+                        )
+                        is_serial_missing = True
                 # System bandwidth, system power & Spare
                 (fid[31][i], fid[32][i], fid[33][i]) = unpack("<HBB", bdata[50:54])
                 # Instrument serial number & Beam angle
@@ -673,13 +682,12 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
             + bcolors.ENDC
         )
         # If Serial No. is missing, flag all data after Serial No.
-        fid[30] = [MISSING_VALUE_FLAG] * ensemble  # Serial No.
-        fid[31] = [MISSING_VALUE_FLAG] * ensemble  # System Bandwidth
-        fid[32] = [MISSING_VALUE_FLAG] * ensemble  # System Power
-        fid[33] = [MISSING_VALUE_FLAG] * ensemble  # Spare 2
-        fid[34] = [MISSING_VALUE_FLAG] * ensemble  # Instrument No
-        fid[35] = [MISSING_VALUE_FLAG] * ensemble  # Beam Angle
-    fid = np.array(fid)
+        fid[30, :] = MISSING_VALUE_FLAG  # Serial No.
+        fid[31, :] = MISSING_VALUE_FLAG  # System Bandwidth
+        fid[32, :] = MISSING_VALUE_FLAG  # System Power
+        fid[33, :] = MISSING_VALUE_FLAG  # Spare 2
+        fid[34, :] = MISSING_VALUE_FLAG  # Instrument No
+        fid[35, :] = MISSING_VALUE_FLAG  # Beam Angle
     data = fid[:, :ensemble]
     return (data, ensemble, error_code)
 
@@ -745,7 +753,7 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
         or ensemble == 0
     ):
         _, _, byteskip, offset, idarray, ensemble, error_code = fileheader(filename)
-    vid = [[0] * ensemble for _ in range(48)]
+    vid = np.zeros((48, ensemble), dtype="int32")
     bfile, error = safe_open(filename, "rb")
     if bfile is None:
         return (vid, ensemble, error.code)
@@ -757,7 +765,7 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
         fbyteskip = None
         for count, item in enumerate(idarray[i]):
             if item in (128, 129):
-                fbyteskip = offset[0][count]
+                fbyteskip = offset[i][count]
         if fbyteskip == None:
             error = ErrorCode.ID_NOT_FOUND
             ensemble = i
@@ -863,7 +871,6 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
 
     bfile.close()
     error_code = error.code
-    vid = np.array(vid, dtype="int32")
     data = vid[:, :ensemble]
     return (data, ensemble, error_code)
 
@@ -958,15 +965,15 @@ def datatype(
     # Velocity is 16 bits and all others are 8 bits.
     # Create empty array for the chosen variable name.
     if var_name == "velocity":
-        var_array = np.full(
-            (int(max(beam)), int(max(cell)), ensemble), -32768, dtype="int16"
-        )
-        bitstr = "<h"
         bitint = 2
+        inttype = "int16"
+        var_array = np.full(
+            (int(max(beam)), int(max(cell)), ensemble), -32768, dtype=inttype
+        )
     else:  # inserted
-        var_array = np.zeros((int(max(beam)), int(max(cell)), ensemble), dtype="uint8")
-        bitstr = "<B"
         bitint = 1
+        inttype = "uint8"
+        var_array = np.zeros((int(max(beam)), int(max(cell)), ensemble), dtype=inttype)
     # -----------------------------
 
     # Read the file in safe mode.
@@ -1010,13 +1017,13 @@ def datatype(
     i = 0
     try:
         for i in range(ensemble):
+            total_bytes = beam[i] * cell[i] * bitint
             bfile.seek(fbyteskip[i], 1)
-            bdata = bfile.read(2)
-            for cno in range(int(cell[i])):
-                for bno in range(int(beam[i])):
-                    bdata = bfile.read(bitint)
-                    varunpack = unpack(bitstr, bdata)
-                    var_array[bno][cno][i] = varunpack[0]
+            bdata = bfile.read(total_bytes)
+            velocity_block = np.frombuffer(bdata, dtype=inttype)
+            var_array[: beam[i], : cell[i], i] = velocity_block.reshape(
+                (beam[i], cell[i])
+            )
             bfile.seek(byteskip[i], 0)
         bfile.close()
     except (ValueError, StructError, OverflowError) as e:

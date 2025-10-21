@@ -9,7 +9,7 @@ and data types like velocity, correlation, echo intensity, and percent good.
 Currently reads only PD0 format.
 
 Modules
--------------------
+-------
 - fileheader: Function to read and parse the file header information.
 - fixedleader: Function to read and parse the fixed leader section of an RDI file.
 - variableleader: Function to read and parse the variable leader section of an RDI file.
@@ -61,17 +61,31 @@ Other add-on functions and classes inlcude bcolors, safe_open, and ErrorCode.
 Examples (add-on)
 -------------------
 >>> error = ErrorCode.FILE_NOT_FOUND
-
 """
 
 import io
 import os
 import sys
 from enum import Enum
+from pathlib import Path
 from struct import error as StructError
 from struct import unpack
+from typing import BinaryIO, Literal, NamedTuple, Optional, Tuple, Union, cast
 
 import numpy as np
+
+# Type aliases for clarity
+FilePathType = Union[str, Path]
+SafeOpenReturn = Tuple[Optional[BinaryIO], "ErrorCode"]
+SafeReadReturn = Tuple[Optional[bytes], "ErrorCode"]
+FileHeaderReturn = Tuple[
+    np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int, int
+]
+LeaderReturn = Tuple[np.ndarray, int, int]
+DataTypeReturn = Union[
+    Tuple[np.ndarray, int],
+    Tuple[np.ndarray, int, np.ndarray, np.ndarray, int],
+]
 
 
 class bcolors:
@@ -123,32 +137,24 @@ class bcolors:
     environments. The appearance may vary depending on the terminal emulator used.
     """
 
-    HEADER = "\033[95m"
-    OKBLUE = "\033[94m"
-    OKCYAN = "\033[96m"
-    OKGREEN = "\033[92m"
-    WARNING = "\033[93m"
-    FAIL = "\033[91m"
-    ENDC = "\033[0m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
-
-    # HEADER = "[95m"
-    # OKBLUE = "[94m"
-    # OKCYAN = "[96m"
-    # OKGREEN = "[92m"
-    # WARNING = "[93m"
-    # FAIL = "[91m"
-    # ENDC = "[0m"
-    # BOLD = "[1m"
-    # UNDERLINE = "[4m"
+    HEADER: str = "\033[95m"
+    OKBLUE: str = "\033[94m"
+    OKCYAN: str = "\033[96m"
+    OKGREEN: str = "\033[92m"
+    WARNING: str = "\033[93m"
+    FAIL: str = "\033[91m"
+    ENDC: str = "\033[0m"
+    BOLD: str = "\033[1m"
+    UNDERLINE: str = "\033[4m"
 
 
 class ErrorCode(Enum):
     """
     Enumeration for error codes with associated messages.
+
     This enum provides a set of error codes and their corresponding descriptive messages.
     It is used to standardize error reporting and handling within the application.
+
     Attributes
     ----------
     SUCCESS : tuple
@@ -203,20 +209,43 @@ class ErrorCode(Enum):
     VALUE_ERROR = (9, "Value Error for incorrect argument.")
     UNKNOWN_ERROR = (99, "Unknown error.")
 
-    def __init__(self, code, message):
-        self.code = code
-        self.message = message
+    def __init__(self, code: int, message: str) -> None:
+        """
+        Initialize ErrorCode enum member.
+
+        Parameters
+        ----------
+        code : int
+            The error code number.
+        message : str
+            The descriptive error message.
+        """
+        self.code: int = code
+        self.message: str = message
 
     @classmethod
-    def get_message(cls, code):
+    def get_message(cls, code: int) -> str:
+        """
+        Retrieve the descriptive message corresponding to a given error code.
+
+        Parameters
+        ----------
+        code : int
+            The error code for which the message is to be retrieved.
+
+        Returns
+        -------
+        str
+            The descriptive message associated with the provided error code.
+            Returns "Error: Invalid error code." if the code is not valid.
+        """
         for error in cls:
             if error.code == code:
                 return error.message
-        else:  # inserted
-            return "Error: Invalid error code."
+        return "Error: Invalid error code."
 
 
-def safe_open(filename, mode="rb"):
+def safe_open(filename: FilePathType, mode: str = "rb") -> SafeOpenReturn:
     """
     Safely open a file, handling common file-related errors.
 
@@ -251,8 +280,6 @@ def safe_open(filename, mode="rb"):
     Exception
         If an unexpected error occurs
 
-
-
     Examples
     --------
     >>> f = safe_open('existing_file.txt')
@@ -267,8 +294,8 @@ def safe_open(filename, mode="rb"):
     Error: Permission denied.
     """
     try:
-        filename = os.path.abspath(filename)
-        file = open(filename, mode)
+        filename_str: str = os.path.abspath(str(filename))
+        file: BinaryIO = cast(BinaryIO, open(filename_str, mode))
         return (file, ErrorCode.SUCCESS)
     except FileNotFoundError as e:
         print(f"FileNotFoundError: The file '{filename}' was not found: {e}")
@@ -287,7 +314,7 @@ def safe_open(filename, mode="rb"):
         return (None, ErrorCode.UNKNOWN_ERROR)
 
 
-def safe_read(bfile, num_bytes):
+def safe_read(bfile: BinaryIO, num_bytes: int) -> SafeReadReturn:
     """
     Safely read a specified number of bytes from a binary file.
 
@@ -316,7 +343,7 @@ def safe_read(bfile, num_bytes):
         If fewer than `num_bytes` are read from the file, indicating an unexpected end of file.
     """
     try:
-        readbytes = bfile.read(num_bytes)
+        readbytes: bytes = bfile.read(num_bytes)
 
         if len(readbytes) != num_bytes:
             print(f"Unexpected end of file: fewer than {num_bytes} bytes were read.")
@@ -332,7 +359,7 @@ def safe_read(bfile, num_bytes):
         return (None, ErrorCode.VALUE_ERROR)
 
 
-def fileheader(rdi_file):
+def fileheader(rdi_file: FilePathType) -> FileHeaderReturn:
     """
     Parse the binary RDI ADCP file and extract header information.
 
@@ -382,27 +409,37 @@ def fileheader(rdi_file):
     ...     print(f"Error code: {error_code}")
     """
 
-    filename = rdi_file
-    headerid = np.array([], dtype="int8")
-    sourceid = np.array([], dtype="int8")
-    byte = np.array([], dtype="int16")
-    spare = np.array([], dtype="int8")
-    datatype = np.array([], dtype="int16")
-    address_offset = []
-    ensemble = 0
-    error_code = 0
-    dataid = []
-    byteskip = np.array([], dtype="int32")
-    dummytuple = ([], [], [], [], [], ensemble, error_code)
+    filename: str = str(rdi_file)
+    headerid: np.ndarray = np.array([], dtype="int8")
+    sourceid: np.ndarray = np.array([], dtype="int8")
+    byte: np.ndarray = np.array([], dtype="int16")
+    spare: np.ndarray = np.array([], dtype="int8")
+    datatype: np.ndarray = np.array([], dtype="int16")
+    address_offset: list[tuple[int, ...]] = []
+    ensemble: int = 0
+    error_code: int = 0
+    dataid: list[list[int]] = []
+    byteskip: np.ndarray = np.array([], dtype="int32")
 
+    bfile: Optional[BinaryIO]
     bfile, error = safe_open(filename, mode="rb")
     if bfile is None:
         error_code = error.code
-        dummytuple = ([], [], [], [], [], ensemble, error_code)
-        return dummytuple
+        return (
+            np.array([]),
+            np.array([]),
+            np.array([]),
+            np.array([]),
+            np.array([]),
+            0,
+            error_code,
+        )
+
     bfile.seek(0, 0)
-    bskip = i = 0
-    hid = [None] * 5
+    bskip: int = 0
+    i: int = 0
+    hid: list[int] = [0] * 5
+
     try:
         while byt := bfile.read(6):
             hid[0], hid[1], hid[2], hid[3], hid[4] = unpack("<BBHBB", byt)
@@ -412,13 +449,21 @@ def fileheader(rdi_file):
             spare = np.append(spare, np.int16(hid[3]))
             datatype = np.append(datatype, np.int16(hid[4]))
 
-            # dbyte = bfile.read(2 * datatype[i])
+            # Read data bytes based on data type count
+            dbyte: Optional[bytes]
             dbyte, error = safe_read(bfile, 2 * datatype[i])
             if dbyte is None:
                 if i == 0:
                     error_code = error.code
-                    dummytuple = ([], [], [], [], [], ensemble, error_code)
-                    return dummytuple
+                    return (
+                        np.array([]),
+                        np.array([]),
+                        np.array([]),
+                        np.array([]),
+                        np.array([]),
+                        0,
+                        error_code,
+                    )
                 else:
                     break
 
@@ -428,8 +473,15 @@ def fileheader(rdi_file):
                     error = ErrorCode.WRONG_RDIFILE_TYPE
                     print(bcolors.FAIL + error.message + bcolors.ENDC)
                     error_code = error.code
-                    dummytuple = ([], [], [], [], [], ensemble, error_code)
-                    return dummytuple
+                    return (
+                        np.array([]),
+                        np.array([]),
+                        np.array([]),
+                        np.array([]),
+                        np.array([]),
+                        0,
+                        error_code,
+                    )
             else:
                 if headerid[i] != 127 or sourceid[i] != 127:
                     error = ErrorCode.ID_NOT_FOUND
@@ -446,19 +498,26 @@ def fileheader(rdi_file):
                     break
 
             try:
-                data = unpack("H" * datatype[i], dbyte)
+                data: tuple[int, ...] = unpack("H" * datatype[i], dbyte)
                 address_offset.append(data)
-            except:
+            except Exception:
                 error = ErrorCode.FILE_CORRUPTED
                 error_code = error.code
-                dummytuple = ([], [], [], [], [], ensemble, error_code)
-                return dummytuple
+                return (
+                    np.array([]),
+                    np.array([]),
+                    np.array([]),
+                    np.array([]),
+                    np.array([]),
+                    0,
+                    error_code,
+                )
 
-            skip_array = [None] * datatype[i]
+            skip_array: list[int] = [0] * datatype[i]
             for dtype in range(datatype[i]):
-                bseek = int(bskip) + int(address_offset[i][dtype])
+                bseek: int = int(bskip) + int(address_offset[i][dtype])
                 bfile.seek(bseek, 0)
-                readbyte = bfile.read(2)
+                readbyte: bytes = bfile.read(2)
                 skip_array[dtype] = int.from_bytes(
                     readbyte, byteorder="little", signed=False
                 )
@@ -471,6 +530,7 @@ def fileheader(rdi_file):
             bfile.seek(bskip, 0)
             byteskip = np.append(byteskip, np.int32(bskip))
             i += 1
+
     except (ValueError, StructError, OverflowError) as e:
         # except:
         print(bcolors.WARNING + "WARNING: The file is broken.")
@@ -485,16 +545,31 @@ def fileheader(rdi_file):
 
     ensemble = i
     bfile.close()
-    address_offset = np.array(address_offset)
-    dataid = np.array(dataid)
+    address_offset_array: np.ndarray = np.array(address_offset)
+    dataid_array: np.ndarray = np.array(dataid)
     datatype = datatype[0:ensemble]
     byte = byte[0:ensemble]
     byteskip = byteskip[0:ensemble]
     error_code = error.code
-    return (datatype, byte, byteskip, address_offset, dataid, ensemble, error_code)
+
+    return (
+        datatype,
+        byte,
+        byteskip,
+        address_offset_array,
+        dataid_array,
+        ensemble,
+        error_code,
+    )
 
 
-def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
+def fixedleader(
+    rdi_file: FilePathType,
+    byteskip: Optional[np.ndarray] = None,
+    offset: Optional[np.ndarray] = None,
+    idarray: Optional[np.ndarray] = None,
+    ensemble: int = 0,
+) -> LeaderReturn:
     """
     Parse the fixed leader data from binary RDI ADCP file.
 
@@ -550,8 +625,9 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
     (data_from_file, 0, 0)
     """
 
-    filename = rdi_file
-    error_code = 0
+    filename: str = str(rdi_file)
+    error_code: int = 0
+    error: ErrorCode = ErrorCode.SUCCESS
 
     if (
         not all((isinstance(v, np.ndarray) for v in (byteskip, offset, idarray)))
@@ -559,29 +635,34 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
     ):
         _, _, byteskip, offset, idarray, ensemble, error_code = fileheader(filename)
 
-    fid = np.zeros((36, ensemble), dtype="int64")
+    # Type narrowing: Cast to ndarray after initialization
+    byteskip = cast(np.ndarray, byteskip)
+    offset = cast(np.ndarray, offset)
+    idarray = cast(np.ndarray, idarray)
 
+    fid: np.ndarray = np.zeros((36, ensemble), dtype="int64")
+
+    bfile: Optional[BinaryIO]
     bfile, error = safe_open(filename, "rb")
     if bfile is None:
         return (fid, ensemble, error.code)
     if error.code == 0 and error_code != 0:
         error.code = error_code
-        error.message = error.get_message(error.code)
 
     # Note: When processing data from ADCPs with older firmware,
     # the instrument serial number may be missing. As a result,
     # garbage value is recorded, which sometimes is too large for a standard 64-bit integer.
     # The following variables are defined to replace garbage value with a missing value.
     # Flag to track if a missing serial number is detected
-    is_serial_missing = False
+    is_serial_missing: bool = False
     # Define the maximum value for a standard signed int64
-    INT64_MAX = 2**63 - 1
+    INT64_MAX: int = 2**63 - 1
     # Define a missing value flag (0 is a safe unsigned integer choice)
-    MISSING_VALUE_FLAG = 0
+    MISSING_VALUE_FLAG: int = 0
 
     bfile.seek(0, 0)
     for i in range(ensemble):
-        fbyteskip = None
+        fbyteskip: Optional[int] = None
         for count, item in enumerate(idarray[i]):
             if item in (0, 1):
                 fbyteskip = offset[i][count]
@@ -594,7 +675,7 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
         else:  # inserted
             try:
                 bfile.seek(fbyteskip, 1)
-                bdata = bfile.read(59)
+                bdata: bytes = bfile.read(59)
                 # Fixed Leader ID, CPU Version no. & Revision no.
                 (fid[0][i], fid[1][i], fid[2][i]) = unpack("<HBB", bdata[0:4])
                 if fid[0][i] not in (0, 1):
@@ -672,6 +753,7 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
                 print(f"File seeking error at iteration {i}: {e}" + bcolors.ENDC)
                 error = ErrorCode.FILE_CORRUPTED
                 ensemble = i
+
     bfile.close()
     error_code = error.code
 
@@ -688,11 +770,18 @@ def fixedleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
         fid[33, :] = MISSING_VALUE_FLAG  # Spare 2
         fid[34, :] = MISSING_VALUE_FLAG  # Instrument No
         fid[35, :] = MISSING_VALUE_FLAG  # Beam Angle
-    data = fid[:, :ensemble]
+
+    data: np.ndarray = fid[:, :ensemble]
     return (data, ensemble, error_code)
 
 
-def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=0):
+def variableleader(
+    rdi_file: FilePathType,
+    byteskip: Optional[np.ndarray] = None,
+    offset: Optional[np.ndarray] = None,
+    idarray: Optional[np.ndarray] = None,
+    ensemble: int = 0,
+) -> LeaderReturn:
     """
     Parse the variable leader data from binary RDI ADCP file.
 
@@ -734,8 +823,8 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
     PermissionError
         If the file cannot be accessed due to permission issues.
     ValueError
-
         If provided parameters are of incorrect type or value.
+
     Examples
     --------
     >>> data, ensemble, error_code = fixedleader('data.rdi', byteskip=10, offset=50)
@@ -743,30 +832,41 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
     (data_from_file, 0, 0)
 
     >>> data, ensemble, error_code = fixedleader('data.rdi', idarray=[1, 2, 3])
-    >>> print(data, ensemble, error_code)
     """
 
-    filename = rdi_file
-    error_code = 0
+    filename: str = str(rdi_file)
+    error_code: int = 0
+    error: ErrorCode = ErrorCode.SUCCESS
+
     if (
         not all((isinstance(v, np.ndarray) for v in (byteskip, offset, idarray)))
         or ensemble == 0
     ):
         _, _, byteskip, offset, idarray, ensemble, error_code = fileheader(filename)
-    vid = np.zeros((48, ensemble), dtype="int32")
+
+    # Type narrowing: Cast to ndarray after initialization
+    byteskip = cast(np.ndarray, byteskip)
+    offset = cast(np.ndarray, offset)
+    idarray = cast(np.ndarray, idarray)
+
+    vid: np.ndarray = np.zeros((48, ensemble), dtype="int32")
+
+    bfile: Optional[BinaryIO]
     bfile, error = safe_open(filename, "rb")
     if bfile is None:
         return (vid, ensemble, error.code)
+
     if error.code == 0 and error_code != 0:
         error.code = error_code
-        error.message = error.get_message(error.code)
+
     bfile.seek(0, 0)
     for i in range(ensemble):
-        fbyteskip = None
+        fbyteskip: Optional[int] = None
         for count, item in enumerate(idarray[i]):
             if item in (128, 129):
                 fbyteskip = offset[i][count]
-        if fbyteskip == None:
+
+        if fbyteskip is None:
             error = ErrorCode.ID_NOT_FOUND
             ensemble = i
             print(bcolors.WARNING + error.message)
@@ -775,7 +875,7 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
         else:
             try:
                 bfile.seek(fbyteskip, 1)
-                bdata = bfile.read(65)
+                bdata: bytes = bfile.read(65)
                 vid[0][i], vid[1][i] = unpack("<HH", bdata[0:4])
                 if vid[0][i] not in (128, 129):
                     error = ErrorCode.ID_NOT_FOUND
@@ -783,8 +883,7 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
                     print(bcolors.WARNING + error.message)
                     print(f"Total ensembles reset to {i}." + bcolors.ENDC)
                     break
-                    sys.exit(f"Variable Leader not found for Ensemble {i}")
-                # Extract WorkHorse ADCP’s real-time clock (RTC)
+                # Extract WorkHorse ADCPâ€™s real-time clock (RTC)
                 # Year, Month, Day, Hour, Minute, Second & Hundredth
                 (
                     vid[2][i],
@@ -871,20 +970,20 @@ def variableleader(rdi_file, byteskip=None, offset=None, idarray=None, ensemble=
 
     bfile.close()
     error_code = error.code
-    data = vid[:, :ensemble]
+    data: np.ndarray = vid[:, :ensemble]
     return (data, ensemble, error_code)
 
 
 def datatype(
-    filename,
-    var_name,
-    cell=0,
-    beam=0,
-    byteskip=None,
-    offset=None,
-    idarray=None,
-    ensemble=0,
-):
+    filename: FilePathType,
+    var_name: Literal["velocity", "correlation", "echo", "percent good", "status"],
+    cell: Union[int, np.ndarray] = 0,
+    beam: Union[int, np.ndarray] = 0,
+    byteskip: Optional[np.ndarray] = None,
+    offset: Optional[np.ndarray] = None,
+    idarray: Optional[np.ndarray] = None,
+    ensemble: int = 0,
+) -> DataTypeReturn:
     """
     Parse 3D data from binary RDI ADCP file.
 
@@ -916,23 +1015,18 @@ def datatype(
         Returns number of cells.
     ensemble: int
         Returns number of ensembles.
-
     """
 
-    varid = dict()
-
-    # Define file ids:
-    varid = {
+    varid: dict[str, tuple[int, ...]] = {
         "velocity": (256, 257),
         "correlation": (512, 513),
         "echo": (768, 769),
         "percent good": (1024, 1025),
         "status": (1280, 1281),
     }
-    error_code = 0
+    error_code: int = 0
 
     # Check for optional arguments.
-    # -----------------------------
     # These arguments are outputs of fileheader function.
     # Makes the code faster if the fileheader function is already executed.
     if (
@@ -941,11 +1035,21 @@ def datatype(
     ):
         _, _, byteskip, offset, idarray, ensemble, error_code = fileheader(filename)
         if error_code > 0 and error_code < 6:
-            return ([], error_code)
+            return (np.array([]), error_code)
+
+    # Type narrowing: Cast to ndarray after initialization
+    byteskip = cast(np.ndarray, byteskip)
+    offset = cast(np.ndarray, offset)
+    idarray = cast(np.ndarray, idarray)
+
+    # Type narrowing: Extract beam and cell values
+    cell_array: np.ndarray
+    beam_array: np.ndarray
 
     # These arguments are outputs of fixedleader function.
     # Makes the code faster if the fixedheader function is already executed.
     if isinstance(cell, (np.integer, int)) or isinstance(beam, (np.integer, int)):
+        flead: np.ndarray
         flead, ensemble, fl_error_code = fixedleader(
             filename,
             byteskip=byteskip,
@@ -953,41 +1057,45 @@ def datatype(
             idarray=idarray,
             ensemble=ensemble,
         )
-        cell = []
-        beam = []
-        cell = flead[7][:]
-        beam = flead[6][:]
+        cell_array = flead[7][:]
+        beam_array = flead[6][:]
         if fl_error_code != 0:
             error_code = fl_error_code
     else:
-        cell = cell
-        beam = beam
+        cell_array = cell
+        beam_array = beam
+
+    # Extract max values for array shape
+    max_beam: int = int(max(beam_array))
+    max_cell: int = int(max(cell_array))
+
     # Velocity is 16 bits and all others are 8 bits.
     # Create empty array for the chosen variable name.
     if var_name == "velocity":
-        bitint = 2
-        inttype = "int16"
-        var_array = np.full(
-            (int(max(beam)), int(max(cell)), ensemble), -32768, dtype=inttype
+        bitint: int = 2
+        inttype: Literal["int16", "uint8"] = "int16"
+        var_array: np.ndarray = np.full(
+            (max_beam, max_cell, ensemble), -32768, dtype=inttype
         )
     else:  # inserted
         bitint = 1
         inttype = "uint8"
-        var_array = np.zeros((int(max(beam)), int(max(cell)), ensemble), dtype=inttype)
-    # -----------------------------
+        var_array = np.zeros((max_beam, max_cell, ensemble), dtype=inttype)
 
     # Read the file in safe mode.
+    bfile: Optional[BinaryIO]
     bfile, error = safe_open(filename, "rb")
     if bfile is None:
-        return (var_array, ensemble, error.code)
+        return (var_array, error.code)
+
     if error.code == 0 and error_code != 0:
         error.code = error_code
-        error.message = error.get_message(error.code)
 
     bfile.seek(0, 0)
-    vid = varid.get(var_name)
+    vid_tuple: Optional[tuple[int, ...]] = varid.get(var_name)
+
     # Print error if the variable id is not found.
-    if not vid:
+    if not vid_tuple:
         print(
             bcolors.FAIL
             + "ValueError: Invalid variable name. List of permissible variable names: 'velocity', 'correlation', 'echo', 'percent good', 'status'"
@@ -997,13 +1105,14 @@ def datatype(
         return (var_array, error.code)
 
     # Checks if variable id is found in address offset
-    fbyteskip = None
+    fbyteskip: Optional[list[int]] = None
     for count, item in enumerate(idarray[0][:]):
-        if item in vid:
+        if item in vid_tuple:
             fbyteskip = []
             for i in range(ensemble):
                 fbyteskip.append(int(offset[i][count]))
             break
+
     if fbyteskip is None:
         print(
             bcolors.FAIL
@@ -1014,28 +1123,34 @@ def datatype(
         return (var_array, error.code)
 
     # READ DATA
-    i = 0
+    ensemble_idx: int = 0
     try:
-        for i in range(ensemble):
-            total_bytes = beam[i] * cell[i] * bitint
-            bfile.seek(fbyteskip[i], 1)
-            bdata = bfile.read(total_bytes)
-            velocity_block = np.frombuffer(bdata, dtype=inttype)
-            var_array[: beam[i], : cell[i], i] = velocity_block.reshape(
-                (beam[i], cell[i])
+        for ensemble_idx in range(ensemble):
+            total_bytes: int = (
+                beam_array[ensemble_idx] * cell_array[ensemble_idx] * bitint
             )
-            bfile.seek(byteskip[i], 0)
+            bfile.seek(fbyteskip[ensemble_idx], 1)
+            bdata: bytes = bfile.read(total_bytes)
+            velocity_block: np.ndarray = np.frombuffer(bdata, dtype=inttype)
+            var_array[
+                : beam_array[ensemble_idx], : cell_array[ensemble_idx], ensemble_idx
+            ] = velocity_block.reshape(
+                (beam_array[ensemble_idx], cell_array[ensemble_idx])
+            )
+            bfile.seek(byteskip[ensemble_idx], 0)
         bfile.close()
+
     except (ValueError, StructError, OverflowError) as e:
         print(bcolors.WARNING + "WARNING: The file is broken.")
         print(
-            f"Function `datatype` unable to extract {var_name} for ensemble {i + 1}. Total ensembles reset to {i}."
+            f"Function `datatype` unable to extract {var_name} for ensemble {ensemble_idx + 1}. Total ensembles reset to {ensemble_idx}."
         )
         print(bcolors.UNDERLINE + "Details from struct function" + bcolors.ENDC)
         print(f"  Error Type: {type(e).__name__}")
         print(f"  Error Details: {e}")
         error = ErrorCode.FILE_CORRUPTED
-        ensemble = i
+        ensemble = ensemble_idx
 
-    data = var_array[:, :, :ensemble]
-    return (data, ensemble, cell, beam, error_code)
+    data: np.ndarray = var_array[:, :, :ensemble]
+    return (data, ensemble, cell_array, beam_array, error_code)
+

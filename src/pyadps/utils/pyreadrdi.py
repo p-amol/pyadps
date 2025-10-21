@@ -22,7 +22,7 @@ Creation Date
 
 Last Modified Date
 --------------
-2025-10-01
+2025-10-21
 
 Version
 -------
@@ -90,51 +90,42 @@ DataTypeReturn = Union[
 
 class bcolors:
     """
-    Terminal color codes for styling console output.
+    ANSI terminal color codes for console output styling.
 
-    This class provides a set of color codes and text formatting options for styling
-    terminal or console output. The codes can be used to change the text color and style
-    in a terminal that supports ANSI escape sequences.
+    This class provides color codes and formatting options for ANSI-compatible
+    terminals. Use these codes to colorize text by prepending the code and
+    appending `ENDC` to reset formatting.
 
     Attributes
     ----------
     HEADER : str
-        Color code for magenta text, typically used for headers.
+        Magenta text, typically used for headers.
     OKBLUE : str
-        Color code for blue text, typically used for general information.
+        Blue text for general information.
     OKCYAN : str
-        Color code for cyan text, used for informational messages.
+        Cyan text for informational messages.
     OKGREEN : str
-        Color code for green text, typically used for success messages.
+        Green text for success messages.
     WARNING : str
-        Color code for yellow text, used for warnings.
+        Yellow text for warnings.
     FAIL : str
-        Color code for red text, used for errors or failures.
+        Red text for errors or failures.
     ENDC : str
-        Reset color code to default. Resets the color and formatting.
+        Reset code to default color and formatting.
     BOLD : str
-        Bold text formatting code. Makes text bold.
+        Bold text formatting.
     UNDERLINE : str
-        Underlined text formatting code. Underlines the text.
-
-    Usage
-    -----
-    To use these color codes, prepend them to your string and append `bcolors.ENDC`
-    to reset the formatting. For example:
-
-    >>> print(f"{bcolors.OKGREEN}Success{bcolors.ENDC}")
-    >>> print(f"{bcolors.WARNING}Warning: This is a warning.{bcolors.ENDC}")
+        Underlined text formatting.
 
     Examples
     --------
-    >>> print(f"{bcolors.OKBLUE}This text is blue.{bcolors.ENDC}")
-    >>> print(f"{bcolors.FAIL}This text is red and indicates an error.{bcolors.ENDC}")
-    >>> print(f"{bcolors.BOLD}{bcolors.UNDERLINE}Bold and underlined text.{bcolors.ENDC}")
+    >>> print(f"{bcolors.OKGREEN}Success{bcolors.ENDC}")
+    >>> print(f"{bcolors.FAIL}Error{bcolors.ENDC}")
 
     Notes
     -----
-    These color codes use ANSI escape sequences and may not be supported in all terminal
-    environments. The appearance may vary depending on the terminal emulator used.
+    Not all terminals support ANSI escape sequences. Appearance varies by
+    terminal emulator. Test before relying on color in production scripts.
     """
 
     HEADER: str = "\033[95m"
@@ -150,51 +141,40 @@ class bcolors:
 
 class ErrorCode(Enum):
     """
-    Enumeration for error codes with associated messages.
+    Standardized error codes and messages for RDI file operations.
 
-    This enum provides a set of error codes and their corresponding descriptive messages.
-    It is used to standardize error reporting and handling within the application.
+    This enum provides consistent error reporting throughout the module,
+    replacing numeric error codes with semantic meaning.
 
     Attributes
     ----------
     SUCCESS : tuple
-        Represents a successful operation.
+        Operation completed successfully (code 0).
     FILE_NOT_FOUND : tuple
-        Error code for when a file is not found.
+        File does not exist (code 1).
     PERMISSION_DENIED : tuple
-        Error code for when access to a resource is denied.
-    IO_ERROR: tuple
-        Error Code for when the file fails to open.
+        Access denied (code 2).
+    IO_ERROR : tuple
+        File open failed (code 3).
     OUT_OF_MEMORY : tuple
-        Error code for when the system runs out of memory.
+        Insufficient memory (code 4).
     WRONG_RDIFILE_TYPE : tuple
-        Error code for when a file type is not supported by RDI or incorrect.
-    ID_NOT_FOUND: tuple
-        Error code for when RDI file is found but the data type ID does not match.
+        File type not recognized as RDI (code 5).
+    ID_NOT_FOUND : tuple
+        Data type ID not found (code 6).
     FILE_CORRUPTED : tuple
-        Error code for when a file is corrupted and cannot be read.
-    DATATYPE_MISMATCH: tuple
-        Error code for when the data type is not same as the previous ensemble.
-    VALUE_ERROR: tuple
-        Error code for incorrect argument.
+        File structure invalid (code 8).
+    DATATYPE_MISMATCH : tuple
+        Data type inconsistent with previous ensemble (code 7).
+    VALUE_ERROR : tuple
+        Invalid argument provided (code 9).
     UNKNOWN_ERROR : tuple
-        Error code for an unspecified or unknown error.
+        Unspecified or unexpected error (code 99).
 
     Methods
     -------
-    get_message(code)
-        Retrieves the descriptive message corresponding to a given error code.
-
-    Parameters
-    ----------
-    code : int
-        The error code for which the message is to be retrieved.
-
-    Returns
-    -------
-    str
-        The descriptive message associated with the provided error code. If the code
-        is not valid, returns \"Error: Invalid error code.\"
+    get_message(code: int) -> str
+        Retrieve the message corresponding to an error code.
     """
 
     SUCCESS = (0, "Success")
@@ -247,51 +227,33 @@ class ErrorCode(Enum):
 
 def safe_open(filename: FilePathType, mode: str = "rb") -> SafeOpenReturn:
     """
-    Safely open a file, handling common file-related errors.
+    Safely open a binary file with exception handling.
 
-    This function attempts to open a file and handles exceptions that may occur,
-    such as the file not being found or a lack of necessary permissions.
-    It returns the file object if successful, or an appropriate error message.
+    Attempts to open a file and handles common exceptions gracefully,
+    returning both the file object and an error code.
 
-    Parameters
-    ----------
-    filepath : str
-        The path to the file that you want to open.
+    Args
+    ----
+    filename : str or Path
+        Path to the file to open.
     mode : str, optional
-        The mode in which to open the file (e.g., 'r' for reading, 'w' for writing).
-        Defaults to 'r'.
+        File mode. Defaults to "rb" (read binary).
 
     Returns
     -------
-    file object or None
-        If the file is successfully opened, the file object is returned.
-        If an error occurs, None is returned and an error message is printed.
+    tuple[BinaryIO | None, ErrorCode]
+        File object (None on error) and ErrorCode enum.
 
     Raises
     ------
-    FileNotFoundError
-        If the file does not exist.
-    PermissionError
-        If the file cannot be opened due to insufficient permissions.
-    IOError
-        If an I/O error occurs during the opening of the file.
-    MemoryError
-        If required memory cannot be allocated by Python.
-    Exception
-        If an unexpected error occurs
+    No exceptions raised. All errors are caught and returned as ErrorCode.
 
     Examples
     --------
-    >>> f = safe_open('existing_file.txt')
-    >>> if f:
-    ...     content = f.read()
+    >>> f, error = safe_open("data.bin")
+    >>> if error == ErrorCode.SUCCESS:
+    ...     data = f.read()
     ...     f.close()
-
-    >>> safe_open('nonexistent_file.txt')
-    Error: File not found.
-
-    >>> safe_open('/restricted_access_file.txt')
-    Error: Permission denied.
     """
     try:
         filename_str: str = os.path.abspath(str(filename))
@@ -316,32 +278,31 @@ def safe_open(filename: FilePathType, mode: str = "rb") -> SafeOpenReturn:
 
 def safe_read(bfile: BinaryIO, num_bytes: int) -> SafeReadReturn:
     """
-    Safely read a specified number of bytes from a binary file.
+    Read specified bytes from a binary file with validation.
 
-    This function attempts to read `num_bytes` from the provided binary file object.
-    It includes error handling for I/O errors, unexpected end-of-file, and other potential issues.
+    Reads exactly `num_bytes` from the file. Returns error if fewer bytes
+    are available (EOF reached unexpectedly).
 
-    Parameters
-    ----------
-    bfile : file object
-        A binary file object opened for reading.
+    Args
+    ----
+    bfile : BinaryIO
+        Open binary file object.
     num_bytes : int
-        The number of bytes to read from the file.
+        Number of bytes to read.
 
     Returns
     -------
-    bytes or None
-        The bytes read from the file, or None if an error occurred.
+    tuple[bytes | None, ErrorCode]
+        Bytes read (None on error) and ErrorCode enum.
 
-    Raises
-    ------
-    IOError
-        If an I/O error occurs during the file read operation.
-    OSError
-        If an operating system-related error occurs.
-    ValueError
-        If fewer than `num_bytes` are read from the file, indicating an unexpected end of file.
+    Examples
+    --------
+    >>> f, _ = safe_open("data.bin")
+    >>> data, error = safe_read(f, 100)
+    >>> if error == ErrorCode.SUCCESS:
+    ...     print(len(data))  # Output: 100
     """
+
     try:
         readbytes: bytes = bfile.read(num_bytes)
 
@@ -361,52 +322,54 @@ def safe_read(bfile: BinaryIO, num_bytes: int) -> SafeReadReturn:
 
 def fileheader(rdi_file: FilePathType) -> FileHeaderReturn:
     """
-    Parse the binary RDI ADCP file and extract header information.
+    Parse RDI file header to extract ensemble metadata.
 
-    This function reads a binary file and extracts several fields from its header,
-    returning them as numpy arrays and integers.
+    Reads the file header and builds arrays mapping ensemble number to file
+    locations and data type information. Required as first step before
+    reading Fixed/Variable Leaders or data types.
 
-    Parameters
-    ----------
-    filename : str
-        The path to the binary file to be read.
+    Args
+    ----
+    rdi_file : str or Path
+        Path to RDI binary file in PD0 format.
 
     Returns
     -------
-    datatype : numpy.ndarray
-        A 1D numpy array of type `int16` representing the data type field from the file header.
-    byte : numpy.ndarray
-        A 1D numpy array of type `int16` representing the byte information from the file header.
-    byteskip : numpy.ndarray
-        A 1D numpy array of type `int32` indicating how many bytes to skip in the file.
-    address_offset : numpy.ndarray
-        A 2D numpy array of type `int` representing the address offsets within the file.
-    dataid : numpy.ndarray
-        A 2D numpy array of type `int` representing the data IDs extracted from the file header.
-    ensemble : int
-        An integer representing the ensemble information from the file header.
-    error_code : int
-        An integer representing the error code, where 0 typically indicates success.
+    tuple
+        (datatype, byte, byteskip, address_offset, dataid, ensemble, error_code)
+
+        - datatype : np.ndarray (int16, shape (n_ensembles,))
+            Number of data type records in each ensemble.
+        - byte : np.ndarray (int16, shape (n_ensembles,))
+            Byte count for each ensemble.
+        - byteskip : np.ndarray (int32, shape (n_ensembles,))
+            File offset (bytes from start) to each ensemble.
+        - address_offset : np.ndarray (int, shape (n_ensembles, n_types))
+            Byte offset within ensemble for each data type.
+        - dataid : np.ndarray (int, shape (n_ensembles, n_types))
+            Data type ID for each position in ensemble.
+        - ensemble : int
+            Number of ensembles successfully parsed.
+        - error_code : int
+            0 on success, non-zero ErrorCode.code value on error.
 
     Raises
     ------
-    IOError
-        If there is an issue opening or reading from the file.
-    ValueError
-        If the file does not contain the expected structure or the data cannot be parsed correctly.
+    No exceptions. All errors returned via error_code.
 
     Notes
     -----
-    This function assumes that the file is in a specific RDI binary format and may not work correctly
-    if the file format differs.
+    - Mandatory checksum verification (RDI spec Section 7.2).
+    - File may be truncated; returns partial data with appropriate error_code.
+    - Data type IDs: 0-1 (Fixed Leader), 128-129 (Variable Leader),
+      256-257 (Velocity), 512-513 (Correlation), 768-769 (Echo Intensity),
+      1024-1025 (Percent Good), 1280-1281 (Status).
 
     Examples
     --------
-    >>> datatype, byte, byteskip, address_offset, dataid, ensemble, error_code = fileheader("data.bin")
-    >>> if error_code == 0:
-    ...     print("File header read successfully.")
-    ... else:
-    ...     print(f"Error code: {error_code}")
+    >>> dt, byte, skip, offset, ids, n_ens, err = fileheader("test.000")
+    >>> if err == 0:
+    ...     print(f"Parsed {n_ens} ensembles")
     """
 
     filename: str = str(rdi_file)
@@ -571,58 +534,54 @@ def fixedleader(
     ensemble: int = 0,
 ) -> LeaderReturn:
     """
-    Parse the fixed leader data from binary RDI ADCP file.
+    Extract Fixed Leader data from RDI file.
 
-    This function extracts the fixed leader section of an RDI file. It uses
-    optional parameters that can be obtained from the `fileheader` function. The function
-    returns data extracted from the file, the ensemble number, and an error code indicating
-    the status of the operation.
+    Reads Fixed Leader section (ID 0-1) containing system configuration,
+    serial numbers, and sensor information. Parameters byteskip, offset,
+    idarray can be provided from fileheader() for efficiency; otherwise
+    fileheader() is called internally.
 
-    Parameters
-    ----------
-    rdi_file : str
-        The path to the RDI binary file from which to read the fixed leader section.
-    byteskip : numpy.ndarray, optional
-        Number of bytes to skip before reading the fixed leader section. If not provided,
-        defaults to None. Can be obtained from the `fileheader` function.
-    offset : numpy.ndarray, optional
-        Offset in bytes from the start of the file to the fixed leader section. If not provided,
-        defaults to None. Can be obtained from the `fileheader` function.
-    idarray : numpy.ndarray, optional
-        An optional list of IDs to be processed. If not provided, defaults to None. Can be obtained
-        from the `fileheader` function.
+    Args
+    ----
+    rdi_file : str or Path
+        Path to RDI binary file.
+    byteskip : np.ndarray, optional
+        Array of file offsets from fileheader(). If None, fileheader()
+        is called internally.
+    offset : np.ndarray, optional
+        Address offsets from fileheader(). If None, fileheader() is
+        called internally.
+    idarray : np.ndarray, optional
+        Data type IDs from fileheader(). If None, fileheader() is
+        called internally.
     ensemble : int, optional
-        The ensemble number to be used or processed. If not provided, defaults to 0. Can be obtained
-        from the `fileheader` function.
+        Number of ensembles from fileheader(). If 0, fileheader() is
+        called internally.
 
     Returns
     -------
-    data : numpy.ndarray
-        Extracted data from the fixed leader section of the file. The type of `data` depends on the
-        implementation and file structure.
-    ensemble : int
-        The ensemble number processed or retrieved from the file.
-    error_code : int
-        An error code indicating the status of the operation.
+    tuple
+        (data, ensemble, error_code)
 
-    Raises
-    ------
-    FileNotFoundError
-        If the RDI file cannot be found.
-    PermissionError
-        If the file cannot be accessed due to permission issues.
-    ValueError
-        If provided parameters are of incorrect type or value.
+        - data : np.ndarray (int64, shape (36, n_ensembles))
+            Fixed Leader fields: ID, CPU version, system config, beam/cell
+            counts, pings per ensemble, sensor info, serial numbers, etc.
+        - ensemble : int
+            Number of ensembles successfully parsed (may be less than input).
+        - error_code : int
+            0 on success, non-zero on error.
+
+    Notes
+    -----
+    - Handles missing serial numbers from old firmware (replaced with flag 0).
+    - If called without optional parameters, it automatically calls fileheader().
 
     Examples
     --------
-    >>> data, ensemble, error_code = fixedleader('data.rdi', byteskip=10, offset=50)
-    >>> print(data, ensemble, error_code)
-    (data_from_file, 0, 0)
-
-    >>> data, ensemble, error_code = fixedleader('data.rdi', idarray=[1, 2, 3])
-    >>> print(data, ensemble, error_code)
-    (data_from_file, 0, 0)
+    >>> fl_data, n_ens, err = fixedleader("test.000")
+    >>> if err == 0:
+    ...     n_beams = fl_data[6, 0]  # Beam count from first ensemble
+    ...     n_cells = fl_data[7, 0]  # Cell count from first ensemble
     """
 
     filename: str = str(rdi_file)
@@ -783,55 +742,46 @@ def variableleader(
     ensemble: int = 0,
 ) -> LeaderReturn:
     """
-    Parse the variable leader data from binary RDI ADCP file.
+    Extract Variable Leader data from RDI file.
 
-    This function extracts the variable leader section of an RDI file. It uses
-    optional parameters that can be obtained from the `fileheader` function. The function
-    returns data extracted from the file, the ensemble number, and an error code indicating
-    the status of the operation.
+    Reads Variable Leader section (ID 128-129) containing time, motion
+    sensors (heading, pitch, roll), depth, temperature, and status for
+    each ensemble.
 
-    Parameters
-    ----------
-    rdi_file : str
-        The path to the RDI binary file from which to read the fixed leader section.
-    byteskip : numpy.ndarray, optional
-        Number of bytes to skip before reading the fixed leader section. If not provided,
-        defaults to None. Can be obtained from the `fileheader` function.
-    offset : numpy.ndarray, optional
-        Offset in bytes from the start of the file to the fixed leader section. If not provided,
-        defaults to None. Can be obtained from the `fileheader` function.
-    idarray : numpy.ndarray, optional
-        An optional list of IDs to be processed. If not provided, defaults to None. Can be obtained
-        from the `fileheader` function.
+    Args
+    ----
+    rdi_file : str or Path
+        Path to RDI binary file.
+    byteskip : np.ndarray, optional
+        Array of file offsets from fileheader(). Auto-fetched if None.
+    offset : np.ndarray, optional
+        Address offsets from fileheader(). Auto-fetched if None.
+    idarray : np.ndarray, optional
+        Data type IDs from fileheader(). Auto-fetched if None.
     ensemble : int, optional
-        The ensemble number to be used or processed. If not provided, defaults to 0. Can be obtained
-        from the `fileheader` function.
+        Number of ensembles from fileheader(). Auto-fetched if 0.
 
     Returns
     -------
-    data : numpy.ndarray
-        Extracted data from the variable leader section of the file.
-    ensemble : int
-        The ensemble number processed or retrieved from the file.
-    error_code : int
-        An error code indicating the status of the operation.
+    tuple
+        (data, ensemble, error_code)
 
-    Raises
-    ------
-    FileNotFoundError
-        If the RDI file cannot be found.
-    PermissionError
-        If the file cannot be accessed due to permission issues.
-    ValueError
-        If provided parameters are of incorrect type or value.
+        - data : np.ndarray (int32, shape (48, n_ensembles))
+            Variable Leader fields: ID, RTC (year/month/day/time),
+            heading, pitch, roll, temperature, salinity, pressure,
+            motion sensor std devs, ADC readings, error status, etc.
+        - ensemble : int
+            Number of ensembles parsed.
+        - error_code : int
+            0 on success.
 
     Examples
     --------
-    >>> data, ensemble, error_code = fixedleader('data.rdi', byteskip=10, offset=50)
-    >>> print(data, ensemble, error_code)
-    (data_from_file, 0, 0)
-
-    >>> data, ensemble, error_code = fixedleader('data.rdi', idarray=[1, 2, 3])
+    >>> vl_data, n_ens, err = variableleader("test.000")
+    >>> if err == 0:
+    ...     year = vl_data[2, 0]    # Year
+    ...     month = vl_data[3, 0]   # Month
+    ...     heading = vl_data[13, 0]  # Heading (0.01° units)
     """
 
     filename: str = str(rdi_file)
@@ -985,36 +935,59 @@ def datatype(
     ensemble: int = 0,
 ) -> DataTypeReturn:
     """
-    Parse 3D data from binary RDI ADCP file.
+    Extract 3D data arrays (velocity, correlation, echo, etc.) from RDI file.
 
-    This function extracts 3D data like velocity, echo intensity,
-    correlation, percent good, and status from the binary RDI file.
-    It uses optional parameters can be obtained from the
-    `fileheader` function and `variableleader` functions. The function
-    returns data of shape (beam, cell, ensemble). The number of beams,
-    cells and ensembles along with error code are also returned.
+    Reads ensemble data for variables that vary by beam and cell:
+    velocity (16-bit), correlation, echo intensity, percent good, and
+    status (all 8-bit).
 
-    Parameters
-    ----------
-    filename : TYPE STRING
-        RDI ADCP binary file. The function can currently extract Workhorse,
-        Ocean Surveyor, and DVS files.
-
-    var_name : TYPE STRING
-        Extracts RDI variables that are functions of beam and cells.
-        List of permissible variable names: 'velocity', 'correlation',
-        'echo', 'percent good', 'status'
+    Args
+    ----
+    filename : str or Path
+        Path to RDI binary file.
+    var_name : str
+        Variable to extract. One of: 'velocity', 'correlation', 'echo',
+        'percent good', 'status'.
+    cell : int or np.ndarray, optional
+        Cell counts per ensemble. If int/0, fetched from fixedleader().
+    beam : int or np.ndarray, optional
+        Beam counts per ensemble. If int/0, fetched from fixedleader().
+    byteskip : np.ndarray, optional
+        File offsets from fileheader(). Auto-fetched if None.
+    offset : np.ndarray, optional
+        Address offsets from fileheader(). Auto-fetched if None.
+    idarray : np.ndarray, optional
+        Data type IDs from fileheader(). Auto-fetched if None.
+    ensemble : int, optional
+        Number of ensembles. Auto-fetched if 0.
 
     Returns
     -------
-    data : numpy.ndarray
-        Returns a 3-D array of size (beam, cell, ensemble) for the var_name.
-    beam: int
-        Returns number of beams.
-    cell: int
-        Returns number of cells.
-    ensemble: int
-        Returns number of ensembles.
+    tuple
+        (data, ensemble, cell_array, beam_array, error_code)
+
+        - data : np.ndarray (shape (max_beam, max_cell, n_ensembles))
+            Data values. Velocity is int16 (-32768 = missing), others uint8.
+            Dimensions padded to max across all ensembles.
+        - ensemble : int
+            Ensembles parsed (may be less than input if corrupted).
+        - cell_array : np.ndarray (int, shape (n_ensembles,))
+            Cell count for each ensemble.
+        - beam_array : np.ndarray (int, shape (n_ensembles,))
+            Beam count for each ensemble.
+        - error_code : int
+            0 on success.
+
+    Raises
+    ------
+    No exceptions. Errors returned via error_code.
+
+    Examples
+    --------
+    >>> vel, n_ens, cells, beams, err = datatype("test.000", "velocity")
+    >>> if err == 0:
+    ...     print(f"Shape: {vel.shape}")  # (n_beams, n_cells, n_ensembles)
+    ...     v_beam0_cell0 = vel[0, 0, :]  # Velocity time series
     """
 
     varid: dict[str, tuple[int, ...]] = {
@@ -1153,4 +1126,3 @@ def datatype(
 
     data: np.ndarray = var_array[:, :, :ensemble]
     return (data, ensemble, cell_array, beam_array, error_code)
-

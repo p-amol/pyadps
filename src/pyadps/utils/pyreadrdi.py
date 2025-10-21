@@ -145,7 +145,7 @@ def safe_open(filename: FilePathType, mode: str = "rb") -> SafeOpenReturn:
         logger.error(f"Out of memory while accessing '{filename}': {e}")
         return (None, ErrorCode.OUT_OF_MEMORY)
     except Exception as e:
-        logger.exception(f"Unexpected error opening '{filename}'")
+        logger.exception(f"Unexpected error opening '{filename}': {e}")
         return (None, ErrorCode.UNKNOWN_ERROR)
 
 
@@ -894,4 +894,3 @@ def datatype(
 
     data: np.ndarray = var_array[:, :, :ensemble]
     return (data, ensemble, cell_array, beam_array, error_code)
-

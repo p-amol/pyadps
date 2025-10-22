@@ -869,17 +869,19 @@ def datatype(
     ensemble_idx: int = 0
     try:
         for ensemble_idx in range(ensemble):
+            bfile.seek(fbyteskip[ensemble_idx], 1)
+            bdata: bytes = bfile.read(2)
             total_bytes: int = (
                 beam_array[ensemble_idx] * cell_array[ensemble_idx] * bitint
             )
-            bfile.seek(fbyteskip[ensemble_idx], 1)
-            bdata: bytes = bfile.read(total_bytes)
-            velocity_block: np.ndarray = np.frombuffer(bdata, dtype=inttype)
+            bdata = bfile.read(total_bytes)
+
+            velocity_block: np.ndarray = np.frombuffer(bdata, dtype=inttype).copy()
             var_array[
                 : beam_array[ensemble_idx], : cell_array[ensemble_idx], ensemble_idx
             ] = velocity_block.reshape(
-                (beam_array[ensemble_idx], cell_array[ensemble_idx])
-            )
+                (cell_array[ensemble_idx], beam_array[ensemble_idx])
+            ).T
             bfile.seek(byteskip[ensemble_idx], 0)
         bfile.close()
 

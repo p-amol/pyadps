@@ -104,7 +104,66 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 from pyadps.utils import pyreadrdi
-from pyadps.utils.pyreadrdi import bcolors
+
+
+class bcolors:
+    """
+    Terminal color codes for styling console output.
+
+    This class provides a set of color codes and text formatting options for styling
+    terminal or console output. The codes can be used to change the text color and style
+    in a terminal that supports ANSI escape sequences.
+
+    Attributes
+    ----------
+    HEADER : str
+        Color code for magenta text, typically used for headers.
+    OKBLUE : str
+        Color code for blue text, typically used for general information.
+    OKCYAN : str
+        Color code for cyan text, used for informational messages.
+    OKGREEN : str
+        Color code for green text, typically used for success messages.
+    WARNING : str
+        Color code for yellow text, used for warnings.
+    FAIL : str
+        Color code for red text, used for errors or failures.
+    ENDC : str
+        Reset color code to default. Resets the color and formatting.
+    BOLD : str
+        Bold text formatting code. Makes text bold.
+    UNDERLINE : str
+        Underlined text formatting code. Underlines the text.
+
+    Usage
+    -----
+    To use these color codes, prepend them to your string and append `bcolors.ENDC`
+    to reset the formatting. For example:
+
+    >>> print(f"{bcolors.OKGREEN}Success{bcolors.ENDC}")
+    >>> print(f"{bcolors.WARNING}Warning: This is a warning.{bcolors.ENDC}")
+
+    Examples
+    --------
+    >>> print(f"{bcolors.OKBLUE}This text is blue.{bcolors.ENDC}")
+    >>> print(f"{bcolors.FAIL}This text is red and indicates an error.{bcolors.ENDC}")
+    >>> print(f"{bcolors.BOLD}{bcolors.UNDERLINE}Bold and underlined text.{bcolors.ENDC}")
+
+    Notes
+    -----
+    These color codes use ANSI escape sequences and may not be supported in all terminal
+    environments. The appearance may vary depending on the terminal emulator used.
+    """
+
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
 
 
 class DotDict:

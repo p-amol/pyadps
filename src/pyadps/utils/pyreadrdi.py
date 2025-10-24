@@ -74,6 +74,7 @@ class ErrorCode(Enum):
     DATATYPE_MISMATCH = (7, "Warning: Data type mismatch.")
     FILE_CORRUPTED = (8, "Warning: File Corrupted.")
     VALUE_ERROR = (9, "Value Error for incorrect argument.")
+    CHECKSUM_ERROR = (10, "Error: Ensemble checksum verification failed.")
     UNKNOWN_ERROR = (99, "Unknown error.")
 
     def __init__(self, code: int, message: str) -> None:
@@ -194,6 +195,117 @@ def safe_read(bfile: BinaryIO, num_bytes: int) -> SafeReadReturn:
         return (None, ErrorCode.VALUE_ERROR)
 
 
+# ============================================================================
+# CHECKSUM VERIFICATION HELPERS (Private - Internal Use Only)
+# ============================================================================
+
+
+def _calculate_checksum(data: bytes) -> int:
+    """
+    Calculate RDI ensemble checksum per RDI spec Section 7.2.
+
+    The checksum is calculated by summing all bytes in the ensemble
+    (excluding the 2-byte checksum itself). Only the 2-byte least
+    significant digits are used.
+
+    Args
+    ----
+    data : bytes
+        Ensemble bytes excluding the checksum word (last 2 bytes).
+
+    Returns
+    -------
+    int
+        16-bit checksum (lower 16 bits of sum).
+
+    Examples
+    --------
+    >>> data = b'\\x7f\\x7f...'
+    >>> checksum = _calculate_checksum(data)
+    >>> checksum & 0xFFFF
+    12345
+    """
+    return sum(data) & 0xFFFF
+
+
+def _verify_ensemble_checksum(
+    bfile: BinaryIO,
+    ensemble_start_pos: int,
+    ensemble_size: int,
+) -> Tuple[bool, int]:
+    """
+    Verify checksum for a single ensemble at specified file position.
+
+    Per RDI spec Section 7.2:
+    1. Ensemble size (excluding checksum) is at offset +2 in header
+    2. Checksum is located at: ensemble_start + ensemble_size
+    3. Calculate checksum on all bytes from ensemble_start to end of data
+    4. Compare to stored checksum
+
+    Args
+    ----
+    bfile : BinaryIO
+        Open binary file object.
+    ensemble_start_pos : int
+        File position of ensemble start (header ID byte).
+    ensemble_size : int
+        Size of ensemble in bytes (from header byte +2, excludes checksum).
+
+    Returns
+    -------
+    tuple[bool, int]
+        (is_valid, error_code) where error_code is 0 if valid,
+        CHECKSUM_ERROR if mismatch.
+
+    Notes
+    -----
+    Logs warning if checksum mismatch detected.
+    """
+    try:
+        # Read ensemble data (excluding checksum)
+        bfile.seek(ensemble_start_pos, 0)
+        ensemble_data: bytes = bfile.read(ensemble_size)
+
+        if len(ensemble_data) != ensemble_size:
+            logger.warning(
+                f"Incomplete ensemble at offset {ensemble_start_pos}: "
+                f"expected {ensemble_size} bytes, got {len(ensemble_data)}"
+            )
+            return (False, ErrorCode.FILE_CORRUPTED.code)
+
+        # Calculate expected checksum
+        calculated_checksum: int = _calculate_checksum(ensemble_data)
+
+        # Read stored checksum (2 bytes, little-endian)
+        bfile.seek(ensemble_start_pos + ensemble_size, 0)
+        checksum_bytes: bytes = bfile.read(2)
+
+        if len(checksum_bytes) != 2:
+            logger.warning(
+                f"Missing checksum at offset {ensemble_start_pos + ensemble_size}"
+            )
+            return (False, ErrorCode.FILE_CORRUPTED.code)
+
+        stored_checksum: int = int.from_bytes(
+            checksum_bytes, byteorder="little", signed=False
+        )
+
+        # Compare checksums
+        if calculated_checksum != stored_checksum:
+            logger.error(
+                f"Checksum mismatch at ensemble offset {ensemble_start_pos}: "
+                f"calculated {calculated_checksum:#06x}, "
+                f"stored {stored_checksum:#06x}."
+            )
+            return (False, ErrorCode.CHECKSUM_ERROR.code)
+
+        return (True, ErrorCode.SUCCESS.code)
+
+    except (IOError, OSError, ValueError) as e:
+        logger.error(f"Error verifying checksum at offset {ensemble_start_pos}: {e}")
+        return (False, ErrorCode.IO_ERROR.code)
+
+
 def fileheader(rdi_file: FilePathType) -> FileHeaderReturn:
     """
     Parse RDI file header to extract ensemble metadata.
@@ -217,6 +329,8 @@ def fileheader(rdi_file: FilePathType) -> FileHeaderReturn:
     Notes
     -----
     - File may be truncated; returns partial data with appropriate error_code.
+    - Checksum verification is performed per RDI spec Section 7.2.
+    - If checksum fails, parsing stops and accumulated data is returned.
 
     Examples
     --------
@@ -258,6 +372,7 @@ def fileheader(rdi_file: FilePathType) -> FileHeaderReturn:
 
     try:
         while byt := bfile.read(6):
+            ensemble_start_pos: int = bfile.tell() - 6
             hid[0], hid[1], hid[2], hid[3], hid[4] = unpack("<BBHBB", byt)
             headerid = np.append(headerid, np.int8(hid[0]))
             sourceid = np.append(sourceid, np.int16(hid[1]))
@@ -342,6 +457,25 @@ def fileheader(rdi_file: FilePathType) -> FileHeaderReturn:
             bskip = int(bskip) + int(byte[i]) + 2
             bfile.seek(bskip, 0)
             byteskip = np.append(byteskip, np.int32(bskip))
+
+            # CHECKSUM VERIFICATION (Last step - per RDI spec Section 7.2)
+            # If checksum fails here, we stop and return accumulated data
+            is_valid_checksum, checksum_error = _verify_ensemble_checksum(
+                bfile,
+                ensemble_start_pos,
+                byte[i],
+            )
+
+            if not is_valid_checksum:
+                error_msg: str = ErrorCode.get_message(checksum_error)
+                logger.error(
+                    f"Checksum verification failed at ensemble {i + 1} "
+                    f"(file offset {ensemble_start_pos}): {error_msg}. "
+                    f"Truncating to {i} valid ensembles."
+                )
+                error = ErrorCode(checksum_error, error_msg)
+                break
+
             i += 1
 
     except (ValueError, StructError, OverflowError) as e:

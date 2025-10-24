@@ -354,6 +354,21 @@ def fileheader(rdi_file: FilePathType) -> FileHeaderReturn:
 
     ensemble = i
     bfile.close()
+
+    if i == 0:
+        error = ErrorCode.FILE_CORRUPTED
+        logger.error("No valid ensembles found in file")
+        error_code = error.code
+        return (
+            np.array([]),
+            np.array([]),
+            np.array([]),
+            np.array([]),
+            np.array([]),
+            0,
+            error_code,
+        )
+
     address_offset_array: np.ndarray = np.array(address_offset)
     dataid_array: np.ndarray = np.array(dataid)
     datatype = datatype[0:ensemble]

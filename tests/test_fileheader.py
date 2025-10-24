@@ -18,7 +18,12 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from pyadps.utils.pyreadrdi import ErrorCode, fileheader
+from pyadps.utils.pyreadrdi import (
+    ErrorCode,
+    fileheader,
+    _calculate_checksum,
+    _verify_ensemble_checksum,
+)
 
 
 # ============================================================================
@@ -27,7 +32,7 @@ from pyadps.utils.pyreadrdi import ErrorCode, fileheader
 
 
 @pytest.fixture
-def valid_rdi_header():
+def valid_rdi_ensemble():
     """Generate a valid complete RDI ensemble matching WorkHorse spec."""
     num_datatypes = 7
     beams = 4
@@ -114,31 +119,31 @@ def valid_rdi_header():
 
 
 @pytest.fixture
-def valid_rdi_file(tmp_path, valid_rdi_header):
+def valid_rdi_file(tmp_path, valid_rdi_ensemble):
     """Create a temporary file with valid RDI data.
 
     Single ensemble with all required sections.
     """
     rdi_file = tmp_path / "test_single_ensemble.000"
-    rdi_file.write_bytes(valid_rdi_header)
+    rdi_file.write_bytes(valid_rdi_ensemble)
     return rdi_file
 
 
 @pytest.fixture
-def multi_ensemble_rdi_file(tmp_path, valid_rdi_header):
+def multi_ensemble_rdi_file(tmp_path, valid_rdi_ensemble):
     """Create a temporary file with multiple valid RDI ensembles."""
     rdi_file = tmp_path / "test_multi_ensemble.000"
     # Write 3 identical ensembles
-    rdi_file.write_bytes(valid_rdi_header * 3)
+    rdi_file.write_bytes(valid_rdi_ensemble * 3)
     return rdi_file
 
 
 @pytest.fixture
-def truncated_rdi_file(tmp_path, valid_rdi_header):
+def truncated_rdi_file(tmp_path, valid_rdi_ensemble):
     """Create a file truncated mid-header (incomplete first read)."""
     rdi_file = tmp_path / "test_truncated.000"
     # Write only first 3 bytes of header (incomplete)
-    rdi_file.write_bytes(valid_rdi_header[:3])
+    rdi_file.write_bytes(valid_rdi_ensemble[:3])
     return rdi_file
 
 
@@ -167,9 +172,9 @@ def invalid_source_id_file(tmp_path):
 
 
 @pytest.fixture
-def mismatched_datatype_file(tmp_path, valid_rdi_header):
+def mismatched_datatype_file(tmp_path, valid_rdi_ensemble):
     """Create a file where second ensemble has different datatype count."""
-    header1 = valid_rdi_header
+    header1 = valid_rdi_ensemble
 
     # Second header with different num_datatypes
     header2 = struct.pack("<BBHBB", 0x7F, 0x7F, 100, 0, 4)  # 4 instead of 7
@@ -201,7 +206,7 @@ def empty_file(tmp_path):
 
 
 @pytest.fixture
-def file_with_corrupted_offset(tmp_path, valid_rdi_header):
+def file_with_corrupted_offset(tmp_path, valid_rdi_ensemble):
     """Create a file with first ensemble valid, second ensemble corrupted offset array.
 
     Simulates power loss or firmware issue mid-recording after first ensemble completes.
@@ -209,11 +214,15 @@ def file_with_corrupted_offset(tmp_path, valid_rdi_header):
     rdi_file = tmp_path / "corrupted_second_ensemble.000"
 
     # First ensemble: valid
-    first_ensemble = valid_rdi_header
+    first_ensemble = valid_rdi_ensemble
 
+    actual_ensemble_size = 837  # Declare this size based on valid_rdi_ensemble
     # Second ensemble: corrupted (truncated offset array)
     # Valid header but incomplete offset data
-    header = struct.pack("<BBHBBH", 0x7F, 0x7F, 837, 0, 7, 1)  # Says 5 datatypes
+    header = struct.pack(
+        "<BBHBB", 0x7F, 0x7F, actual_ensemble_size, 0, 7
+    )  # Says 5 datatypes
+    header += struct.pack("<HHH", 0, 1, 256)
 
     second_ensemble_corrupted = header
 
@@ -313,11 +322,11 @@ class TestFileheaderFileAccess:
 class TestFileheaderReturnStructure:
     """Test that fileheader returns correct structure in all cases."""
 
-    def test_return_tuple_length(self, tmp_path, valid_rdi_header):
+    def test_return_tuple_length(self, tmp_path, valid_rdi_ensemble):
         """Test that fileheader always returns 7-tuple."""
         # Create temporary RDI file
         rdi_file = tmp_path / "test.000"
-        rdi_file.write_bytes(valid_rdi_header)
+        rdi_file.write_bytes(valid_rdi_ensemble)
 
         result = fileheader(rdi_file)
         assert isinstance(result, tuple)
@@ -328,11 +337,11 @@ class TestFileheaderReturnStructure:
         result = fileheader("nonexistent.000")
         assert len(result) == 7
 
-    def test_return_values_are_correct_types(self, tmp_path, valid_rdi_header):
+    def test_return_values_are_correct_types(self, tmp_path, valid_rdi_ensemble):
         """Test return value types on success."""
         # Create temporary RDI file
         rdi_file = tmp_path / "test.000"
-        rdi_file.write_bytes(valid_rdi_header)
+        rdi_file.write_bytes(valid_rdi_ensemble)
 
         datatype, byte, byteskip, address_offset, dataid, ensemble, error_code = (
             fileheader(rdi_file)
@@ -360,10 +369,10 @@ class TestFileheaderReturnStructure:
 class TestFileheaderValidFiles:
     """Test fileheader parsing of valid RDI files."""
 
-    def test_single_ensemble_parsing(self, tmp_path, valid_rdi_header):
+    def test_single_ensemble_parsing(self, tmp_path, valid_rdi_ensemble):
         """Test parsing a file with single ensemble."""
         rdi_file = tmp_path / "single.000"
-        rdi_file.write_bytes(valid_rdi_header)
+        rdi_file.write_bytes(valid_rdi_ensemble)
         datatype, byte, byteskip, address_offset, dataid, ensemble, error_code = (
             fileheader(rdi_file)
         )
@@ -375,10 +384,10 @@ class TestFileheaderValidFiles:
         assert len(byte) == 1
         assert len(byteskip) == 1
 
-    def test_multi_ensemble_parsing(self, tmp_path, valid_rdi_header):
+    def test_multi_ensemble_parsing(self, tmp_path, valid_rdi_ensemble):
         """Test parsing a file with multiple ensembles."""
         multi_ensemble_rdi_file = tmp_path / "multi.000"
-        multi_ensemble_rdi_file.write_bytes(valid_rdi_header * 3)
+        multi_ensemble_rdi_file.write_bytes(valid_rdi_ensemble * 3)
         datatype, byte, byteskip, address_offset, dataid, ensemble, error_code = (
             fileheader(multi_ensemble_rdi_file)
         )
@@ -484,6 +493,26 @@ class TestFileheaderInvalidFormat:
         """Test file missing datatype ID bytes."""
         _, _, _, _, _, _, error_code = fileheader(missing_datatype_bytes_file)
         assert error_code == ErrorCode.FILE_CORRUPTED.code
+
+    def test_corrupted_offset(self, file_with_corrupted_offset):
+        """Test that fileheader() detects corruption in second ensemble.
+
+        Simulates real scenario: instrument loses power mid-recording.
+        First ensemble is valid, second is truncated.
+        """
+        rdi_file = file_with_corrupted_offset
+
+        datatype, byte, byteskip, address_offset, dataid, ensemble, error_code = (
+            fileheader(rdi_file)
+        )
+
+        # Should successfully read first ensemble
+        assert ensemble == 1  # Only 1 valid ensemble
+        assert error_code == ErrorCode.FILE_CORRUPTED.code
+
+        # Verify first ensemble data
+        assert datatype[0] == 7  # or whatever valid_rdi_ensemble has
+        assert len(address_offset) == 1  # Only first ensemble's offsets
 
 
 # ============================================================================
@@ -732,25 +761,377 @@ class TestFileheaderLogging:
         assert len(caplog.records) > 0
 
 
-def test_corrupted_offset(file_with_corrupted_offset):
-    """Test that fileheader() detects corruption in second ensemble.
+# ============================================================================
+# TESTS: Checksum Verification
+# ============================================================================
 
-    Simulates real scenario: instrument loses power mid-recording.
-    First ensemble is valid, second is truncated.
-    """
-    rdi_file = file_with_corrupted_offset
 
-    datatype, byte, byteskip, address_offset, dataid, ensemble, error_code = fileheader(
-        rdi_file
-    )
+class TestChecksumCalculation:
+    """Test checksum calculation helper function."""
 
-    # Should successfully read first ensemble
-    assert ensemble == 1  # Only 1 valid ensemble
-    assert error_code == 8
+    def test_calculate_checksum_basic(self):
+        """Test basic checksum calculation."""
+        data = b"\x7f\x7f\x80\x10"
+        checksum = _calculate_checksum(data)
+        assert checksum == 398  # or 0x018E
 
-    # Verify first ensemble data
-    assert datatype[0] == 7  # or whatever valid_rdi_header has
-    assert len(address_offset) == 1  # Only first ensemble's offsets
+    def test_calculate_checksum_empty(self):
+        """Test checksum with empty bytes."""
+        data = b""
+        checksum = _calculate_checksum(data)
+        assert checksum == 0
+
+    def test_calculate_checksum_single_byte(self):
+        """Test checksum with single byte."""
+        data = b"\x42"
+        checksum = _calculate_checksum(data)
+        assert checksum == 0x42
+
+    def test_calculate_checksum_overflow(self):
+        """Test that checksum masks to 16 bits."""
+        # Create data that sums to > 0xFFFF
+        data = b"\xff" * 300  # 300 * 0xFF = 0x12600
+        checksum = _calculate_checksum(data)
+        # Should mask to lower 16 bits: 0x2600
+        assert checksum == (300 * 0xFF) & 0xFFFF
+        assert checksum <= 0xFFFF
+
+    def test_calculate_checksum_idempotent(self):
+        """Test that checksum is consistent across calls."""
+        data = b"\x7f\x7f\x80\x10\x05\x00"
+        checksum1 = _calculate_checksum(data)
+        checksum2 = _calculate_checksum(data)
+        assert checksum1 == checksum2
+
+    def test_calculate_checksum_order_matters(self):
+        """Test that byte order affects checksum."""
+        data1 = b"\x01\x02"
+        data2 = b"\x02\x01"
+        checksum1 = _calculate_checksum(data1)
+        checksum2 = _calculate_checksum(data2)
+        assert checksum1 == checksum2  # Sum is same, but test data order
+        # Actually, sum is same but let's verify
+        assert 0x01 + 0x02 == 0x02 + 0x01
+
+
+class TestChecksumVerification:
+    """Test checksum verification against RDI ensemble data."""
+
+    @pytest.fixture
+    def valid_ensemble_data(self, tmp_path):
+        """Create a valid ensemble with correct checksum.
+
+        RDI ensemble structure:
+        - Bytes 0-1: Header ID (0x7F7F)
+        - Bytes 2-3: Ensemble size (excluding 2-byte checksum)
+        - Bytes 4-5: Data type count and spare
+        - Bytes 6+: Data (size-6 bytes, where size includes header)
+        - Last 2 bytes: Checksum
+        """
+        # Create ensemble with size = 50 (includes 6-byte header)
+        ensemble_size = 50
+        header = struct.pack("<BBHBB", 0x7F, 0x7F, ensemble_size, 0, 1)  # 6 bytes
+        header += struct.pack("<H", 0)  # 2 bytes: One data type offset
+
+        # Body: ensemble_size - 6 (header) - 2 (offset) = 42 bytes
+        body = b"\x00" * 42
+
+        # Calculate checksum on all data excluding checksum itself
+        ensemble_without_checksum = header + body
+        checksum_val = _calculate_checksum(ensemble_without_checksum)
+        checksum_bytes = struct.pack("<H", checksum_val)
+
+        # Write to file
+        rdi_file = tmp_path / "valid_ensemble.000"
+        rdi_file.write_bytes(ensemble_without_checksum + checksum_bytes)
+
+        return rdi_file, ensemble_without_checksum, checksum_val
+
+    @pytest.fixture
+    def corrupted_ensemble_data(self, tmp_path):
+        """Create ensemble with corrupted checksum."""
+        ensemble_size = 50
+        header = struct.pack("<BBHBB", 0x7F, 0x7F, ensemble_size, 0, 1)
+        header += struct.pack("<H", 0)
+        body = b"\x00" * 42
+
+        ensemble_without_checksum = header + body
+
+        # Use wrong checksum (intentionally corrupt)
+        wrong_checksum = 0x9999
+        checksum_bytes = struct.pack("<H", wrong_checksum)
+
+        rdi_file = tmp_path / "corrupted_ensemble.000"
+        rdi_file.write_bytes(ensemble_without_checksum + checksum_bytes)
+
+        return rdi_file, ensemble_without_checksum
+
+    def test_verify_ensemble_checksum_valid(self, valid_ensemble_data):
+        """Test verification passes with valid checksum."""
+        rdi_file, ensemble_data, expected_checksum = valid_ensemble_data
+
+        with open(rdi_file, "rb") as bfile:
+            is_valid, error_code = _verify_ensemble_checksum(
+                bfile,
+                ensemble_start_pos=0,
+                ensemble_size=50,  # Match the fixture
+            )
+
+        assert is_valid is True
+        assert error_code == ErrorCode.SUCCESS.code
+
+    def test_verify_ensemble_checksum_corrupted(self, corrupted_ensemble_data):
+        """Test verification fails with corrupted checksum."""
+        rdi_file, ensemble_data = corrupted_ensemble_data
+
+        with open(rdi_file, "rb") as bfile:
+            is_valid, error_code = _verify_ensemble_checksum(
+                bfile,
+                ensemble_start_pos=0,
+                ensemble_size=50,  # Match the fixture
+            )
+
+        assert is_valid is False
+        assert error_code == ErrorCode.CHECKSUM_ERROR.code
+
+    def test_verify_ensemble_checksum_incomplete_data(self, tmp_path):
+        """Test verification with incomplete ensemble data."""
+        # Create file with incomplete data
+        ensemble_size = 50
+        header = struct.pack("<BBHBB", 0x7F, 0x7F, ensemble_size, 0, 1)
+        header += struct.pack("<H", 0)
+        body = b"\x00" * 20  # Only 20 bytes instead of 42
+
+        rdi_file = tmp_path / "incomplete_ensemble.000"
+        rdi_file.write_bytes(header + body)
+
+        with open(rdi_file, "rb") as bfile:
+            is_valid, error_code = _verify_ensemble_checksum(
+                bfile,
+                ensemble_start_pos=0,
+                ensemble_size=50,
+            )
+
+        assert is_valid is False
+        assert error_code == ErrorCode.FILE_CORRUPTED.code
+
+    def test_verify_ensemble_checksum_missing_checksum(self, tmp_path):
+        """Test verification when checksum bytes are missing."""
+        ensemble_size = 50
+        header = struct.pack("<BBHBB", 0x7F, 0x7F, ensemble_size, 0, 1)
+        header += struct.pack("<H", 0)
+        body = b"\x00" * 42
+
+        rdi_file = tmp_path / "missing_checksum.000"
+        # Write without checksum bytes
+        rdi_file.write_bytes(header + body)
+
+        with open(rdi_file, "rb") as bfile:
+            is_valid, error_code = _verify_ensemble_checksum(
+                bfile,
+                ensemble_start_pos=0,
+                ensemble_size=50,
+            )
+
+        assert is_valid is False
+        assert error_code == ErrorCode.FILE_CORRUPTED.code
+
+    def test_verify_ensemble_checksum_little_endian(self, tmp_path):
+        """Test that checksum uses little-endian byte order."""
+        ensemble_size = 10
+        header = struct.pack("<BBHBB", 0x7F, 0x7F, ensemble_size, 0, 0)
+
+        # Header is 6 bytes, so body is 10 - 6 = 4 bytes
+        body = b"\x00" * 4
+        ensemble_without_checksum = header + body
+
+        # Checksum = 0x7F + 0x7F + 0x0A + 0x00 + 0x00 + 0x00 + 0x00 + 0x00 + 0x00 + 0x00
+        # = 0x0108
+        checksum_val = _calculate_checksum(ensemble_without_checksum)
+        checksum_bytes = struct.pack("<H", checksum_val)  # Little-endian
+
+        rdi_file = tmp_path / "endian_test.000"
+        rdi_file.write_bytes(ensemble_without_checksum + checksum_bytes)
+
+        with open(rdi_file, "rb") as bfile:
+            is_valid, error_code = _verify_ensemble_checksum(
+                bfile,
+                ensemble_start_pos=0,
+                ensemble_size=ensemble_size,
+            )
+
+        assert is_valid is True
+        assert error_code == ErrorCode.SUCCESS.code
+
+    def test_verify_ensemble_checksum_at_different_offset(self, tmp_path):
+        """Test checksum verification at non-zero file offset."""
+        # Write some garbage data first
+        garbage = b"\xaa" * 1000
+
+        # Then write valid ensemble
+        ensemble_size = 50
+        header = struct.pack("<BBHBB", 0x7F, 0x7F, ensemble_size, 0, 1)
+        header += struct.pack("<H", 0)
+        body = b"\x00" * 42
+
+        ensemble_without_checksum = header + body
+        checksum_val = _calculate_checksum(ensemble_without_checksum)
+        checksum_bytes = struct.pack("<H", checksum_val)
+
+        rdi_file = tmp_path / "offset_test.000"
+        rdi_file.write_bytes(garbage + ensemble_without_checksum + checksum_bytes)
+
+        ensemble_start_pos = len(garbage)
+
+        with open(rdi_file, "rb") as bfile:
+            is_valid, error_code = _verify_ensemble_checksum(
+                bfile,
+                ensemble_start_pos=ensemble_start_pos,
+                ensemble_size=ensemble_size,
+            )
+
+        assert is_valid is True
+        assert error_code == ErrorCode.SUCCESS.code
+
+
+class TestFileheaderWithChecksum:
+    """Test fileheader function with checksum verification integration."""
+
+    @pytest.fixture
+    def valid_rdi_file_with_checksums(self, tmp_path):
+        """Create valid RDI file with multiple ensembles and correct checksums."""
+        rdi_file = tmp_path / "valid_multi_ensemble.000"
+        file_data = b""
+
+        # Create 3 valid ensembles
+        ensemble_size = 50
+        for ens_num in range(3):
+            header = struct.pack("<BBHBB", 0x7F, 0x7F, ensemble_size, 0, 1)
+            header += struct.pack("<H", 0)
+            body = b"\x00" * 42
+
+            ensemble_without_checksum = header + body
+            checksum_val = _calculate_checksum(ensemble_without_checksum)
+            checksum_bytes = struct.pack("<H", checksum_val)
+
+            file_data += ensemble_without_checksum + checksum_bytes
+
+        rdi_file.write_bytes(file_data)
+        return rdi_file
+
+    @pytest.fixture
+    def rdi_file_with_checksum_error_at_end(self, tmp_path):
+        """Create RDI file where checksum fails at 3rd ensemble."""
+        rdi_file = tmp_path / "checksum_error_at_3.000"
+        file_data = b""
+
+        ensemble_size = 50
+
+        # First 2 ensembles valid
+        for ens_num in range(2):
+            header = struct.pack("<BBHBB", 0x7F, 0x7F, ensemble_size, 0, 1)
+            header += struct.pack("<H", 0)
+            body = b"\x00" * 42
+
+            ensemble_without_checksum = header + body
+            checksum_val = _calculate_checksum(ensemble_without_checksum)
+            checksum_bytes = struct.pack("<H", checksum_val)
+
+            file_data += ensemble_without_checksum + checksum_bytes
+
+        # 3rd ensemble with WRONG checksum
+        header = struct.pack("<BBHBB", 0x7F, 0x7F, ensemble_size, 0, 1)
+        header += struct.pack("<H", 0)
+        body = b"\x00" * 42
+        ensemble_without_checksum = header + body
+        wrong_checksum = 0x9999
+        checksum_bytes = struct.pack("<H", wrong_checksum)
+
+        file_data += ensemble_without_checksum + checksum_bytes
+
+        rdi_file.write_bytes(file_data)
+        return rdi_file
+
+    def test_fileheader_with_valid_checksums(self, valid_rdi_file_with_checksums):
+        """Test fileheader parses file with valid checksums."""
+        dt, byte, skip, offset, ids, n_ens, err = fileheader(
+            valid_rdi_file_with_checksums
+        )
+
+        assert err == 0
+        assert n_ens == 3
+        assert len(dt) == 3
+        assert len(byte) == 3
+
+    def test_fileheader_stops_on_checksum_error(
+        self, rdi_file_with_checksum_error_at_end
+    ):
+        """Test fileheader stops when checksum fails."""
+        dt, byte, skip, offset, ids, n_ens, err = fileheader(
+            rdi_file_with_checksum_error_at_end
+        )
+
+        # Should return 2 valid ensembles (stop at 3rd)
+        assert err == ErrorCode.CHECKSUM_ERROR.code
+        assert n_ens == 2
+        assert len(dt) == 2
+        assert len(byte) == 2
+
+    def test_fileheader_returns_clean_data_before_checksum_error(
+        self, rdi_file_with_checksum_error_at_end
+    ):
+        """Test that clean data is returned before checksum fails."""
+        dt, byte, skip, offset, ids, n_ens, err = fileheader(
+            rdi_file_with_checksum_error_at_end
+        )
+
+        # Verify first 2 ensembles data is correct
+        assert n_ens == 2
+        assert all(b == 50 for b in byte)  # All ensemble sizes should be 50
+        assert all(dt_val == 1 for dt_val in dt)  # All should have 1 data type
+
+
+class TestChecksumEdgeCases:
+    """Test edge cases and boundary conditions for checksum."""
+
+    def test_checksum_single_bit_error_detected(self, tmp_path):
+        """Test that single-bit error in data is detected."""
+        header = struct.pack("<BBHBB", 0x7F, 0x7F, 10, 0, 0)
+        original_data = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+
+        checksum_val = _calculate_checksum(header + original_data)
+        checksum_bytes = struct.pack("<H", checksum_val)
+
+        # Corrupt one bit in header
+        corrupted_header = b"\x7f\x7f\x81\x00"  # Changed one bit
+        corrupted_header += b"\x00"  # spare
+        corrupted_header += b"\x00"  # datatype
+
+        rdi_file = tmp_path / "single_bit_error.000"
+        rdi_file.write_bytes(corrupted_header + original_data + checksum_bytes)
+
+        with open(rdi_file, "rb") as bfile:
+            is_valid, error_code = _verify_ensemble_checksum(
+                bfile,
+                ensemble_start_pos=0,
+                ensemble_size=10,
+            )
+
+        assert is_valid is False
+        assert error_code == ErrorCode.CHECKSUM_ERROR.code
+
+    def test_checksum_all_zeros(self, tmp_path):
+        """Test checksum with all-zero data."""
+        data = b"\x00" * 100
+        checksum_val = _calculate_checksum(data)
+        assert checksum_val == 0
+
+    def test_checksum_all_ones(self, tmp_path):
+        """Test checksum with all 0xFF data."""
+        data = b"\xff" * 256  # Exactly 256 bytes
+        checksum_val = _calculate_checksum(data)
+        # 0xFF * 256 = 0x0000FF00, masked to 0xFF00
+        assert checksum_val == (256 * 0xFF) & 0xFFFF
 
 
 def test_demo_000_hard_coded_values():

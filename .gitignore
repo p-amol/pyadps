@@ -7,3 +7,8 @@ dist/
 
 # Ignore egg-info
 *.egg-info/
+
+# Pytest files
+.pytest_cache/
+.coverage
+htmlcov/

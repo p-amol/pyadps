@@ -586,8 +586,9 @@ def fixedleader(
     bfile, error = safe_open(filename, "rb")
     if bfile is None:
         return (fid, ensemble, error.code)
-    if error.code == 0 and error_code != 0:
-        error.code = error_code
+    # Use error_code from fileheader if it has one, otherwise use SUCCESS.code
+    if error_code == 0:
+        error_code = error.code
 
     # Handle missing serial numbers from old firmware
     is_serial_missing: bool = False
@@ -679,7 +680,11 @@ def fixedleader(
                 ensemble = i
 
     bfile.close()
-    error_code = error.code
+    # Use error.code for errors detected in the loop, or error_code from fileheader
+    if error.code == ErrorCode.SUCCESS.code:
+        error_code_final = error_code
+    else:
+        error_code_final = error.code
 
     if is_serial_missing:
         logger.info(
@@ -694,7 +699,7 @@ def fixedleader(
         fid[35, :] = MISSING_VALUE_FLAG  # Beam Angle
 
     data: np.ndarray = fid[:, :ensemble]
-    return (data, ensemble, error_code)
+    return (data, ensemble, error_code_final)
 
 
 def variableleader(
@@ -758,9 +763,9 @@ def variableleader(
     bfile, error = safe_open(filename, "rb")
     if bfile is None:
         return (vid, ensemble, error.code)
-
-    if error.code == 0 and error_code != 0:
-        error.code = error_code
+    # Use error_code from fileheader if it has one, otherwise use SUCCESS.code
+    if error_code == 0:
+        error_code = error.code
 
     bfile.seek(0, 0)
     for i in range(ensemble):
@@ -862,9 +867,13 @@ def variableleader(
                 ensemble = i
 
     bfile.close()
-    error_code = error.code
+    # Use error.code for errors detected in the loop, or error_code from fileheader
+    if error.code == ErrorCode.SUCCESS.code:
+        error_code_final = error_code
+    else:
+        error_code_final = error.code
     data: np.ndarray = vid[:, :ensemble]
-    return (data, ensemble, error_code)
+    return (data, ensemble, error_code_final)
 
 
 def datatype(
@@ -981,8 +990,9 @@ def datatype(
     if bfile is None:
         return (var_array, error.code)
 
-    if error.code == 0 and error_code != 0:
-        error.code = error_code
+    # Use error_code from fileheader if it has one, otherwise use SUCCESS.code
+    if error_code == 0:
+        error_code = error.code
 
     bfile.seek(0, 0)
     vid_tuple: Optional[tuple[int, ...]] = varid.get(var_name)
@@ -1043,5 +1053,12 @@ def datatype(
         error = ErrorCode.FILE_CORRUPTED
         ensemble = ensemble_idx
 
+    # Use error.code for errors detected in the loop, or error_code from fileheader
+    if error.code == ErrorCode.SUCCESS.code:
+        error_code_final = error_code
+    else:
+        error_code_final = error.code
+
     data: np.ndarray = var_array[:, :, :ensemble]
-    return (data, ensemble, cell_array, beam_array, error_code)
+    return (data, ensemble, cell_array, beam_array, error_code_final)
+

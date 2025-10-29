@@ -460,10 +460,11 @@ def fileheader(rdi_file: FilePathType) -> FileHeaderReturn:
 
             # CHECKSUM VERIFICATION (Last step - per RDI spec Section 7.2)
             # If checksum fails here, we stop and return accumulated data
+            # Convert numpy scalar to native int for numpy 2.3 compatibility
             is_valid_checksum, checksum_error = _verify_ensemble_checksum(
                 bfile,
                 ensemble_start_pos,
-                byte[i],
+                int(byte[i]),
             )
 
             if not is_valid_checksum:
@@ -783,6 +784,7 @@ def variableleader(
             try:
                 bfile.seek(fbyteskip, 1)
                 bdata: bytes = bfile.read(65)
+                # Variable Leader ID, Ensemble No
                 vid[0][i], vid[1][i] = unpack("<HH", bdata[0:4])
                 if vid[0][i] not in (128, 129):
                     error = ErrorCode.ID_NOT_FOUND
@@ -802,7 +804,7 @@ def variableleader(
                 ) = unpack("<BBBBBBB", bdata[4:11])
                 # Ensemble # MSB & BIT Result
                 (vid[9][i], vid[10][i]) = unpack("<BH", bdata[11:14])
-                # Sound Speed, Transducer Depth, Heading, Pitch, Roll, Temperature & Salinity
+                # Sound Speed, Transducer Depth, Heading, Pitch, Roll, Salinity & Temperature
                 (
                     vid[11][i],
                     vid[12][i],
@@ -1061,4 +1063,3 @@ def datatype(
 
     data: np.ndarray = var_array[:, :, :ensemble]
     return (data, ensemble, cell_array, beam_array, error_code_final)
-

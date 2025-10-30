@@ -184,6 +184,81 @@ class TestErrorCode:
             assert error.code >= 0
         assert count >= 10  # Should have at least 10 error codes
 
+    def test_error_code_get_code_success(self) -> None:
+        """Test get_code() method for SUCCESS message."""
+        code = ErrorCode.get_code("Success")
+        assert code == 0
+        assert code == ErrorCode.SUCCESS.code
+
+    def test_error_code_get_code_file_not_found(self) -> None:
+        """Test get_code() method for FILE_NOT_FOUND message."""
+        code = ErrorCode.get_code("Error: File not found.")
+        assert code == 1
+        assert code == ErrorCode.FILE_NOT_FOUND.code
+
+    def test_error_code_get_code_permission_denied(self) -> None:
+        """Test get_code() method for PERMISSION_DENIED message."""
+        code = ErrorCode.get_code("Error: Permission denied.")
+        assert code == 2
+        assert code == ErrorCode.PERMISSION_DENIED.code
+
+    def test_error_code_get_code_io_error(self) -> None:
+        """Test get_code() method for IO_ERROR message."""
+        code = ErrorCode.get_code("IO Error: Unable to open file.")
+        assert code == 3
+        assert code == ErrorCode.IO_ERROR.code
+
+    def test_error_code_get_code_checksum_error(self) -> None:
+        """Test get_code() method for CHECKSUM_ERROR message."""
+        code = ErrorCode.get_code("Error: Ensemble checksum verification failed.")
+        assert code == 10
+        assert code == ErrorCode.CHECKSUM_ERROR.code
+
+    def test_error_code_get_code_invalid_message(self) -> None:
+        """Test get_code() with invalid error message."""
+        code = ErrorCode.get_code("Unknown message xyz")
+        assert code == 99
+        assert code == ErrorCode.UNKNOWN_ERROR.code
+
+    def test_error_code_get_code_empty_string(self) -> None:
+        """Test get_code() with empty string."""
+        code = ErrorCode.get_code("")
+        assert code == 99
+        assert code == ErrorCode.UNKNOWN_ERROR.code
+
+    def test_error_code_get_code_all_messages(self) -> None:
+        """Test get_code() for all ErrorCode enum messages."""
+        for error in ErrorCode:
+            code = ErrorCode.get_code(error.message)
+            assert code == error.code
+
+    def test_error_code_get_code_roundtrip_consistency(self) -> None:
+        """Test round-trip consistency: code -> message -> code."""
+        for error in ErrorCode:
+            message = ErrorCode.get_message(error.code)
+            code = ErrorCode.get_code(message)
+            assert code == error.code
+
+    def test_error_code_get_code_case_sensitive(self) -> None:
+        """Test get_code() is case-sensitive."""
+        # Correct case returns valid code
+        code = ErrorCode.get_code("Success")
+        assert code == 0
+
+        # Wrong case returns UNKNOWN_ERROR
+        code = ErrorCode.get_code("success")
+        assert code == 99
+
+    def test_error_code_get_code_exact_match_required(self) -> None:
+        """Test get_code() requires exact message match."""
+        # Partial message should not match
+        code = ErrorCode.get_code("Error: File")
+        assert code == 99
+
+        # Extra spaces should not match
+        code = ErrorCode.get_code("Error:  File not found.")
+        assert code == 99
+
 
 # ============================================================================
 # safe_open() TESTS
@@ -782,3 +857,4 @@ class TestEdgeCasesAndBoundaries:
         """Verify VALUE_ERROR code is defined."""
         assert hasattr(ErrorCode, "VALUE_ERROR")
         assert ErrorCode.VALUE_ERROR.code == 9
+

@@ -102,6 +102,49 @@ class ErrorCode(Enum):
                 return error.message
         return "Error: Invalid error code."
 
+    @classmethod
+    def get_code(cls, message: str) -> int:
+        """
+        Retrieve the error code corresponding to a message.
+
+        Performs reverse lookup of error code from error message string.
+        Useful for deriving error codes from messages in datasets.
+
+        Args
+        ----
+        message : str
+            Error message string (e.g., "Success", "Error: File not found.")
+
+        Returns
+        -------
+        int
+            Error code associated with message, or 99 (UNKNOWN_ERROR)
+            if no matching message is found.
+
+        Examples
+        --------
+        >>> from pyadps.utils import pyreadrdi
+        >>> code = pyreadrdi.ErrorCode.get_code("Success")
+        >>> print(code)
+        0
+
+        >>> code = pyreadrdi.ErrorCode.get_code("Error: File not found.")
+        >>> print(code)
+        1
+
+        >>> code = pyreadrdi.ErrorCode.get_code("Unknown message")
+        >>> print(code)
+        99
+        """
+        if not message or message == "Unknown":
+            return 99
+
+        for error in cls:
+            if error.message == message:
+                return error.code
+
+        return 99
+
 
 def safe_open(filename: FilePathType, mode: str = "rb") -> SafeOpenReturn:
     """

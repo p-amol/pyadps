@@ -547,8 +547,8 @@ def fileheader(rdi_file: FilePathType) -> FileHeaderReturn:
             error_code,
         )
 
-    address_offset_array: np.ndarray = np.array(address_offset)
-    dataid_array: np.ndarray = np.array(dataid)
+    address_offset_array: np.ndarray = np.array(address_offset)[0:ensemble, :]
+    dataid_array: np.ndarray = np.array(dataid)[0:ensemble, :]
     datatype = datatype[0:ensemble]
     byte = byte[0:ensemble]
     byteskip = byteskip[0:ensemble]

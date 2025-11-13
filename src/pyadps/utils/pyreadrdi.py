@@ -26,10 +26,12 @@ FileHeaderReturn = Tuple[
     np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int, int
 ]
 LeaderReturn = Tuple[np.ndarray, int, int]
-DataTypeReturn = Union[
-    Tuple[np.ndarray, int],
-    Tuple[np.ndarray, int, np.ndarray, np.ndarray, int],
-]
+DataTypeReturn = Tuple[np.ndarray, int, np.ndarray, np.ndarray, int]
+
+# DataTypeReturn = Union[
+#     Tuple[np.ndarray, int],
+#     Tuple[np.ndarray, int, np.ndarray, np.ndarray, int],
+# ]
 
 
 class ErrorCode(Enum):
@@ -989,7 +991,13 @@ def datatype(
     ):
         _, _, byteskip, offset, idarray, ensemble, error_code = fileheader(filename)
         if error_code > 0 and error_code < 6:
-            return (np.array([]), error_code)
+            return (
+                np.array([], dtype=np.int16),  # data (empty on error)
+                0,  # ensemble
+                np.array([], dtype=np.int32),  # cell_array (empty on error)
+                np.array([], dtype=np.int32),  # beam_array (empty on error)
+                error_code,  # error code
+            )
 
     byteskip = cast(np.ndarray, byteskip)
     offset = cast(np.ndarray, offset)
@@ -1033,7 +1041,13 @@ def datatype(
     bfile: Optional[BinaryIO]
     bfile, error = safe_open(filename, "rb")
     if bfile is None:
-        return (var_array, error.code)
+        return (
+            np.array([], dtype=np.int16),  # data (empty on error)
+            0,  # ensemble
+            np.array([], dtype=np.int32),  # cell_array (empty on error)
+            np.array([], dtype=np.int32),  # beam_array (empty on error)
+            error.code,  # error code
+        )
 
     # Use error_code from fileheader if it has one, otherwise use SUCCESS.code
     if error_code == 0:
@@ -1050,7 +1064,13 @@ def datatype(
             f"'percent good', 'status'"
         )
         error = ErrorCode.VALUE_ERROR
-        return (var_array, error.code)
+        return (
+            np.array([], dtype=np.int16),  # data (empty on error)
+            0,  # ensemble
+            np.array([], dtype=np.int32),  # cell_array (empty on error)
+            np.array([], dtype=np.int32),  # beam_array (empty on error)
+            error.code,  # error code
+        )
 
     # Find variable ID in address offset
     fbyteskip: Optional[list[int]] = None
@@ -1067,7 +1087,13 @@ def datatype(
             f"This data type may not be present in the file."
         )
         error = ErrorCode.ID_NOT_FOUND
-        return (var_array, error.code)
+        return (
+            np.array([], dtype=np.int16),  # data (empty on error)
+            0,  # ensemble
+            np.array([], dtype=np.int32),  # cell_array (empty on error)
+            np.array([], dtype=np.int32),  # beam_array (empty on error)
+            error.code,  # error code
+        )
 
     # Read data from file
     ensemble_idx: int = 0

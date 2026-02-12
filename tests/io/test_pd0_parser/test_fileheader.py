@@ -473,12 +473,12 @@ class TestFileheaderInvalidFormat:
     def test_invalid_header_id(self, invalid_header_id_file):
         """Test file with invalid header ID (not 0x7F)."""
         _, _, _, _, _, _, error_code = fileheader(invalid_header_id_file)
-        assert error_code == ErrorCode.WRONG_RDIFILE_TYPE.code
+        assert error_code == ErrorCode.WRONG_ADCPFILE_TYPE.code
 
     def test_invalid_source_id(self, invalid_source_id_file):
         """Test file with invalid source ID (not 0x7F)."""
         _, _, _, _, _, _, error_code = fileheader(invalid_source_id_file)
-        assert error_code == ErrorCode.WRONG_RDIFILE_TYPE.code
+        assert error_code == ErrorCode.WRONG_ADCPFILE_TYPE.code
 
     def test_empty_file(self, tmp_path):
         """Test parsing an empty file."""
@@ -535,7 +535,7 @@ class TestFileheaderSecondEnsembleInvalidID:
                 logger.warning(f"{error.message} Ensembles truncated at {i}")
                 break
 
-    This branch is different from the first-ensemble case (WRONG_RDIFILE_TYPE)
+    This branch is different from the first-ensemble case (WRONG_ADCPFILE_TYPE)
     because it truncates to the valid ensembles instead of returning empty arrays.
     """
 

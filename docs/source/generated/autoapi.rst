@@ -1,6 +1,0 @@
-﻿autoapi
-=======
-
-.. automodule:: autoapi
-
-   

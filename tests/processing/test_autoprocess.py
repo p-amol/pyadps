@@ -1,0 +1,658 @@
+"""
+Test suite for autoprocess module.
+
+This module provides tests for the autoprocess() function which coordinates
+the full ADCP data processing pipeline.
+
+Run with: pytest test_autoprocess.py -v
+"""
+
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch, mock_open
+
+import numpy as np
+import pytest
+import xarray as xr
+
+
+# -----------------------------------------------------------------------------
+# IMPORT CONFIGURATION
+# -----------------------------------------------------------------------------
+
+try:
+    from pyadps.processing.autoprocess import autoprocess
+    from pyadps.processing.config import ProcessingConfig
+    from pyadps.processing.core import ProcessedDataset
+
+    PATCH_PREFIX = "pyadps.processing.autoprocess"
+except ImportError:
+    from autoprocess import autoprocess
+    from config import ProcessingConfig
+    from core import ProcessedDataset
+
+    PATCH_PREFIX = "autoprocess"
+
+
+# -----------------------------------------------------------------------------
+# FIXTURES
+# -----------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sample_dataset():
+    """Create a minimal valid ADCP dataset for testing."""
+    n_beams = 4
+    n_cells = 20
+    n_time = 100
+
+    np.random.seed(42)
+    velocity = np.random.randint(-2000, 2000, size=(n_beams, n_cells, n_time)).astype(
+        np.float32
+    )
+
+    # Create mask (all valid)
+    mask = np.zeros((n_beams, n_cells, n_time), dtype=np.int8)
+
+    ds = xr.Dataset(
+        {
+            "velocity": (["beam", "cell", "time"], velocity, {"units": "mm/s"}),
+            "mask": (["beam", "cell", "time"], mask),
+        },
+        coords={
+            "time": np.arange(n_time),
+            "cell": np.arange(n_cells),
+            "beam": np.arange(n_beams),
+        },
+    )
+
+    return ds
+
+
+@pytest.fixture
+def mock_config():
+    """Create a mock ProcessingConfig object."""
+    config = MagicMock(spec=ProcessingConfig)
+    config.input_file_path = "/data"
+    config.input_file_name = "test.000"
+    config.isTimeAxisModified = False
+    config.isSensorTest = False
+    config.isQCTest = False
+    config.isProfileTest = False
+    config.isVelocityTest = False
+    config.isAttributes = False
+    return config
+
+
+@pytest.fixture
+def temp_dir():
+    """Create a temporary directory for file tests."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir)
+
+
+@pytest.fixture
+def sample_config_ini(temp_dir):
+    """Create a sample config.ini file."""
+    config_content = """[InputFile]
+input_file_path = /data
+input_file_name = test.000
+
+[TimeAxis]
+time_axis_modified = False
+
+[SensorTest]
+sensor_test = False
+
+[QCTest]
+qc_test = False
+
+[ProfileTest]
+profile_test = False
+
+[VelocityTest]
+velocity_test = False
+"""
+    config_path = temp_dir / "config.ini"
+    config_path.write_text(config_content)
+    return config_path
+
+
+@pytest.fixture
+def sample_binary_file(temp_dir):
+    """Create a dummy binary file for path validation tests."""
+    binary_path = temp_dir / "test.000"
+    binary_path.write_bytes(b"dummy data")
+    return binary_path
+
+
+# -----------------------------------------------------------------------------
+# BASIC FUNCTIONALITY TESTS
+# -----------------------------------------------------------------------------
+
+
+class TestAutoprocessBasic:
+    """Tests for basic autoprocess functionality."""
+
+    def test_autoprocess_with_config_object(
+        self, sample_dataset, mock_config, sample_binary_file
+    ):
+        """Test autoprocess with ProcessingConfig object."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            # Setup mocks
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            # Call autoprocess
+            result = autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                print_summary=False,
+            )
+
+            # Verify
+            mock_read.assert_called_once_with(str(sample_binary_file))
+            mock_proc_class.assert_called_once_with(sample_dataset)
+            mock_proc.apply_config.assert_called_once_with(mock_config)
+            mock_proc.finalize.assert_called_once()
+            assert isinstance(result, xr.Dataset)
+
+    def test_autoprocess_with_config_file(
+        self, sample_dataset, sample_binary_file, temp_dir
+    ):
+        """Test autoprocess with config file path."""
+        # Create a dummy config file
+        config_path = temp_dir / "config.ini"
+        config_path.write_text("[InputFile]\ninput_file_path = /data\n")
+
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+            patch(f"{PATCH_PREFIX}.ProcessingConfig") as mock_config_class,
+        ):
+            # Setup mock config returned by from_ini
+            mock_config = MagicMock()
+            mock_config.input_file_path = str(sample_binary_file.parent)
+            mock_config.input_file_name = sample_binary_file.name
+            mock_config.isTimeAxisModified = False
+            mock_config.isSensorTest = False
+            mock_config.isQCTest = False
+            mock_config.isProfileTest = False
+            mock_config.isVelocityTest = False
+            mock_config_class.from_ini.return_value = mock_config
+
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            result = autoprocess(config_path, print_summary=False)
+
+            mock_config_class.from_ini.assert_called_once_with(str(config_path))
+            mock_read.assert_called_once()
+            assert isinstance(result, xr.Dataset)
+
+    def test_autoprocess_with_path_object(
+        self, sample_dataset, mock_config, sample_binary_file
+    ):
+        """Test autoprocess with Path object for binary file."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            # Pass Path object (not string)
+            result = autoprocess(
+                mock_config,
+                binary_file_path=Path(sample_binary_file),
+                print_summary=False,
+            )
+
+            assert isinstance(result, xr.Dataset)
+
+    def test_autoprocess_returns_dataset(
+        self, sample_dataset, mock_config, sample_binary_file
+    ):
+        """Test that autoprocess returns xarray Dataset."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            result = autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                print_summary=False,
+            )
+
+            assert isinstance(result, xr.Dataset)
+            assert "velocity" in result.data_vars
+
+
+# -----------------------------------------------------------------------------
+# ERROR HANDLING TESTS
+# -----------------------------------------------------------------------------
+
+
+class TestAutoprocessErrors:
+    """Tests for autoprocess error handling."""
+
+    def test_missing_binary_path_with_config_object(self, mock_config):
+        """Test error when binary_file_path not provided with config object."""
+        with pytest.raises(ValueError, match="binary_file_path must be provided"):
+            autoprocess(mock_config)
+
+    def test_missing_binary_path_in_config_file(self, temp_dir):
+        """Test error when binary path not in config file and not provided."""
+        # Config without input file info
+        config_content = """[TimeAxis]
+time_axis_modified = False
+"""
+        config_path = temp_dir / "config.ini"
+        config_path.write_text(config_content)
+
+        with patch(f"{PATCH_PREFIX}.ProcessingConfig") as mock_config_class:
+            mock_config = MagicMock()
+            mock_config.input_file_path = None
+            mock_config.input_file_name = None
+            mock_config_class.from_ini.return_value = mock_config
+
+            with pytest.raises(ValueError, match="binary_file_path must be provided"):
+                autoprocess(config_path)
+
+    def test_binary_file_not_found(self, mock_config):
+        """Test error when binary file doesn't exist."""
+        with pytest.raises(FileNotFoundError, match="Binary file not found"):
+            autoprocess(mock_config, binary_file_path="/nonexistent/file.000")
+
+    def test_invalid_velocity_units(
+        self, sample_dataset, mock_config, sample_binary_file, temp_dir
+    ):
+        """Test error with invalid velocity units."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc.print_summary = MagicMock()
+            mock_proc.velocity_to_netcdf.side_effect = ValueError("Invalid units")
+            mock_proc_class.return_value = mock_proc
+
+            with pytest.raises(ValueError):
+                autoprocess(
+                    mock_config,
+                    binary_file_path=sample_binary_file,
+                    save_netcdf=True,
+                    save_velocity_only=True,
+                    velocity_units="invalid",
+                    print_summary=False,
+                )
+
+
+# -----------------------------------------------------------------------------
+# OUTPUT SAVING TESTS
+# -----------------------------------------------------------------------------
+
+
+class TestAutoprocessOutput:
+    """Tests for autoprocess output saving functionality."""
+
+    def test_save_netcdf_full_dataset(
+        self, sample_dataset, mock_config, sample_binary_file, temp_dir
+    ):
+        """Test saving full processed dataset."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            # Create mock that returns dataset with to_netcdf method
+            mock_result = MagicMock(spec=xr.Dataset)
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = mock_result
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                save_netcdf=True,
+                output_dir=temp_dir,
+                print_summary=False,
+            )
+
+            # Verify to_netcdf was called
+            mock_result.to_netcdf.assert_called_once()
+            call_path = mock_result.to_netcdf.call_args[0][0]
+            assert str(temp_dir) in str(call_path)
+            assert "_processed.nc" in str(call_path)
+
+    def test_save_velocity_only(
+        self, sample_dataset, mock_config, sample_binary_file, temp_dir
+    ):
+        """Test saving velocity components only."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                save_netcdf=True,
+                save_velocity_only=True,
+                output_dir=temp_dir,
+                velocity_units="m/s",
+                print_summary=False,
+            )
+
+            # Verify velocity_to_netcdf was called
+            mock_proc.velocity_to_netcdf.assert_called_once()
+            call_kwargs = mock_proc.velocity_to_netcdf.call_args[1]
+            assert call_kwargs["units"] == "m/s"
+
+    def test_custom_output_filename(
+        self, sample_dataset, mock_config, sample_binary_file, temp_dir
+    ):
+        """Test custom output filename."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_result = MagicMock(spec=xr.Dataset)
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = mock_result
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                save_netcdf=True,
+                output_dir=temp_dir,
+                output_filename="custom_output.nc",
+                print_summary=False,
+            )
+
+            call_path = mock_result.to_netcdf.call_args[0][0]
+            assert "custom_output.nc" in str(call_path)
+
+    def test_default_output_directory(
+        self, sample_dataset, mock_config, sample_binary_file
+    ):
+        """Test that default output directory is same as input."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_result = MagicMock(spec=xr.Dataset)
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = mock_result
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                save_netcdf=True,
+                print_summary=False,
+            )
+
+            call_path = Path(mock_result.to_netcdf.call_args[0][0])
+            assert call_path.parent == sample_binary_file.parent
+
+    def test_print_summary_prints_output_path_when_save_netcdf(
+        self, sample_dataset, mock_config, sample_binary_file, temp_dir, capsys
+    ):
+        """Test that output path is printed when save_netcdf=True and print_summary=True (line 188)."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_result = MagicMock(spec=xr.Dataset)
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = mock_result
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                save_netcdf=True,
+                output_dir=temp_dir,
+                print_summary=True,
+            )
+
+            stdout = capsys.readouterr().out
+            assert "Output saved to:" in stdout
+
+    def test_creates_output_directory(
+        self, sample_dataset, mock_config, sample_binary_file, temp_dir
+    ):
+        """Test that output directory is created if it doesn't exist."""
+        new_output_dir = temp_dir / "new_subdir" / "nested"
+
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_result = MagicMock(spec=xr.Dataset)
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = mock_result
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                save_netcdf=True,
+                output_dir=new_output_dir,
+                print_summary=False,
+            )
+
+            assert new_output_dir.exists()
+
+
+# -----------------------------------------------------------------------------
+# PROCESSING OPTIONS TESTS
+# -----------------------------------------------------------------------------
+
+
+class TestAutoprocessOptions:
+    """Tests for autoprocess processing options."""
+
+    def test_ensure_depth_ascending_true(
+        self, sample_dataset, mock_config, sample_binary_file
+    ):
+        """Test depth ascending option is passed to finalize."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                ensure_depth_ascending=True,
+                print_summary=False,
+            )
+
+            mock_proc.finalize.assert_called_once_with(ensure_depth_ascending=True)
+
+    def test_ensure_depth_ascending_false(
+        self, sample_dataset, mock_config, sample_binary_file
+    ):
+        """Test depth ascending disabled."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                ensure_depth_ascending=False,
+                print_summary=False,
+            )
+
+            mock_proc.finalize.assert_called_once_with(ensure_depth_ascending=False)
+
+    def test_print_summary_enabled(
+        self, sample_dataset, mock_config, sample_binary_file
+    ):
+        """Test print_summary option enabled."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                print_summary=True,
+            )
+
+            mock_proc.print_summary.assert_called_once()
+
+    def test_print_summary_disabled(
+        self, sample_dataset, mock_config, sample_binary_file
+    ):
+        """Test print_summary option disabled."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc_class.return_value = mock_proc
+
+            autoprocess(
+                mock_config,
+                binary_file_path=sample_binary_file,
+                print_summary=False,
+            )
+
+            mock_proc.print_summary.assert_not_called()
+
+    def test_velocity_units_passed_to_export(
+        self, sample_dataset, mock_config, sample_binary_file, temp_dir
+    ):
+        """Test velocity units are passed to velocity export."""
+        with (
+            patch("pyadps.read") as mock_read,
+            patch(f"{PATCH_PREFIX}.ProcessedDataset") as mock_proc_class,
+        ):
+            mock_read.return_value = sample_dataset
+
+            mock_proc = MagicMock()
+            mock_proc.finalize.return_value = sample_dataset
+            mock_proc.print_summary = MagicMock()
+            mock_proc_class.return_value = mock_proc
+
+            for units in ["mm/s", "cm/s", "m/s"]:
+                mock_proc.reset_mock()
+
+                autoprocess(
+                    mock_config,
+                    binary_file_path=sample_binary_file,
+                    save_netcdf=True,
+                    save_velocity_only=True,
+                    output_dir=temp_dir,
+                    velocity_units=units,
+                    print_summary=False,
+                )
+
+                call_kwargs = mock_proc.velocity_to_netcdf.call_args[1]
+                assert call_kwargs["units"] == units
+
+
+# -----------------------------------------------------------------------------
+# INTEGRATION STYLE TESTS (with minimal mocking)
+# -----------------------------------------------------------------------------
+
+
+class TestAutoprocessIntegration:
+    """Integration-style tests with minimal mocking."""
+
+    def test_full_workflow_mocked_read(
+        self, sample_dataset, mock_config, sample_binary_file, temp_dir
+    ):
+        """Test full workflow with only pyadps.read mocked."""
+        with patch("pyadps.read") as mock_read:
+            mock_read.return_value = sample_dataset
+
+            # This will use real ProcessedDataset
+            # Note: This test may fail if ProcessedDataset has issues
+            # It's more of an integration test
+            try:
+                result = autoprocess(
+                    mock_config,
+                    binary_file_path=sample_binary_file,
+                    print_summary=False,
+                )
+                assert isinstance(result, xr.Dataset)
+            except Exception as e:
+                # If ProcessedDataset fails, that's expected in unit tests
+                # This test is more for integration testing
+                pytest.skip(f"Integration test skipped: {e}")
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

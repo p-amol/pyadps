@@ -56,7 +56,7 @@ try:
     PYADPS_VERSION = get_version("pyadps")
 except Exception:  # pragma: no cover
     # Fallback for development or if package not installed
-    PYADPS_VERSION = "1.0.0"
+    PYADPS_VERSION = "0.0.0.dev0"  # pragma: no cover
 
 # Data format identifier for RDI PD0 binary format
 ADCP_DATA_FORMAT = "PD0"
@@ -1912,6 +1912,7 @@ def read_velocity(
     offset: Optional[np.ndarray] = None,
     idarray: Optional[np.ndarray] = None,
     ensemble: int = 0,
+    missing_as_nan: bool = True,
 ) -> xr.Dataset:
     """
     Load ADCP velocity data into xarray.Dataset.
@@ -1945,13 +1946,22 @@ def read_velocity(
         Array of data type IDs for each ensemble.
     ensemble : int, optional
         Number of ensembles. If 0, auto-fetch from fileheader. Default is 0.
+    missing_as_nan : bool, optional
+        If True (default), replace the RDI missing value sentinel (-32768) with
+        np.nan and store velocity as float32. Xarray aggregations (.mean(), .std(),
+        etc.) then skip missing cells automatically.
+        If False, retain the raw int16 data with -32768 as the sentinel value
+        (legacy behaviour). Use False only when memory is critical or you need to
+        preserve the exact binary representation.
 
     Returns
     -------
     xr.Dataset
         xarray Dataset with velocity data. Variables include:
-        - velocity : (beam, cell, ensemble) int16
-            Water current velocity in mm/s. Missing value: -32768
+        - velocity : (beam, cell, ensemble) float32 or int16
+            Water current velocity in mm/s.
+            float32 with NaN when missing_as_nan=True (default).
+            int16 with -32768 sentinel when missing_as_nan=False.
 
         Dataset attributes:
         - filename : str
@@ -2005,7 +2015,9 @@ def read_velocity(
     Notes
     -----
     Velocity data extracted using pd0_parser.datatype() with datatype="velocity".
-    Missing values are represented as -32768 (valid for 16-bit signed integers).
+    By default (missing_as_nan=True) missing values (-32768) are replaced with
+    np.nan and the array is stored as float32. Set missing_as_nan=False to retain
+    the raw int16 data with -32768 as the sentinel.
 
     The velocity data has dimensions (beam, cell, ensemble) where:
     - cell: Depth cells (typically 0 to ~100+)
@@ -2082,9 +2094,15 @@ def read_velocity(
         "ensemble": np.arange(n_ensembles),
     }
 
-    # Data variables
+    # Data variables — dtype and missing-value handling depends on missing_as_nan
+    if missing_as_nan:
+        vel_data = data.astype(np.float32)
+        vel_data[vel_data <= VELOCITY_MISSING_VALUE] = np.nan
+    else:
+        vel_data = data.astype(np.int16)
+
     data_vars = {
-        "velocity": (("beam", "cell", "ensemble"), data.astype(np.int16)),
+        "velocity": (("beam", "cell", "ensemble"), vel_data),
     }
 
     # Attributes for coordinate variables
@@ -2103,19 +2121,34 @@ def read_velocity(
         "long_name": "Beam number",
     }
     # Attributes for velocity variable (CF Convention)
-    velocity_attrs = {
-        "long_name": "Water current velocity",
-        "units": "mm s-1",
-        "valid_min": -32768,
-        "valid_max": 32767,
-        "missing_value": -32768,
-        "_FillValue": -32768,
-        "scale_factor": 1.0,
-        "add_offset": 0.0,
-        "description": "Velocity magnitude measured by ADCP beams",
-        "source": "RDI WorkHorse ADCP",
-        "comments": "Negative values indicate flow direction opposite to beam direction",
-    }
+    if missing_as_nan:
+        velocity_attrs = {
+            "long_name": "Water current velocity",
+            "units": "mm s-1",
+            "valid_min": -32767,
+            "valid_max": 32767,
+            "scale_factor": 1.0,
+            "add_offset": 0.0,
+            "description": "Velocity magnitude measured by ADCP beams",
+            "source": "RDI WorkHorse ADCP",
+            "comments": "Negative values indicate flow direction opposite to beam direction",
+            "missing_value_handling": "nan",
+        }
+    else:
+        velocity_attrs = {
+            "long_name": "Water current velocity",
+            "units": "mm s-1",
+            "valid_min": -32768,
+            "valid_max": 32767,
+            "missing_value": -32768,
+            "_FillValue": -32768,
+            "scale_factor": 1.0,
+            "add_offset": 0.0,
+            "description": "Velocity magnitude measured by ADCP beams",
+            "source": "RDI WorkHorse ADCP",
+            "comments": "Negative values indicate flow direction opposite to beam direction",
+            "missing_value_handling": "sentinel",
+        }
 
     # Dataset-level attributes
     ds_attrs = {
@@ -2668,11 +2701,17 @@ def _create_velocity_mask(ds_velocity: xr.Dataset) -> xr.Dataset:
 
     # Create masks for U, V, W components (beams 0, 1, 2)
     # Do NOT mask based on error velocity (beam 3)
+    # Use NaN detection for float arrays, sentinel comparison for int arrays
+    is_nan_mode = np.issubdtype(vel_values.dtype, np.floating)
     for beam_idx in range(min(3, n_beams)):
-        # Mark as invalid (1) where velocity equals missing value
-        mask_data[beam_idx, :, :] = (
-            vel_values[beam_idx, :, :] <= VELOCITY_MISSING_VALUE
-        ).astype(np.int8)
+        if is_nan_mode:
+            mask_data[beam_idx, :, :] = np.isnan(
+                vel_values[beam_idx, :, :]
+            ).astype(np.int8)
+        else:
+            mask_data[beam_idx, :, :] = (
+                vel_values[beam_idx, :, :] <= VELOCITY_MISSING_VALUE
+            ).astype(np.int8)
 
     # Create combined signal quality mask (4th beam)
     # This is the logical OR of U, V, W masks
@@ -3094,6 +3133,7 @@ def read(
     use_depth_as_primary_dim: bool = False,
     include_header: bool = False,
     include_mask: bool = True,
+    missing_as_nan: bool = True,
 ) -> xr.Dataset:
     """
     Load complete ADCP dataset from RDI binary file into xarray.Dataset.
@@ -3159,6 +3199,12 @@ def read(
         - beam 3: Combined signal quality mask (U OR V OR W)
         If False, no mask is created (useful for faster loading when mask not needed).
         Note: Mask is only created if Velocity data is loaded.
+    missing_as_nan : bool, default True
+        If True (default), replace the RDI missing value sentinel (-32768) with
+        np.nan and store velocity as float32. Xarray aggregations skip NaN cells
+        automatically, making this the safe default for analysis.
+        If False, retain raw int16 velocity data with -32768 as the sentinel.
+        Passed through to read_velocity().
 
     Returns
     -------
@@ -3233,7 +3279,7 @@ def read(
 
     Use xarray features:
 
-    >>> ds['velocity'].plot()
+    >>> ds['velocity'].isel(beam=1).plot()
     >>> mean_velocity = ds['velocity'].mean(dim='ensemble')
     >>> ds.to_netcdf('output.nc')
 
@@ -3365,7 +3411,7 @@ def read(
     if ds_fl is not None and ds_vl is not None:
         logger.debug("Computing depth coordinate...")
         try:
-            depth_coord = _compute_depth_coordinate(ds_fl, ds_vl, use_fl_accessor=False)
+            depth_coord = _compute_depth_coordinate(ds_fl, ds_vl, use_fl_accessor=True)
         except (KeyError, ValueError, TypeError) as e:
             logger.warning(f"Could not compute depth coordinate: {e}")
     else:
@@ -3394,6 +3440,7 @@ def read(
                 offset=offset,
                 idarray=idarray,
                 ensemble=ensemble_count,
+                missing_as_nan=missing_as_nan,
             )
         except Exception as e:
             logger.warning(f"Could not read Velocity data: {e}")

@@ -30,7 +30,6 @@ Example:
 
 # Import submodules
 from . import io
-from . import legacy
 from . import pages
 from . import processing
 

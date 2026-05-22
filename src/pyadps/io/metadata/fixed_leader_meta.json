@@ -1,0 +1,1732 @@
+{
+  "metadata_version": "1.2",
+  "component": "FixedLeader",
+  "description": "Fixed Leader metadata for pyadps v1.0.0. Includes raw fields and decoded bit-field derivatives for xarray.Dataset integration.",
+  "total_raw_fields": 36,
+  "total_decoded_fields": 25,
+  "total_variables": 61,
+  "source": "WorkHorse ADCP Commands and Output Data Format (RDI Specification), Section 5.2, Page 126-131",
+  "last_updated": "2025-11-06",
+  "raw_fields": {
+    "0": {
+      "index": 0,
+      "name": "fixed_leader_id",
+      "long_name": "Fixed Leader ID",
+      "description": "Identifier for Fixed Leader data structure (0x007F = 127).",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 1,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Always 0 or 1 for Fixed Leader"
+    },
+    "1": {
+      "index": 1,
+      "name": "cpu_version",
+      "long_name": "CPU Firmware Version",
+      "description": "Contains the version number of the CPU firmware.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Major version number of firmware"
+    },
+    "2": {
+      "index": 2,
+      "name": "cpu_revision",
+      "long_name": "CPU Firmware Revision",
+      "description": "Contains the revision number of the CPU firmware.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Minor revision number of firmware"
+    },
+    "3": {
+      "index": 3,
+      "name": "system_configuration_code",
+      "long_name": "System Configuration Code",
+      "description": "16-bit coded field defining the WorkHorse ADCP hardware configuration. Contains frequency, beam pattern, sensor config, and other system settings packed in individual bits.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 65535,
+      "is_raw": true,
+      "is_decoded": false,
+      "bit_width": 16,
+      "comments": "Raw bit-coded configuration. See decoded_fields for individual parameters.",
+      "bit_fields_documented_in": [
+        "3_1",
+        "3_2",
+        "3_3",
+        "3_4",
+        "3_5",
+        "3_6",
+        "3_7"
+      ]
+    },
+    "4": {
+      "index": 4,
+      "name": "real_sim_flag",
+      "long_name": "Real/Simulation Flag",
+      "description": "Indicates whether the data is real (collected) or simulated test data.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 1,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "0=Real data (default), 1=Simulated data",
+      "command": "PD"
+    },
+    "5": {
+      "index": 5,
+      "name": "lag_length",
+      "long_name": "Lag Length",
+      "description": "Time period between sound pulses. Used in ping timing configuration (WM5, WM8, WM11, BM7 commands).",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Ping lag setting"
+    },
+    "6": {
+      "index": 6,
+      "name": "num_beams",
+      "long_name": "Number of Beams",
+      "description": "Number of beams used to calculate velocity data. WorkHorse needs 3 beams minimum for velocity; 4th beam provides error velocity.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 3,
+      "valid_max": 4,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Typically 4 for full error velocity calculation"
+    },
+    "7": {
+      "index": 7,
+      "name": "num_cells",
+      "long_name": "Number of Depth Cells",
+      "description": "Number of depth cells (bins) over which the ADCP collects velocity data.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 1,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "WN command sets this value",
+      "command": "WN"
+    },
+    "8": {
+      "index": 8,
+      "name": "pings_per_ensemble",
+      "long_name": "Pings Per Ensemble",
+      "description": "Number of pings averaged together during a data ensemble.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 16384,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "If 0, no water-profile data collected",
+      "command": "WP"
+    },
+    "9": {
+      "index": 9,
+      "name": "depth_cell_length",
+      "long_name": "Depth Cell Length",
+      "description": "Physical length of one depth cell.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "cm",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 1,
+      "valid_max": 6400,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "WS command sets cell length",
+      "command": "WS"
+    },
+    "10": {
+      "index": 10,
+      "name": "blank_after_transmit",
+      "long_name": "Blank After Transmit",
+      "description": "Blanking distance allowing transmit circuits to recover before receive cycle.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "cm",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 9999,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "WF command sets blanking distance",
+      "command": "WF"
+    },
+    "11": {
+      "index": 11,
+      "name": "profiling_mode",
+      "long_name": "Profiling Mode",
+      "description": "Signal processing mode used by the ADCP.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 1,
+      "valid_max": 1,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Always set to 1",
+      "command": "WM"
+    },
+    "12": {
+      "index": 12,
+      "name": "low_correlation_threshold",
+      "long_name": "Low Correlation Threshold",
+      "description": "Minimum correlation threshold for water-profile data quality.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "count",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "WC command sets correlation threshold",
+      "command": "WC"
+    },
+    "13": {
+      "index": 13,
+      "name": "number_code_repetitions",
+      "long_name": "Number of Code Repetitions",
+      "description": "Number of code repetitions in the transmit pulse.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Controls transmit pulse modulation"
+    },
+    "14": {
+      "index": 14,
+      "name": "percent_good_minimum",
+      "long_name": "Percent Good Minimum",
+      "description": "Minimum percentage of water-profiling pings that must be good to output velocity data.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "%",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 100,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "WG command sets this threshold",
+      "command": "WG"
+    },
+    "15": {
+      "index": 15,
+      "name": "error_velocity_maximum",
+      "long_name": "Error Velocity Maximum Threshold",
+      "description": "Maximum error velocity threshold. If exceeded, water-current data flagged as bad.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "mm s-1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 5000,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "WE command sets error velocity threshold",
+      "command": "WE"
+    },
+    "16": {
+      "index": 16,
+      "name": "time_per_ping_minute",
+      "long_name": "Time Per Ping - Minutes",
+      "description": "Minutes portion of time between ping groups in ensemble.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "minute",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 59,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Part of TP command (time per ping)"
+    },
+    "17": {
+      "index": 17,
+      "name": "time_per_ping_second",
+      "long_name": "Time Per Ping - Seconds",
+      "description": "Seconds portion of time between ping groups in ensemble.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "second",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 59,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Part of TP command (time per ping)"
+    },
+    "18": {
+      "index": 18,
+      "name": "time_per_ping_hundredth",
+      "long_name": "Time Per Ping - Hundredths of Second",
+      "description": "Hundredths of second portion of time between ping groups in ensemble.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "second",
+      "scale_factor": 0.01,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 99,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Part of TP command (time per ping). NOTE: WorkHorse extends ensemble if WP*TP > TE"
+    },
+    "19": {
+      "index": 19,
+      "name": "coordinate_transformation_code",
+      "long_name": "Coordinate Transformation Code",
+      "description": "8-bit coded field containing coordinate transformation processing parameters (EX command).",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "bit_width": 8,
+      "comments": "Raw bit-coded coordinate transformation settings. See decoded_fields for individual parameters.",
+      "command": "EX",
+      "bit_fields_documented_in": [
+        "19_1",
+        "19_2",
+        "19_3",
+        "19_4"
+      ]
+    },
+    "20": {
+      "index": 20,
+      "name": "heading_alignment",
+      "long_name": "Heading Alignment",
+      "description": "Correction factor for physical heading misalignment.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "degree",
+      "scale_factor": 0.01,
+      "add_offset": 0.0,
+      "valid_min": -17999,
+      "valid_max": 18000,
+      "valid_min_physical": -179.99,
+      "valid_max_physical": 180.0,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "EA command sets heading alignment offset",
+      "command": "EA"
+    },
+    "21": {
+      "index": 21,
+      "name": "heading_bias",
+      "long_name": "Heading Bias",
+      "description": "Correction factor for electrical/magnetic heading bias.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "degree",
+      "scale_factor": 0.01,
+      "add_offset": 0.0,
+      "valid_min": -17999,
+      "valid_max": 18000,
+      "valid_min_physical": -179.99,
+      "valid_max_physical": 180.0,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "EB command sets heading bias correction",
+      "command": "EB"
+    },
+    "22": {
+      "index": 22,
+      "name": "sensor_source_code",
+      "long_name": "Sensor Source Code",
+      "description": "8-bit coded field indicating selected source of environmental sensor data.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "bit_width": 8,
+      "comments": "Raw bit-coded sensor source. See decoded_fields for individual parameters.",
+      "command": "EZ",
+      "bit_fields_documented_in": [
+        "22_1",
+        "22_2",
+        "22_3",
+        "22_4",
+        "22_5",
+        "22_6",
+        "22_7"
+      ]
+    },
+    "23": {
+      "index": 23,
+      "name": "sensor_available_code",
+      "long_name": "Sensor Available Code",
+      "description": "8-bit coded field indicating which sensors are available.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "bit_width": 8,
+      "comments": "Raw bit-coded sensor availability. See decoded_fields for individual parameters.",
+      "bit_fields_documented_in": [
+        "23_1",
+        "23_2",
+        "23_3",
+        "23_4",
+        "23_5",
+        "23_6",
+        "23_7"
+      ]
+    },
+    "24": {
+      "index": 24,
+      "name": "bin_1_distance",
+      "long_name": "Distance to Bin 1 (Middle of First Depth Cell)",
+      "description": "Distance to the middle of the first depth cell. Function of cell length, profiling mode, blanking distance, and sound speed.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "cm",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 65535,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Calculated from WS, WM, WF, and sound speed"
+    },
+    "25": {
+      "index": 25,
+      "name": "transmit_pulse_length",
+      "long_name": "Transmit Pulse Length",
+      "description": "Length of the transmit pulse. Typically set equal to depth cell length.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "cm",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 65535,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "WT command sets transmit pulse length",
+      "command": "WT"
+    },
+    "26": {
+      "index": 26,
+      "name": "water_profile_reference_layer",
+      "long_name": "Water Profile Reference Layer",
+      "description": "Starting (LSB) and ending (MSB) depth cell indices used for water reference layer averaging.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 1,
+      "valid_max": 128,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "WL command sets reference layer cells",
+      "command": "WL"
+    },
+    "27": {
+      "index": 27,
+      "name": "false_target_threshold",
+      "long_name": "False Target Threshold",
+      "description": "Threshold value used to reject data from false targets (usually fish).",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "count",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "RDI ADC rejection threshold",
+      "command": "WA"
+    },
+    "28": {
+      "index": 28,
+      "name": "spare_1",
+      "long_name": "Spare 1",
+      "description": "Reserved/spare field for future use. Contains CX command setting (Range 0-5).",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 5,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "CX command sets spare field",
+      "command": "CX"
+    },
+    "29": {
+      "index": 29,
+      "name": "transmit_lag_distance",
+      "long_name": "Transmit Lag Distance",
+      "description": "Represents output of ADC on DSP board. Fields are zeroed at deployment start and updated each ensemble.",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "cm",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 65535,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "WM command reference; ADC samples one of 8 channels per ping",
+      "command": "WM"
+    },
+    "30": {
+      "index": 30,
+      "name": "cpu_board_serial_number",
+      "long_name": "CPU Board Serial Number",
+      "description": "Serial number of the CPU board. Stored in Big Endian (MSB first).",
+      "dtype": "uint64",
+      "bytes": 8,
+      "byte_order": "big-endian",
+      "pack_struct": ">Q",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 18446744073709551615,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Unique CPU board identifier"
+    },
+    "31": {
+      "index": 31,
+      "name": "system_bandwidth",
+      "long_name": "System Bandwidth",
+      "description": "System bandwidth setting (WB command setting).",
+      "dtype": "uint16",
+      "bytes": 2,
+      "byte_order": "little-endian",
+      "pack_struct": "<H",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 1,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "0=Normal, 1=Wide bandwidth",
+      "command": "WB"
+    },
+    "32": {
+      "index": 32,
+      "name": "system_power",
+      "long_name": "System Power",
+      "description": "System power setting (CQ command setting). Range 0-255.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "CQ command for Monitor/Sentinel/Long Ranger ADCPs",
+      "command": "CQ"
+    },
+    "33": {
+      "index": 33,
+      "name": "spare_2",
+      "long_name": "Spare 2",
+      "description": "Reserved/spare field for future use.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 255,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Reserved for future use"
+    },
+    "34": {
+      "index": 34,
+      "name": "instrument_serial_number",
+      "long_name": "Instrument Serial Number",
+      "description": "Contains the instrument (ADCP unit) serial number.",
+      "dtype": "uint32",
+      "bytes": 4,
+      "byte_order": "little-endian",
+      "pack_struct": "<L",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 4294967295,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Unique ADCP instrument identifier"
+    },
+    "35": {
+      "index": 35,
+      "name": "beam_angle",
+      "long_name": "Beam Angle",
+      "description": "Acoustic beam angle relative to vertical axis.",
+      "dtype": "uint8",
+      "bytes": 1,
+      "byte_order": "little-endian",
+      "pack_struct": "<B",
+      "unit": "degree",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "valid_min": 0,
+      "valid_max": 45,
+      "is_raw": true,
+      "is_decoded": false,
+      "comments": "Typically 15, 20, or 30 degrees. Fixed for deployment."
+    }
+  },
+  "decoded_fields": {
+    "3_1": {
+      "index": "3_1",
+      "name": "frequency",
+      "long_name": "Acoustic Frequency",
+      "derived_from": "system_configuration_code (bits 15-13)",
+      "description": "Operating acoustic frequency of the ADCP.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        38,
+        75,
+        150,
+        300,
+        600,
+        1200,
+        2400
+      ],
+      "bit_extraction": {
+        "source_field": "system_configuration_code",
+        "source_field_index": 3,
+        "bits": "15-13",
+        "method": "Extract bits 15-13, shift right by 13, map to frequency",
+        "mapping": {
+          "0": 75,
+          "1": 150,
+          "2": 300,
+          "3": 600,
+          "4": 1200,
+          "5": 2400,
+          "6": 38,
+          "7": 0
+        },
+        "bit_width": 16,
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "implementation_method": "Convert system_configuration_code to 16-bit binary string, extract indices [13:16], convert to integer, map to frequency value.",
+        "flag_values": [
+          0
+        ],
+        "flag_meanings": "unknown"
+      },
+      "comments": "Acoustic operating frequency. Typically constant within file.",
+      "units": "kHz",
+      "flag_values": [
+        0
+      ],
+      "flag_meanings": "unknown"
+    },
+    "3_2": {
+      "index": "3_2",
+      "name": "beam_pattern",
+      "long_name": "Beam Pattern Configuration",
+      "derived_from": "system_configuration_code (bit 12)",
+      "description": "1 = Concave beam pattern, 2 = Convex beam pattern",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        1,
+        2
+      ],
+      "bit_extraction": {
+        "source_field": "system_configuration_code",
+        "source_field_index": 3,
+        "bit": 12,
+        "method": "Extract bit 12, map to beam pattern",
+        "mapping": {
+          "0": 1,
+          "1": 2
+        },
+        "bit_width": 16,
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "implementation_method": "Convert system_configuration_code to 16-bit binary string, extract index [12:13], map: 0\u21921 (concave), 1\u21922 (convex).",
+        "flag_values": [
+          1,
+          2
+        ],
+        "flag_meanings": "concave convex"
+      },
+      "comments": "Determines beam arrangement geometry.",
+      "flag_values": [
+        1,
+        2
+      ],
+      "flag_meanings": "concave convex"
+    },
+    "3_3": {
+      "index": "3_3",
+      "name": "sensor_configuration",
+      "long_name": "Sensor Configuration Type",
+      "derived_from": "system_configuration_code (bits 11-10)",
+      "description": "Type of sensor configuration installed.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "bit_extraction": {
+        "source_field": "system_configuration_code",
+        "source_field_index": 3,
+        "bits": "11-10",
+        "method": "Extract bits 11-10 from 16-bit binary representation and map to sensor configuration code",
+        "mapping": {
+          "0": 1,
+          "1": 2,
+          "2": 3,
+          "3": 0
+        },
+        "bit_width": 16,
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "implementation_method": "Convert system_configuration_code to 16-bit binary string, extract indices [4:8], convert to integer, map to beam angle value.",
+        "flag_values": [
+          0
+        ],
+        "flag_meanings": "unknown"
+      },
+      "comments": "Identifies which sensor set is installed.",
+      "flag_values": [
+        0
+      ],
+      "flag_meanings": "unknown"
+    },
+    "3_4": {
+      "index": "3_4",
+      "name": "transducer_attached",
+      "long_name": "Transducer Head Attached",
+      "derived_from": "system_configuration_code (bit 9)",
+      "description": "Indicates whether transducer head is physically attached.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "system_configuration_code",
+        "source_field_index": 3,
+        "bit": 9,
+        "method": "Extract bit 9 and map to 0/1",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 16,
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "implementation_method": "Convert system_configuration_code to 16-bit binary string, extract indices [0:4], convert to integer, map to configuration code.",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_attached attached"
+      },
+      "comments": "XDCR HD status flag."
+    },
+    "3_5": {
+      "index": "3_5",
+      "name": "beam_direction",
+      "long_name": "Beam Direction",
+      "derived_from": "system_configuration_code (bit 8)",
+      "description": "Direction beams are oriented (upward or downward looking).",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "system_configuration_code",
+        "source_field_index": 3,
+        "bit": 8,
+        "method": "Extract bit 8 and map to 0/1",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 16,
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "down up"
+      },
+      "comments": "Down-looking: measuring from water surface down. Up-looking: measuring upward."
+    },
+    "3_6": {
+      "index": "3_6",
+      "name": "beam_angle_code",
+      "long_name": "Beam Angle Code",
+      "derived_from": "system_configuration_code (bits 7-4)",
+      "description": "Coded representation of beam angle.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        15,
+        20,
+        25,
+        30,
+        45
+      ],
+      "bit_extraction": {
+        "source_field": "system_configuration_code",
+        "source_field_index": 3,
+        "bits": "7-4",
+        "method": "Extract bits 7-4 from 16-bit binary representation and map to beam angle value",
+        "mapping": {
+          "0": 15,
+          "1": 20,
+          "2": 30,
+          "3": 25,
+          "4": 45,
+          "7": 0
+        },
+        "bit_width": 16,
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "flag_values": [
+          0
+        ],
+        "flag_meanings": "unknown"
+      },
+      "comments": "Code maps to actual beam angle value (see beam_angle field for numeric value).",
+      "units": "degree"
+    },
+    "3_7": {
+      "index": "3_7",
+      "name": "janus_configuration",
+      "long_name": "Janus Configuration Type",
+      "derived_from": "system_configuration_code (bits 3-0)",
+      "description": "4 = 4-Beam (0100), 5 = 5-Beam DEMOD (0101), 15 = 5-Beam 2-DEMOD (1111)",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        4,
+        5,
+        15
+      ],
+      "bit_extraction": {
+        "source_field": "system_configuration_code",
+        "source_field_index": 3,
+        "bits": "3-0",
+        "method": "Extract bits 3-0 and map to enumeration code",
+        "mapping": {
+          "4": 4,
+          "5": 5,
+          "15": 15
+        },
+        "bit_width": 16,
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "flag_values": [
+          4,
+          5,
+          15
+        ],
+        "flag_meanings": "4beam 5beam_demod 5beam_2demod"
+      },
+      "comments": "Janus configuration defines beam arrangement (4-beam vs 5-beam systems)."
+    },
+    "19_1": {
+      "index": "19_1",
+      "name": "coordinate_system",
+      "long_name": "Coordinate Transformation System",
+      "derived_from": "coordinate_transformation_code (bits 7-6)",
+      "description": "0 = Beam coordinates, 1 = Instrument, 2 = Ship, 3 = Earth",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "bit_extraction": {
+        "source_field": "coordinate_transformation_code",
+        "source_field_index": 19,
+        "bits": "7-6",
+        "method": "Extract bits 7-6 and map to enumeration code",
+        "mapping": {
+          "0": 0,
+          "1": 1,
+          "2": 2,
+          "3": 3
+        },
+        "flag_values": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "flag_meanings": "beam instrument ship earth"
+      },
+      "comments": "Determines reference frame for velocity components."
+    },
+    "19_2": {
+      "index": "19_2",
+      "name": "use_tilt_correction",
+      "long_name": "Tilt Correction Applied",
+      "derived_from": "coordinate_transformation_code (bit 5)",
+      "description": "Flag indicating whether tilt correction is applied.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "coordinate_transformation_code",
+        "source_field_index": 19,
+        "bit": 5,
+        "method": "Extract bit 5 and map to 0/1",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_applied applied"
+      },
+      "comments": "Controls pitch/roll (tilt) correction in coordinate transformation."
+    },
+    "19_3": {
+      "index": "19_3",
+      "name": "three_beam_solution",
+      "long_name": "Three-Beam Solution Mode",
+      "derived_from": "coordinate_transformation_code (bit 4)",
+      "description": "Flag for three-beam solution mode.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "coordinate_transformation_code",
+        "source_field_index": 19,
+        "bit": 4,
+        "method": "Extract bit 4 and map to 0/1",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "disabled enabled"
+      },
+      "comments": "Allows velocity calculation using only 3 beams when 4th beam is unavailable."
+    },
+    "19_4": {
+      "index": "19_4",
+      "name": "bin_mapping_applied",
+      "long_name": "Bin Mapping Applied",
+      "derived_from": "coordinate_transformation_code (bit 3)",
+      "description": "Flag indicating whether bin mapping/remapping is applied.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "coordinate_transformation_code",
+        "source_field_index": 19,
+        "bit": 3,
+        "method": "Extract bit 3 and map to 0/1",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_applied applied"
+      },
+      "comments": "Controls whether data bins are remapped for aligned coordinates."
+    },
+    "22_1": {
+      "index": "22_1",
+      "name": "sensor_source_sound_speed",
+      "long_name": "Sound Speed Sensor Source",
+      "derived_from": "sensor_source_code (bit 1)",
+      "description": "Source of sound speed data.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_source_code",
+        "source_field_index": 22,
+        "bit": 1,
+        "method": "Extract bit 1, map to source",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 0, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "manual_internal sensor_external"
+      },
+      "comments": "Determines whether sound speed is manually entered or sensor-derived.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "manual_internal sensor_external"
+    },
+    "22_2": {
+      "index": "22_2",
+      "name": "sensor_source_depth",
+      "long_name": "Depth Sensor Source",
+      "derived_from": "sensor_source_code (bit 2)",
+      "description": "Source of depth/pressure data.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_source_code",
+        "source_field_index": 22,
+        "bit": 2,
+        "method": "Extract bit 2, map to source",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 1, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "manual_internal sensor_external"
+      },
+      "comments": "Determines whether depth/pressure is manually entered or sensor-derived.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "manual_internal sensor_external"
+    },
+    "22_3": {
+      "index": "22_3",
+      "name": "sensor_source_heading",
+      "long_name": "Heading Sensor Source",
+      "derived_from": "sensor_source_code (bit 3)",
+      "description": "Source of heading data.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_source_code",
+        "source_field_index": 22,
+        "bit": 3,
+        "method": "Extract bit 3, map to source",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 2, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "manual_internal sensor_external"
+      },
+      "comments": "Determines heading source (internal compass vs external device).",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "manual_internal sensor_external"
+    },
+    "22_4": {
+      "index": "22_4",
+      "name": "sensor_source_pitch",
+      "long_name": "Pitch Sensor Source",
+      "derived_from": "sensor_source_code (bit 4)",
+      "description": "Source of pitch data.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_source_code",
+        "source_field_index": 22,
+        "bit": 4,
+        "method": "Extract bit 4, map to source",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 3, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "manual_internal sensor_external"
+      },
+      "comments": "Determines pitch source (internal tilt sensor vs external device).",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "manual_internal sensor_external"
+    },
+    "22_5": {
+      "index": "22_5",
+      "name": "sensor_source_roll",
+      "long_name": "Roll Sensor Source",
+      "derived_from": "sensor_source_code (bit 5)",
+      "description": "Source of roll data.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_source_code",
+        "source_field_index": 22,
+        "bit": 5,
+        "method": "Extract bit 5, map to source",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 4, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "manual_internal sensor_external"
+      },
+      "comments": "Determines roll source (internal tilt sensor vs external device).",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "manual_internal sensor_external"
+    },
+    "22_6": {
+      "index": "22_6",
+      "name": "sensor_source_conductivity",
+      "long_name": "Conductivity Sensor Source",
+      "derived_from": "sensor_source_code (bit 6)",
+      "description": "Source of conductivity/salinity data.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_source_code",
+        "source_field_index": 22,
+        "bit": 6,
+        "method": "Extract bit 6, map to source",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 5, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "manual_internal sensor_external"
+      },
+      "comments": "Determines whether conductivity is manually entered or sensor-derived.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "manual_internal sensor_external"
+    },
+    "22_7": {
+      "index": "22_7",
+      "name": "sensor_source_temperature",
+      "long_name": "Temperature Sensor Source",
+      "derived_from": "sensor_source_code (bit 7)",
+      "description": "Source of temperature data.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_source_code",
+        "source_field_index": 22,
+        "bit": 7,
+        "method": "Extract bit 7, map to source",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 7, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "manual_internal sensor_external"
+      },
+      "comments": "Determines whether temperature is manually entered or sensor-derived.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "manual_internal sensor_external"
+    },
+    "23_1": {
+      "index": "23_1",
+      "name": "sensor_available_sound_speed",
+      "long_name": "Sound Speed Sensor Available",
+      "derived_from": "sensor_available_code (bit 1)",
+      "description": "Flag indicating sound speed sensor availability.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_available_code",
+        "source_field_index": 23,
+        "bit": 1,
+        "method": "Extract bit 1, map to availability",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 1, map: 0\u21920 (not available), 1\u21921 (available).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_available available"
+      },
+      "comments": "Indicates hardware availability independent of data quality.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "not_available available"
+    },
+    "23_2": {
+      "index": "23_2",
+      "name": "sensor_available_depth",
+      "long_name": "Depth Sensor Available",
+      "derived_from": "sensor_available_code (bit 2)",
+      "description": "Flag indicating depth/pressure sensor availability.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_available_code",
+        "source_field_index": 23,
+        "bit": 2,
+        "method": "Extract bit 2, map to availability",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 2, map: 0\u21920 (not available), 1\u21921 (available).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_available available"
+      },
+      "comments": "Indicates depth sensor hardware availability.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "not_available available"
+    },
+    "23_3": {
+      "index": "23_3",
+      "name": "sensor_available_heading",
+      "long_name": "Heading Sensor Available",
+      "derived_from": "sensor_available_code (bit 3)",
+      "description": "Flag indicating heading (compass) sensor availability.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_available_code",
+        "source_field_index": 23,
+        "bit": 3,
+        "method": "Extract bit 3, map to availability",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 3, map: 0\u21920 (not available), 1\u21921 (available).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_available available"
+      },
+      "comments": "Indicates internal/external heading sensor availability.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "not_available available"
+    },
+    "23_4": {
+      "index": "23_4",
+      "name": "sensor_available_pitch",
+      "long_name": "Pitch Sensor Available",
+      "derived_from": "sensor_available_code (bit 4)",
+      "description": "Flag indicating pitch (tilt) sensor availability.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_available_code",
+        "source_field_index": 23,
+        "bit": 4,
+        "method": "Extract bit 4, map to availability",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 4, map: 0\u21920 (not available), 1\u21921 (available).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_available available"
+      },
+      "comments": "Indicates pitch sensor hardware availability.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "not_available available"
+    },
+    "23_5": {
+      "index": "23_5",
+      "name": "sensor_available_roll",
+      "long_name": "Roll Sensor Available",
+      "derived_from": "sensor_available_code (bit 5)",
+      "description": "Flag indicating roll (tilt) sensor availability.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_available_code",
+        "source_field_index": 23,
+        "bit": 5,
+        "method": "Extract bit 5, map to availability",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 5, map: 0\u21920 (not available), 1\u21921 (available).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_available available"
+      },
+      "comments": "Indicates roll sensor hardware availability.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "not_available available"
+    },
+    "23_6": {
+      "index": "23_6",
+      "name": "sensor_available_conductivity",
+      "long_name": "Conductivity Sensor Available",
+      "derived_from": "sensor_available_code (bit 6)",
+      "description": "Flag indicating conductivity/salinity sensor availability.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_available_code",
+        "source_field_index": 23,
+        "bit": 6,
+        "method": "Extract bit 6, map to availability",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 6, map: 0\u21920 (not available), 1\u21921 (available).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_available available"
+      },
+      "comments": "Indicates conductivity sensor hardware availability.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "not_available available"
+    },
+    "23_7": {
+      "index": "23_7",
+      "name": "sensor_available_temperature",
+      "long_name": "Temperature Sensor Available",
+      "derived_from": "sensor_available_code (bit 7)",
+      "description": "Flag indicating temperature sensor availability.",
+      "dtype": "int64",
+      "unit": "1",
+      "scale_factor": 1.0,
+      "add_offset": 0.0,
+      "is_raw": false,
+      "is_decoded": true,
+      "valid_values": [
+        0,
+        1
+      ],
+      "bit_extraction": {
+        "source_field": "sensor_available_code",
+        "source_field_index": 23,
+        "bit": 7,
+        "method": "Extract bit 7, map to availability",
+        "mapping": {
+          "0": 0,
+          "1": 1
+        },
+        "bit_width": 8,
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 7, map: 0\u21920 (not available), 1\u21921 (available).",
+        "flag_values": [
+          0,
+          1
+        ],
+        "flag_meanings": "not_available available"
+      },
+      "comments": "Indicates temperature sensor hardware availability.",
+      "flag_values": [
+        0,
+        1
+      ],
+      "flag_meanings": "not_available available"
+    }
+  },
+  "notes": {
+    "implementation": "This metadata file supports both raw and decoded fields. Use raw_fields for direct binary values and decoded_fields for human-readable interpretations.",
+    "coordinates": "All fields refer to fixed leader ensemble number (implied). No time dimension; Fixed Leader is constant per deployment.",
+    "cf_conventions": "Metadata follows CF Conventions 1.10 standards with UDUNITS2 unit strings.",
+    "netcdf_compliance": "File can be exported to NetCDF4 as CF-compliant Dataset.",
+    "byte_order": "All fields are little-endian except cpu_board_serial_number (big-endian).",
+    "derived_fields": "Decoded fields are derived from raw fields and should be calculated at read time, not stored separately in memory-intensive xarray Dataset.",
+    "backward_compatibility": "Old code accessing raw values will continue to work via accessors. New code should use decoded fields for clarity."
+  }
+}

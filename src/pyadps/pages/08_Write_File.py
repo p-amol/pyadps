@@ -1,623 +1,941 @@
-import configparser
-import tempfile
+"""
+08_Write_File.py - Write Processed Data Page (Refactored for pyadps v1.0.0)
+
+This page allows users to:
+1. Preview processed data (velocity, echo, correlation, percent good)
+2. Export processed data to NetCDF or CSV formats
+3. Choose between velocity-only export (default) or full dataset export
+4. Add custom metadata attributes to exported files
+5. Generate configuration files for reproducible processing
+
+Architecture:
+- Uses st.session_state.processor (ProcessedDataset) as central state manager
+- Uses proc.velocity_to_netcdf() for velocity-only export (default)
+- Uses proc.to_netcdf() for full dataset export
+- No complex mask variable management - all handled by ProcessedDataset
+"""
+
+import io
 import os
+import tempfile
+from datetime import datetime
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-import utils.writenc as wr
-from plotly_resampler import FigureResampler
+from plotly.subplots import make_subplots
 
-if "flead" not in st.session_state:
-    st.write(":red[Please Select Data!]")
+# =============================================================================
+# PAGE CONFIGURATION AND VALIDATION
+# =============================================================================
+
+st.set_page_config(page_title="Write File", page_icon="💾", layout="wide")
+
+# Check if processor exists
+if "processor" not in st.session_state or st.session_state.processor is None:
+    st.error("⚠️ No data loaded! Please read a file on the **Read File** page first.")
     st.stop()
 
-if "fname" not in st.session_state:
-    st.session_state.fname = "No file selected"
-
-if "rawfilename" not in st.session_state:
-    st.session_state.rawfilename = "RAW_DAT.nc"
-
-if "vleadfilename" not in st.session_state:
-    st.session_state.vleadfilename = "RAW_VAR.nc"
-
-if "file_prefix" not in st.session_state:
-    raw_basename = os.path.basename(st.session_state.fname)
-    st.session_state.filename = os.path.splitext(raw_basename)[0]
-    st.session_state.file_prefix = st.session_state.filename
+# Get processor and dataset
+proc = st.session_state.processor
+ds = proc.dataset
 
 
-if "prefix_saved" not in st.session_state:
-    st.session_state.prefix_saved = False
-
-if "filename" not in st.session_state:
-    st.session_state.filename = ""  # <-- Default file name if not passed
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 
 
-# Check if attributes exist in session state
-if "attributes" not in st.session_state:
-    st.session_state.attributes = {}
-    st.session_state.isAttributes = False
+def get_total_ensembles() -> int:
+    """Get total number of ensembles from dataset."""
+    if "time" in ds.dims:
+        return ds.sizes["time"]
+    elif "ensemble" in ds.dims:
+        return ds.sizes["ensemble"]
+    return 0
 
-if st.session_state.isVelocityTest:
-    st.session_state.final_mask = st.session_state.velocity_mask
 
-    if st.session_state.isVelocityModifiedMagnet:
-        st.session_state.final_velocity = st.session_state.velocity_magnet
-    if st.session_state.isRegridCheck_PT:
-        st.session_state.final_velocity = st.session_state.velocity_regrid
-    elif st.session_state.isVelocityModifiedSound_ST:
-        st.session_state.final_velocity = st.session_state.velocity_sensor
+def get_total_cells() -> int:
+    """Get total number of cells from dataset."""
+    if "cell" in ds.dims:
+        return ds.sizes["cell"]
+    elif "depth" in ds.dims:
+        return ds.sizes["depth"]
+    return 0
+
+
+def get_total_beams() -> int:
+    """Get total number of beams from dataset."""
+    if "beam" in ds.dims:
+        return ds.sizes["beam"]
+    return 4
+
+
+def get_time_axis():
+    """Get time axis for plotting."""
+    if "time" in ds.coords:
+        return pd.to_datetime(ds["time"].values)
+    elif "ensemble" in ds.coords:
+        return ds["ensemble"].values
+    return np.arange(get_total_ensembles())
+
+
+def get_depth_axis():
+    """Get depth/cell axis for plotting."""
+    if "depth" in ds.coords:
+        return ds["depth"].values
+    elif "cell" in ds.coords:
+        return ds["cell"].values
+    return np.arange(get_total_cells())
+
+
+def is_earth_coordinates() -> bool:
+    """
+    Check if data is in Earth coordinates.
+    Returns True if transformed to Earth (U, V, W), False for Beam coordinates.
+    """
+    try:
+        coord_info = ds.fixed_leader.coordinate_transformation(ens=0)
+        coord_str = coord_info.get("Coordinates", "")
+        return "Earth" in coord_str
+    except Exception:
+        # Fallback: check attrs
+        return ds.attrs.get("coordinate_system", "").lower() == "earth"
+
+
+def get_velocity_labels() -> tuple[str, str, str, str]:
+    """Get appropriate velocity component labels based on coordinate system."""
+    if is_earth_coordinates():
+        return ("U (East)", "V (North)", "W (Vertical)", "Error")
     else:
-        st.session_state.final_velocity = st.session_state.velocity
-
-    if st.session_state.isRegridCheck_PT:
-        st.session_state.final_echo = st.session_state.echo_regrid
-        st.session_state.final_correlation = st.session_state.correlation_regrid
-        st.session_state.final_pgood = st.session_state.pgood_regrid
-    else:
-        st.session_state.final_echo = st.session_state.echo
-        st.session_state.final_correlation = st.session_state.correlation
-        st.session_state.final_pgood = st.session_state.pgood
-else:
-    if st.session_state.isRegridCheck_PT:
-        st.session_state.final_mask = st.session_state.profile_mask_regrid
-        st.session_state.final_velocity = st.session_state.velocity_regrid
-        st.session_state.final_echo = st.session_state.echo_regrid
-        st.session_state.final_correlation = st.session_state.correlation_regrid
-        st.session_state.final_pgood = st.session_state.pgood_regrid
-    else:
-        if st.session_state.isProfileTest:
-            st.session_state.final_mask = st.session_state.profile_mask
-        elif st.session_state.isQCTest:
-            st.session_state.final_mask = st.session_state.qc_mask
-        elif st.session_state.isSensorTest:
-            st.session_state.final_mask = st.session_state.sensor_mask
-        else:
-            st.session_state.final_mask = st.session_state.orig_mask
-        st.session_state.final_velocity = st.session_state.velocity
-        st.session_state.final_echo = st.session_state.echo
-        st.session_state.final_correlation = st.session_state.correlation
-        st.session_state.final_pgood = st.session_state.pgood
+        return ("Beam 1", "Beam 2", "Beam 3", "Beam 4")
 
 
-if "depth_axis" not in st.session_state:
-    st.session_state.isRegridCheck_PT = False
+def get_file_prefix() -> str:
+    """Get file prefix from session state or derive from filename."""
+    if "file_prefix" in st.session_state and st.session_state.file_prefix:
+        return st.session_state.file_prefix
+    elif "fname" in st.session_state and st.session_state.fname:
+        return os.path.splitext(os.path.basename(st.session_state.fname))[0]
+    return "ADCP"
 
 
-@st.cache_data
-def get_prefixed_filename(base_name):
-    """Generates the file name with the optional prefix."""
-    if st.session_state.file_prefix:
-        return f"{st.session_state.file_prefix}_{base_name}"
+def get_prefixed_filename(base_name: str) -> str:
+    """Generate filename with optional prefix."""
+    prefix = get_file_prefix()
+    if prefix:
+        return f"{prefix}_{base_name}"
     return base_name
 
 
-@st.cache_data
-def file_write(filename=get_prefixed_filename("PRO_DAT.nc")):
-    tempdirname = tempfile.TemporaryDirectory(delete=False)
-    outfilepath = tempdirname.name + "/" + filename
-    return outfilepath
+# =============================================================================
+# PLOTTING FUNCTIONS
+# =============================================================================
 
 
-# If the data is not regrided based on pressure sensor. Use the mean depth
-if not st.session_state.isRegridCheck_PT:
-    st.write(":red[WARNING!]")
-    st.write(
-        "Data not regrided. Using the mean transducer depth to calculate the depth axis."
-    )
-    # mean_depth = np.mean(st.session_state.vlead.vleader["Depth of Transducer"]) / 10
-    mean_depth = np.mean(st.session_state.depth) / 10
-    mean_depth = np.trunc(mean_depth)
-    st.write(f"Mean depth of the transducer is `{mean_depth}`")
-    cells = st.session_state.flead.field()["Cells"]
-    cell_size = st.session_state.flead.field()["Depth Cell Len"] / 100
-    bin1dist = st.session_state.flead.field()["Bin 1 Dist"] / 100
-    if st.session_state.beam_direction_QCT.lower() == "up":
-        sgn = -1
-    else:
-        sgn = 1
-    first_depth = mean_depth + sgn * bin1dist
-    last_depth = first_depth + sgn * cells * cell_size
-    z = np.arange(first_depth, last_depth, sgn * cell_size)
-    st.session_state.final_depth_axis = z
-else:
-    st.session_state.final_depth_axis = st.session_state.depth_axis
+def plot_data_heatmap(
+    data: np.ndarray,
+    title: str,
+    apply_mask: bool = False,
+    colorscale: str = "balance",
+    missing_value: float = -32768,
+) -> None:
+    """Plot a 2D heatmap of data (cell x time)."""
+    time_axis = get_time_axis()
+    depth_axis = get_depth_axis()
 
+    # Handle masking
+    plot_data = data.copy().astype(float)
 
-# Functions for plotting
-@st.cache_data
-def fillplot_plotly(
-    x, y, data, maskdata, colorscale="balance", title="Data", mask=False
-):
-    fig = FigureResampler(go.Figure())
-    if mask:
-        data1 = np.where(maskdata == 1, np.nan, data)
-    else:
-        data1 = np.where(data == -32768, np.nan, data)
+    if apply_mask and "mask" in ds.data_vars:
+        mask = ds["mask"].values
+        # If mask is 3D (beam, cell, time), use beam 0 for non-velocity data
+        if mask.ndim == 3 and plot_data.ndim == 2:
+            mask_2d = mask[0, :, :]
+        elif mask.ndim == 2:
+            mask_2d = mask
+        else:
+            mask_2d = None
 
+        if mask_2d is not None:
+            plot_data = np.where(mask_2d == 1, np.nan, plot_data)
+
+    # Replace missing values with NaN
+    plot_data = np.where(plot_data == missing_value, np.nan, plot_data)
+
+    fig = go.Figure()
     fig.add_trace(
         go.Heatmap(
-            z=data1[:, 0:-1],
-            x=x,
-            y=y,
+            z=plot_data,
+            x=time_axis,
+            y=depth_axis,
             colorscale=colorscale,
             hoverongaps=False,
         )
     )
+
     fig.update_layout(
-        xaxis=dict(showline=True, mirror=True),
-        yaxis=dict(showline=True, mirror=True),
-        title_text=title,
+        title=title,
+        xaxis_title="Time",
+        yaxis_title="Depth/Cell",
+        height=400,
     )
     fig.update_yaxes(autorange="reversed")
-    st.plotly_chart(fig)
+
+    st.plotly_chart(fig, use_container_width=True)
 
 
-def call_plot(varname, beam, mask=False):
-    if varname == "Velocity":
-        fillplot_plotly(
-            st.session_state.date,
-            st.session_state.final_depth_axis,
-            st.session_state.final_velocity[beam - 1, :, :],
-            st.session_state.final_mask,
-            title=varname,
-            mask=mask,
+def plot_velocity_component(
+    beam_idx: int, title: str, apply_mask: bool = False
+) -> None:
+    """Plot velocity component as a heatmap."""
+    if "velocity" not in ds.data_vars:
+        st.warning("No velocity data available.")
+        return
+
+    velocity = ds["velocity"].values
+    vel_data = velocity[beam_idx, :, :].copy().astype(float)
+
+    # Apply mask if requested
+    if apply_mask and "mask" in ds.data_vars:
+        mask = ds["mask"].values
+        if mask.ndim == 3:
+            vel_data = np.where(mask[beam_idx, :, :] == 1, np.nan, vel_data)
+
+    # Replace missing values
+    vel_data = np.where(vel_data == -32768, np.nan, vel_data)
+
+    time_axis = get_time_axis()
+    depth_axis = get_depth_axis()
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Heatmap(
+            z=vel_data,
+            x=time_axis,
+            y=depth_axis,
+            colorscale="RdBu_r",
+            zmid=0,
+            colorbar=dict(title="mm/s"),
+            hoverongaps=False,
         )
-    elif varname == "Echo":
-        fillplot_plotly(
-            st.session_state.date,
-            st.session_state.final_depth_axis,
-            st.session_state.final_echo[beam - 1, :, :],
-            st.session_state.final_mask,
-            title=varname,
-            mask=mask,
-        )
-    elif varname == "Correlation":
-        fillplot_plotly(
-            st.session_state.date,
-            st.session_state.final_depth_axis,
-            st.session_state.final_correlation[beam - 1, :, :],
-            st.session_state.final_mask,
-            title=varname,
-            mask=mask,
-        )
-    elif varname == "Percent Good":
-        fillplot_plotly(
-            st.session_state.date,
-            st.session_state.final_depth_axis,
-            st.session_state.final_pgood[beam - 1, :, :],
-            st.session_state.final_mask,
-            title=varname,
-            mask=mask,
-        )
-
-
-# Option to View Processed Data
-st.header("View Processed Data", divider="blue")
-var_option = st.selectbox(
-    "Select a data type", ("Velocity", "Echo", "Correlation", "Percent Good")
-)
-beam = st.radio("Select beam", (1, 2, 3, 4), horizontal=True)
-
-mask_radio = st.radio("Apply Mask", ("Yes", "No"), horizontal=True)
-plot_button = st.button("Plot Processed Data")
-if plot_button:
-    if mask_radio == "Yes":
-        call_plot(var_option, beam, mask=True)
-    elif mask_radio == "No":
-        call_plot(var_option, beam, mask=False)
-
-
-# Option to Write Processed Data
-st.header("Write Data", divider="blue")
-
-st.session_state.mask_data_WF = st.radio(
-    "Do you want to mask the final data?", ("Yes", "No")
-)
-
-if st.session_state.mask_data_WF == "Yes":
-    mask = st.session_state.final_mask
-    st.session_state.write_velocity = np.copy(st.session_state.final_velocity).astype(
-        np.int16
     )
-    st.session_state.write_velocity[:, mask == 1] = -32768
 
-else:
-    st.session_state.write_velocity = np.copy(st.session_state.final_velocity)
+    fig.update_layout(
+        title=title,
+        xaxis_title="Time",
+        yaxis_title="Depth/Cell",
+        height=400,
+    )
+    fig.update_yaxes(autorange="reversed")
 
-st.session_state.file_type_WF = st.radio(
-    "Select output file format:", ("NetCDF", "CSV")
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# =============================================================================
+# SESSION STATE INITIALIZATION
+# =============================================================================
+
+# Initialize page-specific session state
+if "write_initialized" not in st.session_state:
+    st.session_state.write_initialized = False
+
+if not st.session_state.write_initialized:
+    # File settings
+    st.session_state.file_prefix = get_file_prefix()
+
+    # Export options
+    st.session_state.export_format = "NetCDF"
+    st.session_state.export_type = "Velocity Only"  # Default to velocity-only
+    st.session_state.apply_mask_export = True
+    st.session_state.velocity_units = "cm/s"
+
+    # Custom attributes
+    st.session_state.add_attributes = False
+    st.session_state.custom_attributes = {}
+
+    st.session_state.write_initialized = True
+
+
+# =============================================================================
+# PAGE HEADER
+# =============================================================================
+
+st.header("💾 Write Processed Data", divider="blue")
+
+st.write("""
+Export your processed ADCP data to NetCDF or CSV format. You can choose between:
+- **Velocity Only** (recommended): Exports just U, V, W velocity components with QC mask applied
+- **Full Dataset**: Exports the complete dataset including all variables and metadata
+""")
+
+
+# =============================================================================
+# TABS
+# =============================================================================
+
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["📊 Preview Data", "📝 Attributes", "💾 Export Data", "⚙️ Config File"]
 )
 
-if st.session_state.file_type_WF == "NetCDF":
-    add_attr_button = st.checkbox("Add attributes to NetCDF file")
 
-    if add_attr_button:
-        st.session_state.isAttributes = True
-        st.write("### Modify Attributes")
+# =============================================================================
+# TAB 1: PREVIEW DATA
+# =============================================================================
 
-        # Create two-column layout for attributes
+with tab1:
+    st.header("Preview Processed Data", divider="blue")
+
+    st.write("""
+    Preview your processed data before exporting. The mask can be applied to see 
+    what the final exported data will look like.
+    """)
+
+    # Data type selection
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        var_options = ["Velocity", "Echo Intensity", "Correlation", "Percent Good"]
+        var_selection = st.selectbox(
+            "Select variable to view", var_options, key="preview_var"
+        )
+
+    with col2:
+        if var_selection == "Velocity":
+            u_label, v_label, w_label, err_label = get_velocity_labels()
+            beam_options = [u_label, v_label, w_label, err_label]
+            beam_selection = st.selectbox(
+                "Select component", beam_options, key="preview_beam"
+            )
+            beam_idx = beam_options.index(beam_selection)
+        else:
+            beam_idx = st.selectbox("Select beam", [1, 2, 3, 4], key="preview_beam_num")
+            beam_idx = beam_idx - 1  # Convert to 0-indexed
+
+    with col3:
+        apply_mask_preview = st.radio(
+            "Apply mask?", ["Yes", "No"], horizontal=True, key="preview_mask"
+        )
+        apply_mask = apply_mask_preview == "Yes"
+
+    # Plot button
+    if st.button("📈 Plot Data", key="plot_preview"):
+        if var_selection == "Velocity":
+            plot_velocity_component(
+                beam_idx, f"{var_selection} - {beam_selection}", apply_mask
+            )
+        else:
+            # Get the appropriate data variable
+            var_mapping = {
+                "Echo Intensity": "echo_intensity",
+                "Correlation": "correlation",
+                "Percent Good": "percent_good",
+            }
+            var_name = var_mapping.get(var_selection, "echo_intensity")
+
+            if var_name in ds.data_vars:
+                data = ds[var_name].values
+                if data.ndim == 3:  # (beam, cell, time)
+                    data_2d = data[beam_idx, :, :]
+                else:
+                    data_2d = data
+
+                colorscale = "Viridis" if var_selection != "Correlation" else "Plasma"
+                plot_data_heatmap(
+                    data_2d,
+                    f"{var_selection} - Beam {beam_idx + 1}",
+                    apply_mask=apply_mask,
+                    colorscale=colorscale,
+                    missing_value=0,
+                )
+            else:
+                st.warning(f"Variable '{var_name}' not found in dataset.")
+
+    # Show processing summary
+    with st.expander("📊 Processing Summary", expanded=True):
+        stats = proc.get_current_stats()
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Cells", f"{stats['total_cells']:,}")
+        with col2:
+            st.metric(
+                "Valid Cells", f"{stats['valid']:,}", delta=f"{stats['valid_pct']:.1f}%"
+            )
+        with col3:
+            st.metric(
+                "Masked Cells",
+                f"{stats['masked']:,}",
+                delta=f"-{stats['masked_pct']:.1f}%",
+            )
+
+        if hasattr(proc, "processing_log") and proc.processing_log:
+            st.write("**Processing Steps Applied:**")
+            for step in proc.processing_log:
+                st.write(f"- {step}")
+
+
+# =============================================================================
+# TAB 2: CUSTOM ATTRIBUTES
+# =============================================================================
+
+with tab2:
+    st.header("Custom Attributes", divider="blue")
+
+    st.write("""
+    Add custom metadata attributes to your exported NetCDF file. These attributes 
+    provide important context about the deployment and data collection.
+    """)
+
+    st.session_state.add_attributes = st.checkbox(
+        "Add custom attributes to export",
+        value=st.session_state.add_attributes,
+        key="add_attrs_checkbox",
+    )
+
+    if st.session_state.add_attributes:
         col1, col2 = st.columns(2)
 
         with col1:
-            # Display attributes in the first column
-            for key in [
-                "Cruise_No.",
-                "Ship_Name",
-                "Project_No.",
-                "Water_Depth_m",
-                "Deployment_Depth_m",
-                "Deployment_Date",
-                "Recovery_Date",
-            ]:
-                if key in st.session_state.attributes:
-                    st.session_state.attributes[key] = st.text_input(
-                        key, value=st.session_state.attributes[key]
-                    )
-                else:
-                    st.session_state.attributes[key] = st.text_input(key)
+            st.write("**Deployment Information:**")
+
+            cruise = st.text_input(
+                "Cruise Number",
+                value=st.session_state.custom_attributes.get("cruise_number", ""),
+                key="attr_cruise",
+            )
+            ship = st.text_input(
+                "Ship Name",
+                value=st.session_state.custom_attributes.get("ship_name", ""),
+                key="attr_ship",
+            )
+            project = st.text_input(
+                "Project Number",
+                value=st.session_state.custom_attributes.get("project_number", ""),
+                key="attr_project",
+            )
+            water_depth = st.text_input(
+                "Water Depth (m)",
+                value=st.session_state.custom_attributes.get("water_depth", ""),
+                key="attr_water_depth",
+            )
+            deploy_depth = st.text_input(
+                "Deployment Depth (m)",
+                value=st.session_state.custom_attributes.get("deployment_depth", ""),
+                key="attr_deploy_depth",
+            )
+            deploy_date = st.text_input(
+                "Deployment Date",
+                value=st.session_state.custom_attributes.get("deployment_date", ""),
+                key="attr_deploy_date",
+            )
+            recovery_date = st.text_input(
+                "Recovery Date",
+                value=st.session_state.custom_attributes.get("recovery_date", ""),
+                key="attr_recovery_date",
+            )
 
         with col2:
-            # Display attributes in the second column
-            for key in [
+            st.write("**Location & Contact:**")
+
+            latitude = st.text_input(
                 "Latitude",
+                value=st.session_state.custom_attributes.get("latitude", ""),
+                key="attr_lat",
+            )
+            longitude = st.text_input(
                 "Longitude",
-                "Platform_Type",
+                value=st.session_state.custom_attributes.get("longitude", ""),
+                key="attr_lon",
+            )
+            platform = st.text_input(
+                "Platform Type",
+                value=st.session_state.custom_attributes.get("platform_type", ""),
+                key="attr_platform",
+            )
+            participants = st.text_input(
                 "Participants",
-                "File_created_by",
+                value=st.session_state.custom_attributes.get("participants", ""),
+                key="attr_participants",
+            )
+            created_by = st.text_input(
+                "File Created By",
+                value=st.session_state.custom_attributes.get("file_created_by", ""),
+                key="attr_created_by",
+            )
+            contact = st.text_input(
                 "Contact",
+                value=st.session_state.custom_attributes.get("contact", ""),
+                key="attr_contact",
+            )
+            comments = st.text_area(
                 "Comments",
-            ]:
-                if key in st.session_state.attributes:
-                    st.session_state.attributes[key] = st.text_input(
-                        key, value=st.session_state.attributes[key]
-                    )
-                else:
-                    st.session_state.attributes[key] = st.text_input(key)
-
-download_button = st.button("Generate Processed files")
-
-if download_button:
-    st.session_state.processed_filename = file_write()
-    st.write(":grey[Processed file created. Click the download button.]")
-    #    st.write(st.session_state.processed_filename)
-    depth_axis = np.trunc(st.session_state.final_depth_axis)
-    final_mask = st.session_state.final_mask
-    st.session_state.write_echo = np.copy(st.session_state.final_echo)
-    st.session_state.write_correlation = np.copy(st.session_state.final_correlation)
-    st.session_state.write_pgood = np.copy(st.session_state.final_pgood)
-
-    if st.session_state.file_type_WF == "NetCDF":
-        if add_attr_button and st.session_state.attributes:
-            # Generate file with attributes
-            wr.finalnc(
-                st.session_state.processed_filename,
-                depth_axis,
-                final_mask,
-                st.session_state.write_echo,
-                st.session_state.write_correlation,
-                st.session_state.write_pgood,
-                st.session_state.date,
-                st.session_state.write_velocity,
-                attributes=st.session_state.attributes,  # Pass edited attributes
-            )
-        else:
-            # Generate file without attributes
-            wr.finalnc(
-                st.session_state.processed_filename,
-                depth_axis,
-                final_mask,
-                st.session_state.write_echo,
-                st.session_state.write_correlation,
-                st.session_state.write_pgood,
-                st.session_state.date,
-                st.session_state.write_velocity,
+                value=st.session_state.custom_attributes.get("comments", ""),
+                key="attr_comments",
             )
 
-        with open(st.session_state.processed_filename, "rb") as file:
-            st.download_button(
-                label="Download NetCDF File",
-                data=file,
-                file_name=get_prefixed_filename("PRO_DAT.nc"),
+        # Update session state
+        st.session_state.custom_attributes = {
+            "cruise_number": cruise,
+            "ship_name": ship,
+            "project_number": project,
+            "water_depth": water_depth,
+            "deployment_depth": deploy_depth,
+            "deployment_date": deploy_date,
+            "recovery_date": recovery_date,
+            "latitude": latitude,
+            "longitude": longitude,
+            "platform_type": platform,
+            "participants": participants,
+            "file_created_by": created_by,
+            "contact": contact,
+            "comments": comments,
+        }
+
+        # Show preview
+        with st.expander("Preview Attributes"):
+            attrs_df = pd.DataFrame(
+                [(k, v) for k, v in st.session_state.custom_attributes.items() if v],
+                columns=["Attribute", "Value"],
+            )
+            if not attrs_df.empty:
+                st.dataframe(attrs_df, hide_index=True, use_container_width=True)
+            else:
+                st.info("No attributes entered yet.")
+
+    # Instruction to proceed to Export tab
+    st.info(
+        "💡 After configuring attributes, proceed to the **Export Data** tab to download your files."
+    )
+
+
+# =============================================================================
+# TAB 3: EXPORT DATA
+# =============================================================================
+
+with tab3:
+    st.header("Export Processed Data", divider="blue")
+
+    # File prefix
+    st.session_state.file_prefix = st.text_input(
+        "File prefix",
+        value=st.session_state.file_prefix,
+        help="Prefix added to all exported filenames",
+    )
+
+    st.divider()
+
+    # Export format selection
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.session_state.export_format = st.radio(
+            "Output format",
+            ["NetCDF", "CSV"],
+            key="export_format_radio",
+            help="NetCDF is recommended for most use cases",
+        )
+
+    with col2:
+        st.session_state.export_type = st.radio(
+            "Export type",
+            ["Velocity Only", "Full Dataset"],
+            key="export_type_radio",
+            help="Velocity Only exports U, V, W components. Full Dataset includes all variables.",
+        )
+
+    st.divider()
+
+    # Export options
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.session_state.apply_mask_export = st.checkbox(
+            "Apply QC mask to exported data",
+            value=st.session_state.apply_mask_export,
+            help="Masked values will be set to NaN in the exported file",
+        )
+
+    with col2:
+        if st.session_state.export_type == "Velocity Only":
+            st.session_state.velocity_units = st.selectbox(
+                "Velocity units",
+                ["mm/s", "cm/s", "m/s"],
+                index=1,  # Default to cm/s
+                key="velocity_units_select",
+                help="Original data is in mm/s. Select output units.",
             )
 
-    if st.session_state.file_type_WF == "CSV":
-        udf = pd.DataFrame(
-            st.session_state.write_velocity[0, :, :].T,
-            index=st.session_state.date,
-            columns=-1 * depth_axis,
-        )
-        vdf = pd.DataFrame(
-            st.session_state.write_velocity[1, :, :].T,
-            index=st.session_state.date,
-            columns=-1 * depth_axis,
-        )
-        wdf = pd.DataFrame(
-            st.session_state.write_velocity[2, :, :].T,
-            index=st.session_state.date,
-            columns=-1 * depth_axis,
-        )
-        ucsv = udf.to_csv().encode("utf-8")
-        vcsv = vdf.to_csv().encode("utf-8")
-        wcsv = wdf.to_csv().encode("utf-8")
-        csv_mask = pd.DataFrame(st.session_state.final_mask.T).to_csv().encode("utf-8")
-        st.download_button(
-            label="Download Zonal Velocity File (CSV)",
-            data=ucsv,
-            file_name="zonal_velocity.csv",
-            mime="text/csf",
-        )
-        st.download_button(
-            label="Download Meridional Velocity File (CSV)",
-            data=vcsv,
-            file_name="meridional_velocity.csv",
-            mime="text/csf",
-        )
-        st.download_button(
-            label="Download Vertical Velocity File (CSV)",
-            data=vcsv,
-            file_name="vertical_velocity.csv",
-            mime="text/csf",
-        )
-
-        st.download_button(
-            label="Download Final Mask (CSV)",
-            data=csv_mask,
-            file_name="final_mask.csv",
-            mime="text/csv",
-        )
-
-
-# Option to Download Config file
-# ------------------------------
-
-# Header for the Config.ini File Generator
-st.header("Config.ini File Generator", divider="blue")
-
-# Radio button to decide whether to generate the config.ini file
-generate_config_radio = st.radio(
-    "Do you want to generate a config.ini file?", ("No", "Yes")
-)
-
-
-if generate_config_radio == "Yes":
-    # Create a config parser object
-    config = configparser.ConfigParser()
-
-    # Main section
-    config["FileSettings"] = {}
-    config["DownloadOptions"] = {}
-    config["FixTime"] = {"is_time_modified": "False"}
-    config["SensorTest"] = {"sensor_test": "False"}
-    config["QCTest"] = {"qc_test": "False"}
-    config["ProfileTest"] = {"profile_test": "False"}
-    config["VelocityTest"] = {"velocity_test": "False"}
-    config["Attributes"] = {}
-
-    # ------------------
-    # File Settings
-    # ------------------
-    config["FileSettings"]["input_file_path"] = ""
-    config["FileSettings"]["input_file_name"] = st.session_state.fname
-    config["FileSettings"]["output_file_path"] = ""
-    config["FileSettings"]["output_file_name_raw_netcdf"] = ""
-    config["FileSettings"]["output_file_name_flead_netcdf"] = ""
-    config["FileSettings"]["output_file_name_vlead_netcdf"] = ""
-    config["FileSettings"]["output_file_name_raw_csv"] = ""
-    config["FileSettings"]["output_file_name_processed_netcdf"] = ""
-    config["FileSettings"]["output_file_name_processed_csv"] = ""
-
-    if st.session_state.file_type_WF.lower() == "netcdf":
-        st.session_state.isProcessedNetcdfDownload_WF = True
+    # Show attributes status
+    if st.session_state.add_attributes:
+        n_attrs = len([v for v in st.session_state.custom_attributes.values() if v])
+        st.success(f"✅ {n_attrs} custom attributes will be included in the export.")
     else:
-        st.session_state.isProcessedNetcdfDownload_WF = False
-        st.session_state.isProcessedCSVDownload_WF = True
-    # ------------------
-    # Download options
-    # ------------------
-    config["DownloadOptions"]["download_raw_netcdf"] = str(
-        st.session_state.rawnc_download_DRW
-    )
-    config["DownloadOptions"]["download_flead_netcdf"] = str(
-        st.session_state.fleadnc_download_DRW
-    )
-    config["DownloadOptions"]["download_vlead_netcdf"] = str(
-        st.session_state.vleadnc_download_DRW
-    )
-    config["DownloadOptions"]["download_processed_netcdf"] = str(
-        st.session_state.isProcessedNetcdfDownload_WF
-    )
-    config["DownloadOptions"]["download_raw_csv"] = str(
-        st.session_state.rawcsv_download_DRW
-    )
-    config["DownloadOptions"]["download_processed_csv"] = str(
-        st.session_state.isProcessedCSVDownload_WF
-    )
-    config["DownloadOptions"]["add_attributes_raw"] = str(
-        st.session_state.add_attributes_DRW
-    )
-    config["DownloadOptions"]["add_attributes_processed"] = str(
-        st.session_state.isAttributes
-    )
-    config["DownloadOptions"]["axis_option"] = str(st.session_state.axis_option_DRW)
-    config["DownloadOptions"]["apply_mask"] = "True"
-    config["DownloadOptions"]["download_mask"] = "True"
-
-    # -----------------
-    # PAGE: Read File (Fix Time)
-    # -----------------
-
-    config["FixTime"]["is_time_modified"] = str(st.session_state.isTimeAxisModified)
-    config["FixTime"]["is_snap_time_axis"] = str(st.session_state.isSnapTimeAxis)
-    config["FixTime"]["time_snap_frequency"] = str(st.session_state.time_snap_frequency)
-    config["FixTime"]["time_snap_tolerance"] = str(st.session_state.time_snap_tolerance)
-    config["FixTime"]["time_target_minute"] = str(st.session_state.time_target_minute)
-    config["FixTime"]["is_time_gap_filled"] = str(st.session_state.isTimeGapFilled)
-
-    # ------------------
-    # PAGE: Sensor Test
-    # ------------------
-    config["SensorTest"]["sensor_test"] = str(st.session_state.isSensorTest)
-    # Tab 1: Depth Sensor
-    config["SensorTest"]["is_depth_modified"] = str(st.session_state.isDepthModified_ST)
-    config["SensorTest"]["depth_input_option"] = str(st.session_state.depthoption_ST)
-    config["SensorTest"]["is_fixed_depth"] = str(st.session_state.isFixedDepth_ST)
-    config["SensorTest"]["fixed_depth"] = str(st.session_state.fixeddepth_ST)
-    config["SensorTest"]["is_upload_depth"] = str(st.session_state.isUploadDepth_ST)
-    config["SensorTest"]["depth_file_path"] = ""
-
-    # Tab 2: Salinity sensor
-    config["SensorTest"]["is_salinity_modified"] = str(
-        st.session_state.isSalinityModified_ST
-    )
-    config["SensorTest"]["salinity_input_option"] = str(
-        st.session_state.salinityoption_ST
-    )
-    config["SensorTest"]["is_fixed_salinity"] = str(st.session_state.isFixedSalinity_ST)
-    config["SensorTest"]["fixed_salinity"] = str(st.session_state.fixedsalinity_ST)
-    config["SensorTest"]["is_upload_salinity"] = str(
-        st.session_state.isUploadSalinity_ST
-    )
-    config["SensorTest"]["salinity_file_path"] = ""
-
-    # Tab 3: Temperature sensor
-    config["SensorTest"]["is_temperature_modified"] = str(
-        st.session_state.isTemperatureModified_ST
-    )
-    config["SensorTest"]["temperature_input_option"] = str(
-        st.session_state.temperatureoption_ST
-    )
-    config["SensorTest"]["is_fixed_temperature"] = str(
-        st.session_state.isFixedTemperature_ST
-    )
-    config["SensorTest"]["fixed_temperature"] = str(
-        st.session_state.fixedtemperature_ST
-    )
-    config["SensorTest"]["is_upload_temperature"] = str(
-        st.session_state.isUploadTemperature_ST
-    )
-    config["SensorTest"]["temperature_file_path"] = ""
-
-    # Tab 7:
-
-    config["SensorTest"]["roll_check"] = str(st.session_state.isRollCheck_ST)
-    config["SensorTest"]["roll_cutoff"] = str(st.session_state.roll_cutoff_ST)
-    config["SensorTest"]["pitch_check"] = str(st.session_state.isPitchCheck_ST)
-    config["SensorTest"]["pitch_cutoff"] = str(st.session_state.pitch_cutoff_ST)
-
-    config["SensorTest"]["velocity_modified"] = str(
-        st.session_state.isVelocityModifiedSound_ST
-    )
-
-    # ------------------
-    # PAGE: QC Test
-    # ------------------
-    # Tab 2
-    config["QCTest"]["qc_test"] = str(st.session_state.isQCTest)
-    config["QCTest"]["qc_check"] = str(st.session_state.isQCCheck_QCT)
-    config["QCTest"]["correlation"] = str(st.session_state.ct_QCT)
-    config["QCTest"]["echo_intensity"] = str(st.session_state.et_QCT)
-    config["QCTest"]["error_velocity"] = str(st.session_state.evt_QCT)
-    config["QCTest"]["false_target"] = str(st.session_state.ft_QCT)
-    config["QCTest"]["three_beam"] = str(st.session_state.is3beam_QCT)
-    if st.session_state.is3beam_QCT:
-        config["QCTest"]["beam_ignore"] = str(st.session_state.beam_to_ignore)
-    config["QCTest"]["percent_good"] = str(st.session_state.pgt_QCT)
-
-    # Tab 4
-    config["QCTest"]["beam_modified"] = str(st.session_state.isBeamModified_QCT)
-    config["QCTest"]["orientation"] = str(st.session_state.beam_direction_QCT)
-
-    # ------------------
-    # PAGE: Profile Test
-    # ------------------
-    # Tab 1
-    config["ProfileTest"]["profile_test"] = str(st.session_state.isProfileTest)
-    config["ProfileTest"]["trim_ends_check"] = str(st.session_state.isTrimEndsCheck_PT)
-    config["ProfileTest"]["trim_start_ensemble"] = str(st.session_state.start_ens_PT)
-    config["ProfileTest"]["trim_end_ensemble"] = str(st.session_state.end_ens_PT)
-
-    # Tab 2
-    config["ProfileTest"]["cutbins_sidelobe_check"] = str(
-        st.session_state.isCutBinSideLobeCheck_PT
-    )
-    config["ProfileTest"]["extra_cells"] = str(st.session_state.extra_cells_PT)
-    config["ProfileTest"]["water_depth"] = str(st.session_state.water_depth_PT)
-
-    # Tab 3
-    # config["ProfileTest"]["manual_cutbins"] = str(
-    #     st.session_state.isCutBinManualCheck_PT
-    # )
-
-    # Tab 4
-    config["ProfileTest"]["regrid"] = str(st.session_state.isRegridCheck_PT)
-    config["ProfileTest"]["end_cell_option"] = str(st.session_state.end_cell_option_PT)
-    config["ProfileTest"]["interpolate"] = str(st.session_state.interpolate_PT)
-    config["ProfileTest"]["boundary"] = str(st.session_state.manualdepth_PT)
-
-    # ------------------
-    # PAGE: Velocity Test
-    # ------------------
-
-    config["VelocityTest"]["velocity_test"] = str(st.session_state.isVelocityTest)
-
-    # Tab 1
-    config["VelocityTest"]["magnetic_declination"] = str(
-        st.session_state.isMagnetCheck_VT
-    )
-    config["VelocityTest"]["magnet_method"] = str(st.session_state.magnet_method_VT)
-    config["VelocityTest"]["magnet_latitude"] = str(st.session_state.magnet_lat_VT)
-    config["VelocityTest"]["magnet_longitude"] = str(st.session_state.magnet_lon_VT)
-    config["VelocityTest"]["magnet_depth"] = str(st.session_state.magnet_depth_VT)
-    config["VelocityTest"]["magnet_year"] = str(st.session_state.magnet_year_VT)
-    config["VelocityTest"]["magnet_user_input"] = str(
-        st.session_state.magnet_user_input_VT
-    )
-
-    # Tab 2
-    config["VelocityTest"]["cutoff"] = str(st.session_state.isCutoffCheck_VT)
-    config["VelocityTest"]["max_zonal_velocity"] = str(st.session_state.maxuvel_VT)
-    config["VelocityTest"]["max_meridional_velocity"] = str(st.session_state.maxvvel_VT)
-    config["VelocityTest"]["max_vertical_velocity"] = str(st.session_state.maxwvel_VT)
-
-    # Tab 3
-    config["VelocityTest"]["despike"] = str(st.session_state.isDespikeCheck_VT)
-    config["VelocityTest"]["despike_kernel_size"] = str(
-        st.session_state.despike_kernel_VT
-    )
-    config["VelocityTest"]["despike_cutoff"] = str(st.session_state.despike_cutoff_VT)
-
-    # Tab 4
-    config["VelocityTest"]["flatline"] = str(st.session_state.isFlatlineCheck_VT)
-    config["VelocityTest"]["flatline_kernel_size"] = str(
-        st.session_state.flatline_kernel_VT
-    )
-    config["VelocityTest"]["flatline_cutoff"] = str(st.session_state.flatline_cutoff_VT)
-
-    # Optional section (attributes)
-
-    for key, value in st.session_state.attributes.items():
-        config["Attributes"][key] = str(value)  # Ensure all values are strings
-
-    # Write config.ini to a temporary file
-    # config_filepath = "config.ini"
-    # with open(config_filepath, "w") as configfile:
-    #     config.write(configfile)
-    # Create a temporary file for the config.ini
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".ini") as temp_config:
-        config.write(temp_config)
-        temp_config_path = temp_config.name
-    # Allow the user to download the generated config.ini file
-    with open(temp_config_path, "rb") as file:
-        st.download_button(
-            label="Download config.ini File",
-            data=file,
-            file_name="config.ini",
+        st.info(
+            "ℹ️ No custom attributes configured. Configure in the **Attributes** tab if needed."
         )
 
-    display_config_radio = st.radio(
-        "Do you want to display config.ini file?", ("No", "Yes")
+    st.divider()
+
+    # Export button
+    st.write("### Generate Export Files")
+
+    if st.button("🚀 Generate Files", type="primary", key="generate_export"):
+        try:
+            with st.spinner("Generating export files..."):
+                # Create temporary directory
+                temp_dir = tempfile.mkdtemp()
+
+                if st.session_state.export_format == "NetCDF":
+                    if st.session_state.export_type == "Velocity Only":
+                        # Use velocity_to_netcdf for velocity-only export
+                        filename = get_prefixed_filename("velocity.nc")
+                        filepath = os.path.join(temp_dir, filename)
+
+                        # Add custom attributes to the processor dataset before export
+                        if (
+                            st.session_state.add_attributes
+                            and st.session_state.custom_attributes
+                        ):
+                            for (
+                                key,
+                                value,
+                            ) in st.session_state.custom_attributes.items():
+                                if value:  # Only add non-empty attributes
+                                    proc.dataset.attrs[key] = value
+
+                        proc.velocity_to_netcdf(
+                            filepath,
+                            apply_mask=st.session_state.apply_mask_export,
+                            units=st.session_state.velocity_units,
+                            include_metadata=True,
+                        )
+
+                        # Read file for download
+                        with open(filepath, "rb") as f:
+                            file_data = f.read()
+
+                        st.download_button(
+                            label="📥 Download Velocity NetCDF",
+                            data=file_data,
+                            file_name=filename,
+                            mime="application/x-netcdf",
+                        )
+
+                        st.success(f"✅ Velocity file generated: {filename}")
+
+                        # Show what was included
+                        if st.session_state.add_attributes:
+                            n_attrs = len(
+                                [
+                                    v
+                                    for v in st.session_state.custom_attributes.values()
+                                    if v
+                                ]
+                            )
+                            st.write(f"📝 Included {n_attrs} custom attributes")
+
+                    else:
+                        # Use to_netcdf for full dataset export
+                        filename = get_prefixed_filename("processed.nc")
+                        filepath = os.path.join(temp_dir, filename)
+
+                        # Add custom attributes to the processor dataset before export
+                        if (
+                            st.session_state.add_attributes
+                            and st.session_state.custom_attributes
+                        ):
+                            for (
+                                key,
+                                value,
+                            ) in st.session_state.custom_attributes.items():
+                                if value:  # Only add non-empty attributes
+                                    proc.dataset.attrs[key] = value
+
+                        proc.to_netcdf(filepath)
+
+                        # Read file for download
+                        with open(filepath, "rb") as f:
+                            file_data = f.read()
+
+                        st.download_button(
+                            label="📥 Download Full Dataset NetCDF",
+                            data=file_data,
+                            file_name=filename,
+                            mime="application/x-netcdf",
+                        )
+
+                        st.success(f"✅ Full dataset file generated: {filename}")
+
+                        # Show what was included
+                        if st.session_state.add_attributes:
+                            n_attrs = len(
+                                [
+                                    v
+                                    for v in st.session_state.custom_attributes.values()
+                                    if v
+                                ]
+                            )
+                            st.write(f"📝 Included {n_attrs} custom attributes")
+
+                else:  # CSV format
+                    st.write("Generating CSV files...")
+
+                    # Get velocity data
+                    velocity = ds["velocity"].values
+                    time_axis = get_time_axis()
+                    depth_axis = get_depth_axis()
+
+                    # Apply mask if requested
+                    if st.session_state.apply_mask_export and "mask" in ds.data_vars:
+                        mask = ds["mask"].values
+
+                    u_label, v_label, w_label, _ = get_velocity_labels()
+
+                    # Generate CSV for each velocity component
+                    for i, (beam_idx, label) in enumerate(
+                        [(0, "zonal"), (1, "meridional"), (2, "vertical")]
+                    ):
+                        vel_data = velocity[beam_idx, :, :].copy().astype(float)
+                        vel_data[vel_data == -32768] = np.nan
+
+                        if (
+                            st.session_state.apply_mask_export
+                            and "mask" in ds.data_vars
+                        ):
+                            vel_data = np.where(
+                                mask[beam_idx, :, :] == 1, np.nan, vel_data
+                            )
+
+                        # Create DataFrame
+                        df = pd.DataFrame(
+                            vel_data.T,
+                            index=time_axis,
+                            columns=depth_axis,
+                        )
+
+                        csv_data = df.to_csv().encode("utf-8")
+                        filename = get_prefixed_filename(f"{label}_velocity.csv")
+
+                        st.download_button(
+                            label=f"📥 Download {label.title()} Velocity CSV",
+                            data=csv_data,
+                            file_name=filename,
+                            mime="text/csv",
+                            key=f"csv_{label}",
+                        )
+
+                    # Export mask as CSV
+                    if "mask" in ds.data_vars:
+                        mask = ds["mask"].values
+                        # Use combined mask (beam 3) if available
+                        mask_2d = mask[3, :, :] if mask.shape[0] > 3 else mask[0, :, :]
+                        mask_df = pd.DataFrame(
+                            mask_2d.T, index=time_axis, columns=depth_axis
+                        )
+                        mask_csv = mask_df.to_csv().encode("utf-8")
+
+                        st.download_button(
+                            label="📥 Download Mask CSV",
+                            data=mask_csv,
+                            file_name=get_prefixed_filename("mask.csv"),
+                            mime="text/csv",
+                            key="csv_mask",
+                        )
+
+                    st.success("✅ CSV files generated successfully!")
+
+        except Exception as e:
+            st.error(f"❌ Error generating files: {e}")
+            import traceback
+
+            st.code(traceback.format_exc())
+
+
+# =============================================================================
+# TAB 4: CONFIG FILE GENERATOR
+# =============================================================================
+
+with tab4:
+    st.header("Configuration File Generator", divider="blue")
+
+    st.write("""
+    Generate a configuration file (config.ini) that captures all processing settings.
+    This file can be used to reproduce the processing using the pyadps autoprocess function.
+    """)
+
+    generate_config = st.checkbox(
+        "Generate configuration file",
+        value=False,
+        key="generate_config_checkbox",
     )
-    if display_config_radio == "Yes":
-        st.write({section: dict(config[section]) for section in config.sections()})
+
+    if generate_config:
+        st.info("""
+        **Note:** Configuration file generation captures the current processing state.
+        The generated config.ini can be used with `pyadps.autoprocess()` for batch processing.
+        """)
+
+        if st.button("📄 Generate config.ini", key="gen_config_btn"):
+            try:
+                # Build configuration from processor state
+                config_lines = []
+                config_lines.append("[FileSettings]")
+                config_lines.append(
+                    f"input_file_name = {st.session_state.get('fname', '')}"
+                )
+                config_lines.append("")
+
+                config_lines.append("[DownloadOptions]")
+                config_lines.append(
+                    f"export_type = {'velocity_only' if st.session_state.export_type == 'Velocity Only' else 'full_dataset'}"
+                )
+                config_lines.append(
+                    f"export_format = {st.session_state.export_format.lower()}"
+                )
+                config_lines.append(
+                    f"apply_mask = {st.session_state.apply_mask_export}"
+                )
+                if st.session_state.export_type == "Velocity Only":
+                    config_lines.append(
+                        f"velocity_units = {st.session_state.velocity_units}"
+                    )
+                config_lines.append("")
+
+                # Time axis settings
+                config_lines.append("[TimeAxis]")
+                config_lines.append(
+                    f"time_axis_modified = {st.session_state.get('time_axis_modified', False)}"
+                )
+                config_lines.append("")
+
+                # Sensor health settings
+                config_lines.append("[SensorHealth]")
+                config_lines.append(
+                    f"sensor_health_applied = {st.session_state.get('sensor_health_applied', False)}"
+                )
+                config_lines.append("")
+
+                # Signal quality settings
+                config_lines.append("[SignalQuality]")
+                config_lines.append(
+                    f"qc_applied = {st.session_state.get('qc_applied', False)}"
+                )
+                if st.session_state.get("qc_applied", False):
+                    config_lines.append(
+                        f"correlation_threshold = {st.session_state.get('correlation_threshold', 64)}"
+                    )
+                    config_lines.append(
+                        f"echo_intensity_threshold = {st.session_state.get('echo_intensity_threshold', 40)}"
+                    )
+                    config_lines.append(
+                        f"error_velocity_threshold = {st.session_state.get('error_velocity_threshold', 2000)}"
+                    )
+                config_lines.append("")
+
+                # Profile operation settings
+                config_lines.append("[ProfileOperation]")
+                config_lines.append(
+                    f"profile_applied = {st.session_state.get('profile_applied', False)}"
+                )
+                config_lines.append("")
+
+                # Velocity check settings
+                config_lines.append("[VelocityCheck]")
+                config_lines.append(
+                    f"velocity_applied = {st.session_state.get('velocity_applied', False)}"
+                )
+                if st.session_state.get("velocity_applied", False):
+                    config_lines.append(
+                        f"cutoff_u = {st.session_state.get('cutoff_u', 2500)}"
+                    )
+                    config_lines.append(
+                        f"cutoff_v = {st.session_state.get('cutoff_v', 2500)}"
+                    )
+                    config_lines.append(
+                        f"cutoff_w = {st.session_state.get('cutoff_w', 500)}"
+                    )
+                config_lines.append("")
+
+                # Custom attributes
+                if (
+                    st.session_state.add_attributes
+                    and st.session_state.custom_attributes
+                ):
+                    config_lines.append("[Attributes]")
+                    for key, value in st.session_state.custom_attributes.items():
+                        if value:
+                            config_lines.append(f"{key} = {value}")
+                    config_lines.append("")
+
+                config_content = "\n".join(config_lines)
+
+                # Show preview
+                with st.expander("Preview config.ini", expanded=True):
+                    st.code(config_content, language="ini")
+
+                # Download button
+                st.download_button(
+                    label="📥 Download config.ini",
+                    data=config_content.encode("utf-8"),
+                    file_name="config.ini",
+                    mime="text/plain",
+                )
+
+                st.success("✅ Configuration file generated!")
+
+            except Exception as e:
+                st.error(f"❌ Error generating config file: {e}")
+
+
+# =============================================================================
+# SIDEBAR: PROCESSING STATUS
+# =============================================================================
+
+with st.sidebar:
+    st.header("📊 Export Summary")
+
+    # Current statistics
+    stats = proc.get_current_stats()
+
+    st.metric("Total Cells", f"{stats['total_cells']:,}")
+    st.metric("Valid Cells", f"{stats['valid']:,}", delta=f"{stats['valid_pct']:.1f}%")
+    st.metric(
+        "Masked Cells", f"{stats['masked']:,}", delta=f"-{stats['masked_pct']:.1f}%"
+    )
+
+    st.write("---")
+
+    # Export settings summary
+    st.write("**Export Settings:**")
+    st.write(f"- Format: {st.session_state.export_format}")
+    st.write(f"- Type: {st.session_state.export_type}")
+    st.write(f"- Apply Mask: {'✅' if st.session_state.apply_mask_export else '❌'}")
+    if st.session_state.export_type == "Velocity Only":
+        st.write(f"- Units: {st.session_state.velocity_units}")
+    st.write(f"- Custom Attrs: {'✅' if st.session_state.add_attributes else '❌'}")
+
+    st.write("---")
+
+    # Dataset info
+    st.write("**Dataset Info:**")
+    st.write(f"- Ensembles: {get_total_ensembles():,}")
+    st.write(f"- Cells: {get_total_cells()}")
+    st.write(f"- Beams: {get_total_beams()}")
+
+    # Check coordinate system
+    if is_earth_coordinates():
+        st.write("- Coords: Earth (U, V, W)")
+    else:
+        st.write("- Coords: Beam (1, 2, 3, 4)")
+
+    st.write("---")
+
+    # Processing log
+    st.write("**Processing Log:**")
+    if hasattr(proc, "processing_log") and proc.processing_log:
+        for log_entry in proc.processing_log[-5:]:
+            st.write(f"- {log_entry}")
+    else:
+        st.write("*No processing steps applied yet.*")

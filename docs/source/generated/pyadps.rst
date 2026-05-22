@@ -1,6 +1,0 @@
-﻿pyadps
-======
-
-.. automodule:: pyadps
-
-   

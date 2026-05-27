@@ -220,6 +220,8 @@ class ProcessingConfig:
     isRegridCheck_PT: bool = False
     regrid_cell_size_PT: float = 1.0
     regrid_method_PT: str = "nearest"  # interpolation method passed to runner.regrid()
+    regrid_end_cell_option_PT: str = "cell"  # "cell", "surface", or "manual"
+    regrid_boundary_limit_PT: float = 0.0  # used when end_cell_option="manual"
     beam_direction_PT: str = "up"
 
     # ========================
@@ -453,6 +455,12 @@ class ProcessingConfig:
             kwargs["regrid_method_PT"] = config.get(
                 "ProfileTest", "regrid_method", fallback="nearest"
             )
+            kwargs["regrid_end_cell_option_PT"] = config.get(
+                "ProfileTest", "regrid_end_cell_option", fallback="cell"
+            )
+            kwargs["regrid_boundary_limit_PT"] = config.getfloat(
+                "ProfileTest", "regrid_boundary_limit", fallback=0.0
+            )
             kwargs["beam_direction_PT"] = config.get(
                 "ProfileTest", "beam_direction", fallback="up"
             )
@@ -640,6 +648,8 @@ class ProcessingConfig:
             "regrid": str(self.isRegridCheck_PT),
             "regrid_cell_size": str(self.regrid_cell_size_PT),
             "regrid_method": self.regrid_method_PT,
+            "regrid_end_cell_option": self.regrid_end_cell_option_PT,
+            "regrid_boundary_limit": str(self.regrid_boundary_limit_PT),
             "beam_direction": self.beam_direction_PT,
         }
 

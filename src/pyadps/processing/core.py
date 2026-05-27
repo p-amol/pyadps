@@ -696,6 +696,8 @@ class ProcessedDataset:
         # Regrid
         regrid: bool = False,
         regrid_method: str = "nearest",
+        regrid_end_cell_option: str = "cell",
+        regrid_boundary_limit: float = 0.0,
     ) -> ProcessedDataset:
         """
         Apply profile operations (STEP 4 of 6).
@@ -703,7 +705,7 @@ class ProcessedDataset:
         Modifies profile structure through ensemble trimming, bin cutting,
         and regridding. Uses ProfileOperationRunner for processing.
 
-        âš ï¸ IMPORTANT: Profile operations should be applied AFTER QC checks
+        IMPORTANT: Profile operations should be applied AFTER QC checks
         because regridding changes the cell structure, invalidating cell-based masks.
 
         Parameters
@@ -728,7 +730,12 @@ class ProcessedDataset:
         regrid : bool, default False
             Enable regridding to regular depth grid.
         regrid_method : str, default 'nearest'
-            Interpolation method ('linear', 'nearest').
+            Interpolation method ('nearest', 'linear', 'cubic').
+        regrid_end_cell_option : str, default 'cell'
+            Depth extent of the regridded grid: 'cell' (to last valid cell),
+            'surface' (to water surface), or 'manual' (use regrid_boundary_limit).
+        regrid_boundary_limit : float, default 0.0
+            Depth boundary in metres when regrid_end_cell_option='manual'.
 
         Returns
         -------
@@ -806,8 +813,21 @@ class ProcessedDataset:
 
         # Regrid (must be last)
         if regrid:
+            # Derive trimends from trim_start/trim_end so the depth grid
+            # calculation excludes deployment/recovery periods.
+            regrid_trimends = None
+            if trim_start is not None or trim_end is not None:
+                n_ens = self.dataset.sizes.get("time", self.dataset.sizes.get("ensemble", 0))
+                start_idx = trim_start if trim_start is not None else 0
+                end_idx = n_ens - trim_end if trim_end is not None else n_ens
+                regrid_trimends = (start_idx, end_idx)
+
             runner.regrid(
                 method=regrid_method,
+                end_cell_option=regrid_end_cell_option,
+                boundary_limit=regrid_boundary_limit,
+                trimends=regrid_trimends,
+                orientation=beam_direction,
             )
 
         # Commit changes
@@ -861,6 +881,8 @@ class ProcessedDataset:
         # Regrid
         self.config.isRegridCheck_PT = regrid
         self.config.regrid_method_PT = regrid_method
+        self.config.regrid_end_cell_option_PT = regrid_end_cell_option
+        self.config.regrid_boundary_limit_PT = regrid_boundary_limit
         # ----------------------------------------------------------------------
 
         return self
@@ -1376,6 +1398,8 @@ class ProcessedDataset:
             if config.isRegridCheck_PT:
                 profile_kwargs["regrid"] = True
                 profile_kwargs["regrid_method"] = config.regrid_method_PT
+                profile_kwargs["regrid_end_cell_option"] = config.regrid_end_cell_option_PT
+                profile_kwargs["regrid_boundary_limit"] = config.regrid_boundary_limit_PT
                 profile_kwargs["beam_direction"] = config.beam_direction_PT
 
             if profile_kwargs:

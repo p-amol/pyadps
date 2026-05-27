@@ -1122,7 +1122,7 @@ class ProfileOperationRunner:
     and VelocityCheckRunner style. Coordinates ensemble trimming, bin cutting,
     and regridding operations with comprehensive statistics tracking.
 
-    âš ï¸ IMPORTANT SEQUENCING:
+    IMPORTANT SEQUENCING:
     1. Quality control checks MUST happen BEFORE regridding
     2. Regridding INVALIDATES cell-based masks
     3. Use this class AFTER all QC steps are complete

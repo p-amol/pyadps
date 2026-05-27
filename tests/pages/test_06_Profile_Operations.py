@@ -40,7 +40,7 @@ TestPageFunctionsDirectly    all helper function branches via importlib:
                                get_bin1_distance, get_beam_angle,
                                get_beam_direction (all 5 branches),
                                status_color_map, plot_heatmap 3-D + mask,
-                               plot_mask_comparison 2-D/3-D branches
+                               _trim_has_effect/_trim_to_counts/_trim_trimends
 
 Run with:
     pytest test_06_Profile_Operations.py -v
@@ -53,6 +53,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -350,10 +351,10 @@ class TestPageLoads:
         assert "Enable Side Lobe Cutting" in labels
         assert "Enable Regridding" in labels
 
-    def test_trim_sliders_present(self, loaded_at):
-        labels = [s.label for s in loaded_at.slider]
-        assert any("start" in l.lower() for l in labels)
-        assert any("end" in l.lower() for l in labels)
+    def test_trim_number_inputs_present(self, loaded_at):
+        labels = [n.label for n in loaded_at.number_input]
+        assert any("First valid" in l for l in labels)
+        assert any("Last valid" in l for l in labels)
 
     def test_preview_buttons_present(self, loaded_at):
         labels = [b.label for b in loaded_at.button]
@@ -395,8 +396,8 @@ class TestSessionStateInit:
         "profile_initialized",
         "profile_applied",
         "profile_preview_run",
-        "trim_start",
-        "trim_end",
+        "trim_start_ens",
+        "trim_end_ens",
         "apply_side_lobe",
         "water_depth",
         "extra_cells",
@@ -428,11 +429,12 @@ class TestSessionStateInit:
     def test_profile_preview_run_false(self, loaded_at):
         assert loaded_at.session_state["profile_preview_run"] is False
 
-    def test_trim_start_zero(self, loaded_at):
-        assert loaded_at.session_state["trim_start"] == 0
+    def test_trim_start_ens_zero(self, loaded_at):
+        assert loaded_at.session_state["trim_start_ens"] == 0
 
-    def test_trim_end_zero(self, loaded_at):
-        assert loaded_at.session_state["trim_end"] == 0
+    def test_trim_end_ens_default(self, loaded_at):
+        # default = n_ens - 1 = 99 for a 100-ensemble dataset
+        assert loaded_at.session_state["trim_end_ens"] == 99
 
     def test_apply_side_lobe_false(self, loaded_at):
         assert loaded_at.session_state["apply_side_lobe"] is False
@@ -529,21 +531,21 @@ class TestSidebarStatus:
 
 
 class TestTab1TrimEnds:
-    """Trim sliders, Preview Trim button, and post-preview mask display."""
+    """Trim number_inputs, Preview Trim button, and post-preview mask display."""
 
-    def test_trim_start_slider_default_zero(self, loaded_at):
-        sl = [s for s in loaded_at.slider if "start" in s.label.lower()][0]
-        assert sl.value == 0
+    def test_trim_start_ens_input_default_zero(self, loaded_at):
+        ni = [n for n in loaded_at.number_input if "First valid" in n.label][0]
+        assert ni.value == 0
 
-    def test_trim_end_slider_default_zero(self, loaded_at):
-        sl = [s for s in loaded_at.slider if "end" in s.label.lower()][0]
-        assert sl.value == 0
+    def test_trim_end_ens_input_default_last(self, loaded_at):
+        ni = [n for n in loaded_at.number_input if "Last valid" in n.label][0]
+        assert ni.value == 99  # n_ens - 1
 
     def test_display_range_input_present(self, loaded_at):
         assert any("Display range" in n.label for n in loaded_at.number_input)
 
     def test_preview_trim_zero_trim_sets_flag(self, proc):
-        """Preview with zero trim still sets profile_preview_run=True."""
+        """Preview with default (no-op) trim still sets profile_preview_run=True."""
         at = _make_loaded_at(proc)
         [b for b in at.button if "Preview Trim" in b.label][0].click().run()
         assert not at.exception
@@ -551,8 +553,8 @@ class TestTab1TrimEnds:
 
     def test_preview_trim_with_nonzero_start(self, proc):
         at = _make_loaded_at(proc)
-        sl = [s for s in at.slider if "start" in s.label.lower()][0]
-        sl.set_value(5).run()
+        ni = [n for n in at.number_input if "First valid" in n.label][0]
+        ni.set_value(5).run()
         [b for b in at.button if "Preview Trim" in b.label][0].click().run()
         assert not at.exception
         success = " ".join(s.value for s in at.success)
@@ -560,21 +562,95 @@ class TestTab1TrimEnds:
 
     def test_preview_trim_calls_runner(self, proc):
         at = _make_loaded_at(proc)
-        sl = [s for s in at.slider if "start" in s.label.lower()][0]
-        sl.set_value(3).run()
+        ni = [n for n in at.number_input if "First valid" in n.label][0]
+        ni.set_value(3).run()
         [b for b in at.button if "Preview Trim" in b.label][0].click().run()
         proc.get_profile_operation_runner.assert_called()
 
-    def test_trim_start_updates_session_state(self, proc):
+    def test_trim_start_ens_updates_session_state(self, proc):
         at = _make_loaded_at(proc)
-        sl = [s for s in at.slider if "start" in s.label.lower()][0]
-        sl.set_value(7).run()
-        assert at.session_state["trim_start"] == 7
+        ni = [n for n in at.number_input if "First valid" in n.label][0]
+        ni.set_value(7).run()
+        assert at.session_state["trim_start_ens"] == 7
+
+    def test_trim_end_ens_updates_session_state(self, proc):
+        at = _make_loaded_at(proc)
+        ni = [n for n in at.number_input if "Last valid" in n.label][0]
+        ni.set_value(90).run()
+        assert at.session_state["trim_end_ens"] == 90
 
     def test_mask_heatmap_displayed_after_preview(self, proc):
-        """Lines 513-515: profile_preview_run=True shows revised mask heatmap."""
+        """profile_preview_run=True shows revised mask heatmap."""
         at = _make_loaded_at(proc, extra_ss={"profile_preview_run": True})
         assert not at.exception
+
+
+# ===========================================================================
+# 6b. Trim helper functions
+# ===========================================================================
+
+
+class TestTrimHelpers:
+    """Direct tests for _trim_has_effect, _trim_to_counts, _trim_trimends."""
+
+    def _ss(self, start, end):
+        return SimpleNamespace(trim_start_ens=start, trim_end_ens=end)
+
+    def test_has_effect_false_when_full_range(self, page_module):
+        page_module.ds = _make_ds(n_ens=100)
+        with patch.object(page_module.st, "session_state", self._ss(0, 99)):
+            assert page_module._trim_has_effect() is False
+
+    def test_has_effect_true_when_start_nonzero(self, page_module):
+        page_module.ds = _make_ds(n_ens=100)
+        with patch.object(page_module.st, "session_state", self._ss(5, 99)):
+            assert page_module._trim_has_effect() is True
+
+    def test_has_effect_true_when_end_reduced(self, page_module):
+        page_module.ds = _make_ds(n_ens=100)
+        with patch.object(page_module.st, "session_state", self._ss(0, 94)):
+            assert page_module._trim_has_effect() is True
+
+    def test_to_counts_no_trim(self, page_module):
+        page_module.ds = _make_ds(n_ens=100)
+        with patch.object(page_module.st, "session_state", self._ss(0, 99)):
+            start_count, end_count = page_module._trim_to_counts()
+        assert start_count is None
+        assert end_count is None
+
+    def test_to_counts_start_only(self, page_module):
+        page_module.ds = _make_ds(n_ens=100)
+        with patch.object(page_module.st, "session_state", self._ss(5, 99)):
+            start_count, end_count = page_module._trim_to_counts()
+        assert start_count == 5
+        assert end_count is None
+
+    def test_to_counts_end_only(self, page_module):
+        # trim_end_ens=94 means last valid is 94; ensembles 95-99 trimmed → end_count=5
+        page_module.ds = _make_ds(n_ens=100)
+        with patch.object(page_module.st, "session_state", self._ss(0, 94)):
+            start_count, end_count = page_module._trim_to_counts()
+        assert start_count is None
+        assert end_count == 5  # 100 - 1 - 94
+
+    def test_to_counts_both(self, page_module):
+        page_module.ds = _make_ds(n_ens=100)
+        with patch.object(page_module.st, "session_state", self._ss(10, 89)):
+            start_count, end_count = page_module._trim_to_counts()
+        assert start_count == 10
+        assert end_count == 10  # 100 - 1 - 89
+
+    def test_trimends_none_when_no_effect(self, page_module):
+        page_module.ds = _make_ds(n_ens=100)
+        with patch.object(page_module.st, "session_state", self._ss(0, 99)):
+            result = page_module._trim_trimends()
+        assert result is None
+
+    def test_trimends_returns_tuple(self, page_module):
+        page_module.ds = _make_ds(n_ens=100)
+        with patch.object(page_module.st, "session_state", self._ss(10, 89)):
+            result = page_module._trim_trimends()
+        assert result == (10, 90)  # (trim_start_ens, trim_end_ens + 1)
 
 
 # ===========================================================================
@@ -611,7 +687,7 @@ class TestTab2SideLobe:
             "profile_initialized": True,
             "profile_applied": False,
             "profile_preview_run": False,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": True,
             "water_depth": None,
             "extra_cells": 1,
@@ -715,7 +791,7 @@ class TestTab3ManualCut:
             "profile_initialized": True,
             "profile_applied": False,
             "profile_preview_run": False,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": False,
             "water_depth": None,
             "extra_cells": 1,
@@ -738,7 +814,7 @@ class TestTab3ManualCut:
             "profile_initialized": True,
             "profile_applied": False,
             "profile_preview_run": False,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": False,
             "water_depth": None,
             "extra_cells": 1,
@@ -763,7 +839,7 @@ class TestTab3ManualCut:
             "profile_initialized": True,
             "profile_applied": False,
             "profile_preview_run": False,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": False,
             "water_depth": None,
             "extra_cells": 1,
@@ -821,7 +897,7 @@ class TestTab4Regrid:
             "profile_initialized": True,
             "profile_applied": False,
             "profile_preview_run": False,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": False,
             "water_depth": None,
             "extra_cells": 1,
@@ -919,16 +995,14 @@ class TestTab5ResetButton:
         assert at.session_state["profile_applied"] is False
 
     def test_clears_trim_start(self, proc):
-        # Reset calls st.rerun(); after the rerun the slider widget
-        # (key="trim_start_slider") rebinds trim_start from its own widget
-        # state, so we cannot assert trim_start==0 in session state after
-        # the rerun.  We verify proc.reset() was called (the real side-effect)
-        # and that the page re-renders cleanly.
+        # Reset calls st.rerun(); after the rerun the number_input widget
+        # (key="trim_start_ens_input") rebinds trim_start_ens from widget state.
+        # We verify proc.reset() was called and the page re-renders cleanly.
         at = _make_loaded_at(proc, extra_ss={
             "profile_initialized": True,
             "profile_applied": False,
             "profile_preview_run": False,
-            "trim_start": 5, "trim_end": 0,
+            "trim_start_ens": 5, "trim_end_ens": 99,
             "apply_side_lobe": False,
             "water_depth": None,
             "extra_cells": 1,
@@ -950,7 +1024,7 @@ class TestTab5ResetButton:
             "profile_initialized": True,
             "profile_applied": False,
             "profile_preview_run": False,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": False,
             "water_depth": None,
             "extra_cells": 1,
@@ -968,14 +1042,12 @@ class TestTab5ResetButton:
         assert at.session_state["cut_regions"] == []
 
     def test_clears_apply_side_lobe(self, proc):
-        # Reset calls st.rerun(); the checkbox widget (key="apply_side_lobe_cb")
-        # rebinds apply_side_lobe after the rerun, so we assert on proc.reset()
-        # and clean re-render rather than the session state value.
+        # Reset calls st.rerun(); checkbox widget rebinds after rerun.
         at = _make_loaded_at(proc, extra_ss={
             "profile_initialized": True,
             "profile_applied": False,
             "profile_preview_run": False,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": True,
             "water_depth": None,
             "extra_cells": 1,
@@ -1005,8 +1077,8 @@ class TestAppliedBanner:
         return {
             "profile_applied": True,
             "profile_initialized": True,
-            "trim_start": 0,
-            "trim_end": 0,
+            "trim_start_ens": 0,
+            "trim_end_ens": 99,
             "apply_side_lobe": False,
             "water_depth": None,
             "extra_cells": 1,
@@ -1040,10 +1112,11 @@ class TestSaveWithOperations:
     """Verify each operation type is forwarded to the runner."""
 
     def test_save_with_trim(self, proc):
+        # trim_start_ens=5 → start_count=5; trim_end_ens=96 → end_count=3
         at = _make_loaded_at(proc, extra_ss={
             "profile_initialized": True, "profile_applied": False,
             "profile_preview_run": False, "profile_preview_stats": None,
-            "trim_start": 5, "trim_end": 3,
+            "trim_start_ens": 5, "trim_end_ens": 96,
             "apply_side_lobe": False, "water_depth": None, "extra_cells": 1,
             "cut_regions": [], "apply_regrid": False,
             "regrid_method": "nearest", "end_cell_option": "cell", "boundary_limit": 0.0,
@@ -1057,7 +1130,7 @@ class TestSaveWithOperations:
         at = _make_loaded_at(proc, extra_ss={
             "profile_initialized": True, "profile_applied": False,
             "profile_preview_run": False, "profile_preview_stats": None,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": True, "water_depth": None, "extra_cells": 1,
             "cut_regions": [], "apply_regrid": False,
             "regrid_method": "nearest", "end_cell_option": "cell", "boundary_limit": 0.0,
@@ -1072,7 +1145,7 @@ class TestSaveWithOperations:
         at = _make_loaded_at(proc, extra_ss={
             "profile_initialized": True, "profile_applied": False,
             "profile_preview_run": False, "profile_preview_stats": None,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": False, "water_depth": None, "extra_cells": 1,
             "cut_regions": [region], "apply_regrid": False,
             "regrid_method": "nearest", "end_cell_option": "cell", "boundary_limit": 0.0,
@@ -1086,7 +1159,7 @@ class TestSaveWithOperations:
         at = _make_loaded_at(proc, extra_ss={
             "profile_initialized": True, "profile_applied": False,
             "profile_preview_run": False, "profile_preview_stats": None,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": False, "water_depth": None, "extra_cells": 1,
             "cut_regions": [], "apply_regrid": True,
             "regrid_method": "nearest", "end_cell_option": "cell", "boundary_limit": 0.0,
@@ -1581,25 +1654,6 @@ class TestPageFunctionsDirectly:
                 mask_data=np.zeros((20, 100), dtype=np.int8),
             )
 
-    # ---- plot_mask_comparison ----------------------------------------
-
-    def test_plot_mask_comparison_3d_masks_lines296_302(self, page_module, ds):
-        """Lines 296-297, 301-302: both masks 3-D → first-beam slices used."""
-        page_module.ds = ds
-        with patch("streamlit.plotly_chart"):
-            page_module.plot_mask_comparison(
-                np.zeros((4, 20, 100), dtype=np.int8),
-                np.ones((4, 20, 100), dtype=np.int8),
-            )
-
-    def test_plot_mask_comparison_2d_masks_lines298_304(self, page_module, ds):
-        """Lines 298-299, 303-304: both masks 2-D → used directly."""
-        page_module.ds = ds
-        with patch("streamlit.plotly_chart"):
-            page_module.plot_mask_comparison(
-                np.zeros((20, 100), dtype=np.int8),
-                np.ones((20, 100), dtype=np.int8),
-            )
 
 
 
@@ -1612,15 +1666,15 @@ class TestPageFunctionsDirectly:
 class TestRemainingCoverage:
     """Targeted AppTest and direct-function tests for remaining gaps."""
 
-    def _full_ss(self, *, trim_start=0, trim_end=0, apply_side_lobe=False,
+    def _full_ss(self, *, trim_start_ens=0, trim_end_ens=99, apply_side_lobe=False,
                  cut_regions=None, apply_regrid=False, beam_direction="Up",
                  water_depth=None):
         return {
             "profile_initialized": True,
             "profile_applied": False,
             "profile_preview_run": False,
-            "trim_start": trim_start,
-            "trim_end": trim_end,
+            "trim_start_ens": trim_start_ens,
+            "trim_end_ens": trim_end_ens,
             "apply_side_lobe": apply_side_lobe,
             "water_depth": water_depth,
             "extra_cells": 1,
@@ -1641,9 +1695,9 @@ class TestRemainingCoverage:
         with patch("streamlit.plotly_chart"):
             page_module.plot_trim_ends(start_ens=0, end_ens=None, ens_range=20)
 
-    # 591: Preview Side Lobe with trim_start > 0
+    # 591: Preview Side Lobe with trim_start_ens > 0
     def test_preview_sidelobe_with_trim_line591(self, proc):
-        at = _make_loaded_at(proc, extra_ss=self._full_ss(trim_start=5))
+        at = _make_loaded_at(proc, extra_ss=self._full_ss(trim_start_ens=5))
         [b for b in at.button if "Preview Side Lobe" in b.label][0].click().run()
         assert not at.exception
 
@@ -1661,16 +1715,16 @@ class TestRemainingCoverage:
         at.run()
         assert not at.exception
 
-    # 759-761: Preview Trim success message + profile_preview_run=True
-    def test_preview_trim_success_message_lines759_761(self, proc):
-        at = _make_loaded_at(proc, extra_ss=self._full_ss(trim_start=5))
+    # Preview Trim success message + profile_preview_run=True
+    def test_preview_trim_success_message(self, proc):
+        at = _make_loaded_at(proc, extra_ss=self._full_ss(trim_start_ens=5))
         [b for b in at.button if "Preview Trim" in b.label][0].click().run()
         assert not at.exception
         assert at.session_state["profile_preview_run"] is True
 
-    # 785: Preview Manual Cuts with trim set
-    def test_preview_manual_with_trim_line785(self, proc):
-        at = _make_loaded_at(proc, extra_ss=self._full_ss(trim_start=5))
+    # Preview Manual Cuts with trim set
+    def test_preview_manual_with_trim(self, proc):
+        at = _make_loaded_at(proc, extra_ss=self._full_ss(trim_start_ens=5))
         [b for b in at.button if "Preview Manual" in b.label][0].click().run()
         assert not at.exception
 
@@ -1753,7 +1807,7 @@ class TestRemainingCoverage:
         at = _make_loaded_at(proc_down, extra_ss={
             "profile_initialized": True, "profile_applied": False,
             "profile_preview_run": False, "profile_preview_stats": None,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": False, "water_depth": 0.0, "extra_cells": 1,
             "cut_regions": [], "apply_regrid": True,
             "regrid_method": "nearest", "end_cell_option": "manual",
@@ -1761,10 +1815,10 @@ class TestRemainingCoverage:
         })
         assert not at.exception
 
-    # 964-971: Preview Regrid with trim set (trimends path)
-    def test_preview_regrid_with_trim_lines964_971(self, proc):
+    # Preview Regrid with trim set (trimends path)
+    def test_preview_regrid_with_trim(self, proc):
         at = _make_loaded_at(proc, extra_ss=self._full_ss(
-            trim_start=5, apply_regrid=True))
+            trim_start_ens=5, apply_regrid=True))
         [b for b in at.button if "Preview Regrid" in b.label][0].click().run()
         assert not at.exception
 
@@ -1833,12 +1887,12 @@ class TestRemainingCoverage:
         at = _make_loaded_at(proc_2b, extra_ss={
             "profile_initialized": True, "profile_applied": False,
             "profile_preview_run": False, "profile_preview_stats": None,
-            "trim_start": 0, "trim_end": 0,
+            "trim_start_ens": 0, "trim_end_ens": 99,
             "apply_side_lobe": False, "water_depth": None, "extra_cells": 1,
             "cut_regions": [], "apply_regrid": False,
             "regrid_method": "nearest", "end_cell_option": "cell",
             "boundary_limit": 0.0, "beam_direction": "Up",
-            "profile_beam": 3,  # > velocity.shape[0]=2 → line 1028
+            "profile_beam": 3,  # > velocity.shape[0]=2 → fallback beam index
         })
         assert not at.exception
 

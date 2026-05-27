@@ -3903,6 +3903,29 @@ class TestApplyConfigProfileForwarding:
         )
         assert kw["beam_direction"] == "up"
 
+    def test_regrid_end_cell_option_forwarded(self, sample_dataset):
+        kw = self._call_kwargs(
+            sample_dataset,
+            _all_disabled_config(
+                isProfileTest=True,
+                isRegridCheck_PT=True,
+                regrid_end_cell_option_PT="surface",
+            ),
+        )
+        assert kw["regrid_end_cell_option"] == "surface"
+
+    def test_regrid_boundary_limit_forwarded(self, sample_dataset):
+        kw = self._call_kwargs(
+            sample_dataset,
+            _all_disabled_config(
+                isProfileTest=True,
+                isRegridCheck_PT=True,
+                regrid_end_cell_option_PT="manual",
+                regrid_boundary_limit_PT=25.0,
+            ),
+        )
+        assert kw["regrid_boundary_limit"] == pytest.approx(25.0)
+
     # ---- empty-kwargs guard ----------------------------------------------
 
     def test_apply_profile_operation_not_called_when_kwargs_empty(self, sample_dataset):
@@ -4735,6 +4758,136 @@ class TestConfigTracking:
 
         assert proc.config.isRegridCheck_PT is True
         assert proc.config.regrid_method_PT == "nearest"
+
+    @patch(PROFILE_OPERATION_RUNNER)
+    def test_apply_profile_operation_records_regrid_end_cell_option(
+        self, mock_class, sample_dataset
+    ):
+        """apply_profile_operation records regrid_end_cell_option into config."""
+        mock_runner = MagicMock()
+        mock_runner.finalize.return_value = sample_dataset
+        mock_runner.get_pipeline_report.return_value = MagicMock()
+        mock_runner.statistics = []
+        mock_runner.modifications = []
+        mock_class.return_value = mock_runner
+
+        proc = ProcessedDataset(sample_dataset)
+        proc.apply_profile_operation(regrid=True, regrid_end_cell_option="surface")
+
+        assert proc.config.regrid_end_cell_option_PT == "surface"
+
+    @patch(PROFILE_OPERATION_RUNNER)
+    def test_apply_profile_operation_records_regrid_boundary_limit(
+        self, mock_class, sample_dataset
+    ):
+        """apply_profile_operation records regrid_boundary_limit into config."""
+        mock_runner = MagicMock()
+        mock_runner.finalize.return_value = sample_dataset
+        mock_runner.get_pipeline_report.return_value = MagicMock()
+        mock_runner.statistics = []
+        mock_runner.modifications = []
+        mock_class.return_value = mock_runner
+
+        proc = ProcessedDataset(sample_dataset)
+        proc.apply_profile_operation(
+            regrid=True, regrid_end_cell_option="manual", regrid_boundary_limit=30.0
+        )
+
+        assert proc.config.regrid_end_cell_option_PT == "manual"
+        assert proc.config.regrid_boundary_limit_PT == pytest.approx(30.0)
+
+    @patch(PROFILE_OPERATION_RUNNER)
+    def test_apply_profile_operation_regrid_passes_end_cell_option_to_runner(
+        self, mock_class, sample_dataset
+    ):
+        """runner.regrid() receives end_cell_option from apply_profile_operation."""
+        mock_runner = MagicMock()
+        mock_runner.finalize.return_value = sample_dataset
+        mock_runner.get_pipeline_report.return_value = MagicMock()
+        mock_runner.statistics = []
+        mock_runner.modifications = []
+        mock_class.return_value = mock_runner
+
+        proc = ProcessedDataset(sample_dataset)
+        proc.apply_profile_operation(regrid=True, regrid_end_cell_option="surface")
+
+        kw = mock_runner.regrid.call_args.kwargs
+        assert kw["end_cell_option"] == "surface"
+
+    @patch(PROFILE_OPERATION_RUNNER)
+    def test_apply_profile_operation_regrid_passes_boundary_limit_to_runner(
+        self, mock_class, sample_dataset
+    ):
+        """runner.regrid() receives boundary_limit from apply_profile_operation."""
+        mock_runner = MagicMock()
+        mock_runner.finalize.return_value = sample_dataset
+        mock_runner.get_pipeline_report.return_value = MagicMock()
+        mock_runner.statistics = []
+        mock_runner.modifications = []
+        mock_class.return_value = mock_runner
+
+        proc = ProcessedDataset(sample_dataset)
+        proc.apply_profile_operation(
+            regrid=True, regrid_end_cell_option="manual", regrid_boundary_limit=20.0
+        )
+
+        kw = mock_runner.regrid.call_args.kwargs
+        assert kw["boundary_limit"] == pytest.approx(20.0)
+
+    @patch(PROFILE_OPERATION_RUNNER)
+    def test_apply_profile_operation_regrid_passes_orientation_to_runner(
+        self, mock_class, sample_dataset
+    ):
+        """runner.regrid() receives beam_direction as orientation."""
+        mock_runner = MagicMock()
+        mock_runner.finalize.return_value = sample_dataset
+        mock_runner.get_pipeline_report.return_value = MagicMock()
+        mock_runner.statistics = []
+        mock_runner.modifications = []
+        mock_class.return_value = mock_runner
+
+        proc = ProcessedDataset(sample_dataset)
+        proc.apply_profile_operation(regrid=True, beam_direction="down")
+
+        kw = mock_runner.regrid.call_args.kwargs
+        assert kw["orientation"] == "down"
+
+    @patch(PROFILE_OPERATION_RUNNER)
+    def test_apply_profile_operation_regrid_auto_derives_trimends(
+        self, mock_class, sample_dataset
+    ):
+        """trimends passed to runner.regrid() is derived from trim_start/trim_end."""
+        mock_runner = MagicMock()
+        mock_runner.finalize.return_value = sample_dataset
+        mock_runner.get_pipeline_report.return_value = MagicMock()
+        mock_runner.statistics = []
+        mock_runner.modifications = []
+        mock_class.return_value = mock_runner
+
+        proc = ProcessedDataset(sample_dataset)
+        # sample_dataset has 100 time steps; trim_start=10, trim_end=5
+        proc.apply_profile_operation(regrid=True, trim_start=10, trim_end=5)
+
+        kw = mock_runner.regrid.call_args.kwargs
+        assert kw["trimends"] == (10, 95)  # (start_idx, n_ens - trim_end)
+
+    @patch(PROFILE_OPERATION_RUNNER)
+    def test_apply_profile_operation_regrid_trimends_none_when_no_trim(
+        self, mock_class, sample_dataset
+    ):
+        """trimends is None when neither trim_start nor trim_end is set."""
+        mock_runner = MagicMock()
+        mock_runner.finalize.return_value = sample_dataset
+        mock_runner.get_pipeline_report.return_value = MagicMock()
+        mock_runner.statistics = []
+        mock_runner.modifications = []
+        mock_class.return_value = mock_runner
+
+        proc = ProcessedDataset(sample_dataset)
+        proc.apply_profile_operation(regrid=True)
+
+        kw = mock_runner.regrid.call_args.kwargs
+        assert kw["trimends"] is None
 
     @patch(PROFILE_OPERATION_RUNNER)
     def test_apply_config_forwards_extra_cells_to_runner(

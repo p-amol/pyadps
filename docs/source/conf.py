@@ -6,43 +6,60 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'pyadps'
-copyright = '2024, p-amol'
-author = 'p-amol'
+project = "pyadps"
+copyright = "2024, p-amol"
+author = "p-amol"
 
 # -- General configuration ---------------------------------------------------
 
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 extensions = [
-    'sphinx.ext.duration',
-    'sphinx.ext.doctest',
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.viewcode',
-    'autoapi.extension',
-    'myst_nb',
+    "sphinx.ext.duration",
+    "sphinx.ext.doctest",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.viewcode",
+    "myst_nb",
+    "sphinx_rtd_theme",  # ReadTheDocs theme
+    "autoapi.extension",
 ]
+
+# -- MyST configuration ------------------------------------------------------
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".ipynb": "myst-nb",
+}
+
+myst_enable_extensions = [
+    "colon_fence",  # ::: directive syntax
+    "deflist",  # definition lists
+    "fieldlist",  # :param: style fields
+]
+
+# -- MyST-NB configuration ---------------------------------------------------
+nb_execution_mode = "off"  # "auto", "force", "cache", or "off"
+execution_excludepatterns = [
+    "**.ipynb"
+]  # Prevent execution for specific files (if needed)
+
+# -- AutoAPI configuration ---------------------------------------------------
 
 autoapi_type = "python"
 autoapi_add_toctree_entry = False
-autoapi_dirs = ['../../src']
-autodoc_mock_imports = ['numpy', 'pandas', 'matplotlib', 'pyadps']
-templates_path = ['_templates']
+autoapi_dirs = ["../../src"]
+autodoc_mock_imports = ["numpy", "pandas", "matplotlib", "pyadps"]
+templates_path = ["_templates"]
 exclude_patterns = []
-
-# Myst-NB configuration
-jupyter_execute_notebooks = "off"  # Do not execute cells
-execution_excludepatterns = ["**.ipynb"]  # Prevent execution for specific files (if needed)
-
+autoapi_keep_files = False  # set True to inspect generated .rst files
 
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = "sphinx_rtd_theme"
 # html_theme_options = {
 #     "collapse_navigation": True,  # Optional: Collapse navigation items
 #     "navigation_depth": 2,        # Controls ToC depth globally
 # }
 
-html_static_path = ['_static']
+html_static_path = ["_static"]

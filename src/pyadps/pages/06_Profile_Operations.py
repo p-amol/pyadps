@@ -145,6 +145,31 @@ def status_color_map(value: object) -> str:
     return ""
 
 
+def _trim_has_effect() -> bool:
+    n = get_total_ensembles()
+    return st.session_state.trim_start_ens > 0 or st.session_state.trim_end_ens < n - 1
+
+
+def _trim_to_counts():
+    """Convert absolute ensemble indices to (start_count, end_count) for runner.trim_ensembles()."""
+    n = get_total_ensembles()
+    start_ens = int(st.session_state.trim_start_ens)
+    end_ens = int(st.session_state.trim_end_ens)
+    start_count = start_ens if start_ens > 0 else None
+    end_count = (n - 1 - end_ens) if end_ens < n - 1 else None
+    return start_count, end_count
+
+
+def _trim_trimends():
+    """Return trimends (start_idx, end_exclusive) for runner.regrid(), or None if no trim."""
+    if not _trim_has_effect():
+        return None
+    return (
+        int(st.session_state.trim_start_ens),
+        int(st.session_state.trim_end_ens) + 1,
+    )
+
+
 # =============================================================================
 # PLOTTING FUNCTIONS
 # =============================================================================
@@ -154,7 +179,7 @@ def plot_heatmap(
     data: np.ndarray,
     title: str,
     mask_data: np.ndarray = None,
-    colorscale: str = "balance",
+    colorscale="balance",
 ) -> None:
     """Create a heatmap plot for 2D data (cell x ensemble)."""
     n_ensembles = get_total_ensembles()
@@ -206,6 +231,8 @@ def plot_heatmap(
         yaxis_title="Cell",
         height=400,
     )
+    fig.update_xaxes(showline=True, linewidth=1, linecolor="gray", mirror=True)
+    fig.update_yaxes(showline=True, linewidth=1, linecolor="gray", mirror=True)
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -287,61 +314,6 @@ def plot_trim_ends(
     st.plotly_chart(fig, use_container_width=True)
 
 
-def plot_mask_comparison(original_mask: np.ndarray, preview_mask: np.ndarray) -> None:
-    """Plot side-by-side comparison of original and preview masks."""
-    n_ensembles = get_total_ensembles()
-    n_cells = get_total_cells()
-
-    # Ensure 2D masks for plotting
-    if original_mask.ndim == 3:
-        orig_2d = original_mask[0, :, :]
-    else:
-        orig_2d = original_mask
-
-    if preview_mask.ndim == 3:
-        prev_2d = preview_mask[0, :, :]
-    else:
-        prev_2d = preview_mask
-
-    fig = make_subplots(
-        rows=1,
-        cols=2,
-        subplot_titles=["Original Mask", "Preview Mask"],
-    )
-
-    # Original mask
-    fig.add_trace(
-        go.Heatmap(
-            z=orig_2d,
-            x=np.arange(n_ensembles),
-            y=np.arange(n_cells),
-            colorscale="greys",
-            showscale=False,
-        ),
-        row=1,
-        col=1,
-    )
-
-    # Preview mask
-    fig.add_trace(
-        go.Heatmap(
-            z=prev_2d,
-            x=np.arange(n_ensembles),
-            y=np.arange(n_cells),
-            colorscale="greys",
-            showscale=False,
-        ),
-        row=1,
-        col=2,
-    )
-
-    fig.update_layout(height=400, title_text="Mask Comparison")
-    fig.update_xaxes(title="Ensemble")
-    fig.update_yaxes(title="Cell")
-
-    st.plotly_chart(fig, use_container_width=True)
-
-
 # =============================================================================
 # SESSION STATE INITIALIZATION
 # =============================================================================
@@ -351,9 +323,9 @@ if "profile_initialized" not in st.session_state:
     st.session_state.profile_applied = False
     st.session_state.profile_preview_run = False
 
-    # Trim settings
-    st.session_state.trim_start = 0
-    st.session_state.trim_end = 0
+    # Trim settings (absolute ensemble indices, inclusive)
+    st.session_state.trim_start_ens = 0
+    st.session_state.trim_end_ens = max(0, get_total_ensembles() - 1)
 
     # Side lobe settings
     st.session_state.apply_side_lobe = False
@@ -459,60 +431,58 @@ with tab1:
 
         st.write("---")
 
-        # Trim start
-        trim_start = st.slider(
-            "Trim from start",
+        # First valid ensemble (inclusive)
+        trim_start_ens = st.number_input(
+            "First valid ensemble",
             min_value=0,
-            max_value=min(int(ens_range), n_ensembles - 1),
-            value=int(st.session_state.trim_start),
-            key="trim_start_slider",
+            max_value=n_ensembles - 1,
+            value=int(st.session_state.trim_start_ens),
+            key="trim_start_ens_input",
+            help="First ensemble index to keep (0-based). Ensembles before this are trimmed.",
         )
-        st.session_state.trim_start = trim_start
+        st.session_state.trim_start_ens = trim_start_ens
 
-        # Trim end
-        trim_end = st.slider(
-            "Trim from end",
+        # Last valid ensemble (inclusive)
+        trim_end_ens = st.number_input(
+            "Last valid ensemble",
             min_value=0,
-            max_value=min(int(ens_range), n_ensembles - 1),
-            value=int(st.session_state.trim_end),
-            key="trim_end_slider",
+            max_value=n_ensembles - 1,
+            value=int(st.session_state.trim_end_ens),
+            key="trim_end_ens_input",
+            help="Last ensemble index to keep (0-based, inclusive). Ensembles after this are trimmed.",
         )
-        st.session_state.trim_end = trim_end
+        st.session_state.trim_end_ens = trim_end_ens
 
         st.write("---")
 
+        st.write(f"**Ensembles to keep:** `{trim_start_ens}` to `{trim_end_ens}`")
         st.write(
-            f"**Ensembles to keep:** `{trim_start}` to `{n_ensembles - trim_end - 1}`"
-        )
-        st.write(
-            f"**Total kept:** `{n_ensembles - trim_start - trim_end}` of `{n_ensembles}`"
+            f"**Total kept:** `{trim_end_ens - trim_start_ens + 1}` of `{n_ensembles}`"
         )
 
         # Preview button
         if st.button("👁️ Preview Trim", key="preview_trim"):
-            # Reset preview processor and apply trim
-            # st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
-            # preview_profile_proc = st.session_state.preview_profile_proc
-
-            if trim_start > 0 or trim_end > 0:
+            start_count, end_count = _trim_to_counts()
+            if start_count is not None or end_count is not None:
                 runner = preview_profile_proc.get_profile_operation_runner()
-                runner.trim_ensembles(
-                    start=trim_start if trim_start > 0 else None,
-                    end=trim_end if trim_end > 0 else None,
-                )
+                runner.trim_ensembles(start=start_count, end=end_count)
                 preview_profile_proc.commit_runner(runner)
 
             st.session_state.profile_preview_run = True
             st.success("Preview updated!")
 
     with col_right:
-        # Calculate end_ens for plot
-        end_ens = n_ensembles - trim_end if trim_end > 0 else n_ensembles
-        plot_trim_ends(start_ens=trim_start, end_ens=end_ens, ens_range=int(ens_range))
+        plot_trim_ends(
+            start_ens=int(trim_start_ens),
+            end_ens=int(trim_end_ens) + 1,
+            ens_range=int(ens_range),
+        )
 
     if st.session_state.profile_preview_run:
         display_mask = st.session_state.preview_profile_proc.dataset["mask"].values
-        plot_heatmap(display_mask, "Revised Mask", colorscale="greys")
+        plot_heatmap(
+            display_mask, "Revised Mask", colorscale=[[0, "white"], [1, "red"]]
+        )
 # =============================================================================
 # TAB 2: SIDE LOBE CONTAMINATION
 # =============================================================================
@@ -587,15 +557,9 @@ with tab2:
             runner = preview_profile_proc.get_profile_operation_runner()
 
             # Apply trim first if set
-            if st.session_state.trim_start > 0 or st.session_state.trim_end > 0:
-                runner.trim_ensembles(
-                    start=st.session_state.trim_start
-                    if st.session_state.trim_start > 0
-                    else None,
-                    end=st.session_state.trim_end
-                    if st.session_state.trim_end > 0
-                    else None,
-                )
+            start_count, end_count = _trim_to_counts()
+            if start_count is not None or end_count is not None:
+                runner.trim_ensembles(start=start_count, end=end_count)
 
             # Apply side lobe cutting
             if apply_side_lobe:
@@ -781,15 +745,9 @@ with tab3:
             runner = preview_profile_proc.get_profile_operation_runner()
 
             # Apply trim first if set
-            if st.session_state.trim_start > 0 or st.session_state.trim_end > 0:
-                runner.trim_ensembles(
-                    start=st.session_state.trim_start
-                    if st.session_state.trim_start > 0
-                    else None,
-                    end=st.session_state.trim_end
-                    if st.session_state.trim_end > 0
-                    else None,
-                )
+            start_count, end_count = _trim_to_counts()
+            if start_count is not None or end_count is not None:
+                runner.trim_ensembles(start=start_count, end=end_count)
 
             # Apply side lobe if enabled
             if st.session_state.apply_side_lobe:
@@ -956,22 +914,10 @@ with tab4:
                 runner = preview_profile_proc.get_profile_operation_runner()
 
                 # Apply trim first if set
-                trim_start = st.session_state.trim_start
-                trim_end = st.session_state.trim_end
-                trimends = None
-                n_ens = ds.sizes.get("time", ds.sizes.get("ensemble", 100))
-                if trim_start > 0 or trim_end > 0:
-                    runner.trim_ensembles(
-                        start=trim_start if trim_start > 0 else None,
-                        end=trim_end if trim_end > 0 else None,
-                    )
-                    trimends = (trim_start, trim_end)
-                    end_idx = n_ens - trim_end if trim_end > 0 else n_ens
-                    start_idx = trim_start if trim_start > 0 else 0
-                    trimends = (
-                        start_idx,
-                        end_idx,
-                    )
+                start_count, end_count = _trim_to_counts()
+                trimends = _trim_trimends()
+                if start_count is not None or end_count is not None:
+                    runner.trim_ensembles(start=start_count, end=end_count)
 
                 # Apply side lobe if enabled
                 if st.session_state.apply_side_lobe:
@@ -1060,18 +1006,19 @@ with tab5:
 
         # Summary of operations to apply
         st.write("**Operations to apply:**")
+        n_ens_total = get_total_ensembles()
         summary_data = [
             [
-                "Trim Start",
-                str(st.session_state.trim_start)
-                if st.session_state.trim_start > 0
-                else "None",
+                "First Valid Ensemble",
+                str(st.session_state.trim_start_ens)
+                if st.session_state.trim_start_ens > 0
+                else "0 (no trim)",
             ],
             [
-                "Trim End",
-                str(st.session_state.trim_end)
-                if st.session_state.trim_end > 0
-                else "None",
+                "Last Valid Ensemble",
+                str(st.session_state.trim_end_ens)
+                if st.session_state.trim_end_ens < n_ens_total - 1
+                else f"{n_ens_total - 1} (no trim)",
             ],
             ["Side Lobe Cut", "True" if st.session_state.apply_side_lobe else "False"],
             ["Manual Regions", str(len(st.session_state.cut_regions))],
@@ -1088,15 +1035,10 @@ with tab5:
 
             try:
                 # Apply trim
-                trim_start = st.session_state.trim_start
-                trim_end = st.session_state.trim_end
-                trimends = None
-                if trim_start > 0 or trim_end > 0:
-                    runner.trim_ensembles(
-                        start=trim_start if trim_start > 0 else None,
-                        end=trim_end if trim_end > 0 else None,
-                    )
-                    trimends = (trim_start, trim_end)
+                start_count, end_count = _trim_to_counts()
+                trimends = _trim_trimends()
+                if start_count is not None or end_count is not None:
+                    runner.trim_ensembles(start=start_count, end=end_count)
 
                 # Apply side lobe
                 if st.session_state.apply_side_lobe:
@@ -1195,8 +1137,8 @@ with tab5:
             st.session_state.profile_applied = False
             st.session_state.profile_preview_run = False
             st.session_state.profile_preview_stats = None
-            st.session_state.trim_start = 0
-            st.session_state.trim_end = 0
+            st.session_state.trim_start_ens = 0
+            st.session_state.trim_end_ens = max(0, get_total_ensembles() - 1)
             st.session_state.apply_side_lobe = False
             st.session_state.cut_regions = []
             st.session_state.apply_regrid = False
@@ -1244,8 +1186,8 @@ with st.sidebar:
     st.write("---")
 
     st.write("**Profile Operations Status:**")
-    st.write(f"- Trim Start: `{st.session_state.trim_start}`")
-    st.write(f"- Trim End: `{st.session_state.trim_end}`")
+    st.write(f"- First Valid: `{st.session_state.trim_start_ens}`")
+    st.write(f"- Last Valid: `{st.session_state.trim_end_ens}`")
     st.write(f"- Side Lobe: {'✅' if st.session_state.apply_side_lobe else '❌'}")
     st.write(f"- Manual Regions: `{len(st.session_state.cut_regions)}`")
     st.write(f"- Regrid: {'✅' if st.session_state.apply_regrid else '❌'}")

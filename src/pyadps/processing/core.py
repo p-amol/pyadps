@@ -37,6 +37,12 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import xarray as xr
 
+try:
+    from importlib.metadata import version as _get_version
+    _PYADPS_VERSION = _get_version("pyadps")
+except Exception:  # pragma: no cover
+    _PYADPS_VERSION = "0.0.0.dev0"  # pragma: no cover
+
 from .utility import (
     create_default_mask,
     QCCheckStats,
@@ -1194,7 +1200,7 @@ class ProcessedDataset:
 
         # Add processing metadata
         processing_time = datetime.now(timezone.utc)
-        ds_out.attrs["pyadps_version"] = "1.1.0"
+        ds_out.attrs["pyadps_version"] = _PYADPS_VERSION
         ds_out.attrs["processed_at"] = processing_time.isoformat()
         ds_out.attrs["processing_log"] = str(self.processing_log)
         ds_out.attrs["total_cells"] = self._total_cells
@@ -2186,7 +2192,7 @@ class ProcessedDataset:
             ds_out.attrs = {
                 "title": "ADCP Velocity Components",
                 "institution": ds_final.attrs.get("institution", ""),
-                "source": "pyadps v1.1.0",
+                "source": f"pyadps v{_PYADPS_VERSION}",
                 "history": f"Created {datetime.now(timezone.utc).isoformat()}",
                 "references": "pyadps ADCP processing package",
                 "Conventions": "CF-1.8",
@@ -2214,7 +2220,7 @@ class ProcessedDataset:
                     ds_out.attrs[attr] = ds_final.attrs[attr]
         else:
             ds_out.attrs = {
-                "source": "pyadps v1.1.0",
+                "source": f"pyadps v{_PYADPS_VERSION}",
                 "Conventions": "CF-1.8",
             }
 

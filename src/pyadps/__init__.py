@@ -19,7 +19,6 @@ Submodules:
     io: Low-level file reading (binary_reader, pd0_parser)
     pipeline: Six-step processing pipeline
     config: Configuration management
-    legacy: v0.4.0 code (deprecated)
     pages: Streamlit UI components
 
 Example:
@@ -109,7 +108,12 @@ def load_example(name: str = "demo"):
     return read(str(path))
 
 
-__version__ = "1.0.0"
+try:
+    from importlib.metadata import version as _get_version
+
+    __version__ = _get_version("pyadps")
+except Exception:  # pragma: no cover
+    __version__ = "0.0.0.dev0"  # pragma: no cover
 
 __all__ = [
     "read",
@@ -122,7 +126,6 @@ __all__ = [
     "read_percent_good",
     "read_status",
     "io",
-    "legacy",
     "pages",
     "ProcessedDataset",
     "ProcessingConfig",

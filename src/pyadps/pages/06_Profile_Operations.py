@@ -1091,12 +1091,17 @@ with tab5:
                 trim_start = st.session_state.trim_start
                 trim_end = st.session_state.trim_end
                 trimends = None
+                n_ens = ds.sizes.get("time", ds.sizes.get("ensemble", 100))
                 if trim_start > 0 or trim_end > 0:
                     runner.trim_ensembles(
                         start=trim_start if trim_start > 0 else None,
                         end=trim_end if trim_end > 0 else None,
                     )
-                    trimends = (trim_start, trim_end)
+                    start_idx = trim_start if trim_start > 0 else 0
+                    end_idx = n_ens - trim_end if trim_end > 0 else n_ens
+                    trimends = (start_idx, end_idx)
+
+                st.write("Trim Ensembles Complete")
 
                 # Apply side lobe
                 if st.session_state.apply_side_lobe:
@@ -1106,6 +1111,7 @@ with tab5:
                         extra_cells=st.session_state.extra_cells,
                     )
 
+                st.write("Side Lobe Complete")
                 # Apply manual cuts
                 for region in st.session_state.cut_regions:
                     runner.cut_bins_manual(
@@ -1115,6 +1121,11 @@ with tab5:
                         max_ensemble=region["max_ensemble"],
                     )
 
+                st.write("Cut Region Complete")
+                st.write(st.session_state.regrid_method)
+                st.write(st.session_state.end_cell_option)
+                st.write(trimends)
+                st.write(st.session_state.beam_direction.lower())
                 # Apply regrid (must be last)
                 if st.session_state.apply_regrid:
                     runner.regrid(

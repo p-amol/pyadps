@@ -196,6 +196,30 @@ class TestProcessingConfigProgrammatic:
 class TestToIni:
     """to_ini() must write a valid INI file with all required sections."""
 
+    def test_filesettings_section_present(self, tmp_path):
+        cfg = ProcessingConfig(input_file_name="data.pd0")
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        assert "[FileSettings]" in p.read_text()
+
+    def test_input_file_name_written(self, tmp_path):
+        cfg = ProcessingConfig(input_file_name="cruise001.pd0")
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        assert "input_file_name = cruise001.pd0" in p.read_text()
+
+    def test_input_file_path_written(self, tmp_path):
+        cfg = ProcessingConfig(input_file_path="/data/raw/cruise001.pd0")
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        assert "input_file_path = /data/raw/cruise001.pd0" in p.read_text()
+
+    def test_output_file_path_written(self, tmp_path):
+        cfg = ProcessingConfig(output_file_path="/data/processed/")
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        assert "output_file_path = /data/processed/" in p.read_text()
+
     def test_creates_file(self, tmp_path):
         cfg = ProcessingConfig()
         p = tmp_path / "config.ini"
@@ -208,6 +232,7 @@ class TestToIni:
         cfg.to_ini(str(p))
         text = p.read_text()
         for section in (
+            "FileSettings",
             "FixTime",
             "SensorTest",
             "QCTest",
@@ -284,6 +309,28 @@ class TestToIni:
 
 class TestFromIni:
     """from_ini() must parse every INI section into the correct fields."""
+
+    def test_filesettings_section(self, tmp_path):
+        p = tmp_path / "cfg.ini"
+        p.write_text(
+            "[FileSettings]\n"
+            "input_file_name = cruise001.pd0\n"
+            "input_file_path = /data/raw/cruise001.pd0\n"
+            "output_file_path = /data/processed/\n"
+        )
+        cfg = ProcessingConfig.from_ini(str(p))
+        assert cfg.input_file_name == "cruise001.pd0"
+        assert cfg.input_file_path == "/data/raw/cruise001.pd0"
+        assert cfg.output_file_path == "/data/processed/"
+
+    def test_filesettings_absent_falls_back_to_defaults(self, tmp_path):
+        """Old INI files without [FileSettings] must use empty-string defaults."""
+        p = tmp_path / "cfg.ini"
+        p.write_text("[QCTest]\nqc_test = True\n")
+        cfg = ProcessingConfig.from_ini(str(p))
+        assert cfg.input_file_name == ""
+        assert cfg.input_file_path == ""
+        assert cfg.output_file_path == ""
 
     def test_missing_file_returns_defaults(self):
         # configparser.read() silently ignores missing files, so from_ini
@@ -574,6 +621,17 @@ class TestRoundTrip:
         p = tmp_path / "rt.ini"
         cfg.to_ini(str(p))
         return ProcessingConfig.from_ini(str(p))
+
+    def test_file_settings_roundtrip(self, tmp_path):
+        cfg = ProcessingConfig(
+            input_file_name="cruise001.pd0",
+            input_file_path="/data/raw/cruise001.pd0",
+            output_file_path="/data/processed/",
+        )
+        rt = self._roundtrip(cfg, tmp_path)
+        assert rt.input_file_name == "cruise001.pd0"
+        assert rt.input_file_path == "/data/raw/cruise001.pd0"
+        assert rt.output_file_path == "/data/processed/"
 
     def test_time_axis_roundtrip(self, tmp_path):
         cfg = ProcessingConfig(

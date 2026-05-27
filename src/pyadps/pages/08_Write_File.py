@@ -15,17 +15,16 @@ Architecture:
 - No complex mask variable management - all handled by ProcessedDataset
 """
 
-import io
 import os
 import tempfile
-from datetime import datetime
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
+
+from pyadps.processing.config import ProcessingConfig
 
 # =============================================================================
 # PAGE CONFIGURATION AND VALIDATION
@@ -128,6 +127,17 @@ def get_prefixed_filename(base_name: str) -> str:
     if prefix:
         return f"{prefix}_{base_name}"
     return base_name
+
+
+def get_cell_size() -> float:
+    """Get cell size in meters from the dataset."""
+    try:
+        fl_data = ds.fixed_leader.field(ens=0)
+        return fl_data.get("depth_cell_length", 100) / 100.0  # cm to m
+    except Exception:
+        if "depth_cell_length" in ds.data_vars:
+            return float(ds["depth_cell_length"].values[0]) / 100.0
+        return 1.0
 
 
 # =============================================================================
@@ -270,6 +280,100 @@ Export your processed ADCP data to NetCDF or CSV format. You can choose between:
 - **Velocity Only** (recommended): Exports just U, V, W velocity components with QC mask applied
 - **Full Dataset**: Exports the complete dataset including all variables and metadata
 """)
+
+
+# =============================================================================
+# CONFIG BUILDER
+# =============================================================================
+
+
+def build_config_from_session() -> ProcessingConfig:
+    """Build a ProcessingConfig from current session state values."""
+    ss = st.session_state
+    n_ens = get_total_ensembles()
+    trim_start = ss.get("trim_start_ens", 0)
+    trim_end = ss.get("trim_end_ens", max(0, n_ens - 1))
+    has_trim = trim_start > 0 or trim_end < (n_ens - 1)
+    return ProcessingConfig(
+        # File
+        input_file_name=ss.get("fname", ""),
+        # Time
+        isTimeAxisModified=ss.get("time_axis_modified", False),
+        isSnapTimeAxis=ss.get("snap_time_axis", False),
+        time_snap_frequency=ss.get("time_snap_frequency", "h"),
+        time_snap_tolerance=ss.get("time_snap_tolerance", "5min"),
+        time_target_minute=ss.get("time_target_minute", 0),
+        isTimeGapFilled=ss.get("time_gap_filled", False),
+        time_fill_method=ss.get("time_fill_method", "auto"),
+        # Sensor Health
+        isSensorTest=ss.get("sensor_health_applied", False),
+        isDepthModified_ST=ss.get("depth_modified", False),
+        depthoption_ST=ss.get("depth_option", "None"),
+        fixeddepth_ST=float(ss.get("depth_fixed_value", 0.0)),
+        isSalinityModified_ST=ss.get("salinity_modified", False),
+        salinityoption_ST=ss.get("salinity_option", "None"),
+        fixedsalinity_ST=float(ss.get("salinity_fixed_value", 35.0)),
+        isTemperatureModified_ST=ss.get("temperature_modified", False),
+        temperatureoption_ST=ss.get("temperature_option", "None"),
+        fixedtemperature_ST=float(ss.get("temperature_fixed_value", 15.0)),
+        isRollCheck_ST=ss.get("apply_roll_check", False),
+        isPitchCheck_ST=ss.get("apply_pitch_check", False),
+        roll_cutoff_ST=float(ss.get("roll_threshold", 15.0)),
+        pitch_cutoff_ST=float(ss.get("pitch_threshold", 15.0)),
+        isSoundModified_ST=ss.get("apply_sound_speed_correction", False),
+        isVelocityModified_ST=ss.get("correct_velocity", True),
+        isVelocityModified_HorizontalOnly_ST=ss.get("horizontal_only", True),
+        # QC
+        isQCTest=ss.get("qc_applied", False),
+        ct_QCT=float(ss.get("correlation_threshold", 64)),
+        et_QCT=float(ss.get("echo_intensity_threshold", 0)),
+        evt_QCT=float(ss.get("error_velocity_threshold", 2000)),
+        ft_QCT=float(ss.get("false_target_threshold", 50)),
+        is3beam_QCT=ss.get("threebeam_mode", False),
+        beam_ignore_QCT=ss.get("beam_ignore", None),
+        pgt_QCT=float(ss.get("percent_good_threshold", 0)),
+        # Profile
+        isProfileTest=ss.get("profile_applied", False),
+        isTrimEndsCheck_PT=has_trim,
+        trim_start_PT=trim_start,
+        trim_end_PT=trim_end,
+        isCutBinSideLobeCheck_PT=ss.get("apply_side_lobe", False),
+        water_depth_PT=float(ss.get("water_depth") or 0.0),
+        extra_cells_PT=int(ss.get("extra_cells", 1)),
+        isCutBinManualCheck_PT=bool(ss.get("cut_regions", [])),
+        cut_bins_regions_PT=[
+            [r["min_cell"], r["max_cell"], r["min_ensemble"], r["max_ensemble"]]
+            for r in ss.get("cut_regions", [])
+        ],
+        isRegridCheck_PT=ss.get("apply_regrid", False),
+        regrid_cell_size_PT=get_cell_size(),
+        regrid_method_PT=ss.get("regrid_method", "nearest"),
+        regrid_end_cell_option_PT=ss.get("end_cell_option", "cell"),
+        regrid_boundary_limit_PT=float(ss.get("boundary_limit", 0.0)),
+        beam_direction_PT=(ss.get("beam_direction", "up") or "up").lower(),
+        # Velocity
+        isVelocityTest=ss.get("velocity_applied", False),
+        isMagnetCheck_VT=ss.get("apply_magnetic", False),
+        magnet_method_VT=ss.get("magnetic_method", "api"),
+        magnet_lat_VT=float(ss.get("magnetic_lat", 0.0)),
+        magnet_lon_VT=float(ss.get("magnetic_lon", 0.0)),
+        magnet_year_VT=int(ss.get("magnetic_year", 2025)),
+        magnet_depth_VT=float(ss.get("magnetic_depth", 0.0)),
+        magnet_user_input_VT=float(ss.get("magnetic_declination") or 0.0),
+        isCutoffCheck_VT=ss.get("apply_threshold", False),
+        maxuvel_VT=float(ss.get("cutoff_u", 2500)),
+        maxvvel_VT=float(ss.get("cutoff_v", 2500)),
+        maxwvel_VT=float(ss.get("cutoff_w", 500)),
+        isDespikeCheck_VT=ss.get("apply_despike", False),
+        despike_kernel_VT=int(ss.get("despike_kernel", 5)),
+        despike_cutoff_VT=float(ss.get("despike_cutoff", 3.0)),
+        isFlatlineCheck_VT=ss.get("apply_flatline", False),
+        flatline_kernel_VT=int(ss.get("flatline_kernel", 5)),
+        flatline_cutoff_VT=float(ss.get("flatline_cutoff", 3.0)),
+        # Attributes
+        isAttributes=ss.get("add_attributes", False),
+        attributes={k: v for k, v in ss.get("custom_attributes", {}).items() if v},
+    )
 
 
 # =============================================================================
@@ -779,103 +883,12 @@ with tab4:
 
         if st.button("📄 Generate config.ini", key="gen_config_btn"):
             try:
-                # Build configuration from processor state
-                config_lines = []
-                config_lines.append("[FileSettings]")
-                config_lines.append(
-                    f"input_file_name = {st.session_state.get('fname', '')}"
-                )
-                config_lines.append("")
+                config = build_config_from_session()
+                config_content = config.to_ini_string()
 
-                config_lines.append("[DownloadOptions]")
-                config_lines.append(
-                    f"export_type = {'velocity_only' if st.session_state.export_type == 'Velocity Only' else 'full_dataset'}"
-                )
-                config_lines.append(
-                    f"export_format = {st.session_state.export_format.lower()}"
-                )
-                config_lines.append(
-                    f"apply_mask = {st.session_state.apply_mask_export}"
-                )
-                if st.session_state.export_type == "Velocity Only":
-                    config_lines.append(
-                        f"velocity_units = {st.session_state.velocity_units}"
-                    )
-                config_lines.append("")
-
-                # Time axis settings
-                config_lines.append("[TimeAxis]")
-                config_lines.append(
-                    f"time_axis_modified = {st.session_state.get('time_axis_modified', False)}"
-                )
-                config_lines.append("")
-
-                # Sensor health settings
-                config_lines.append("[SensorHealth]")
-                config_lines.append(
-                    f"sensor_health_applied = {st.session_state.get('sensor_health_applied', False)}"
-                )
-                config_lines.append("")
-
-                # Signal quality settings
-                config_lines.append("[SignalQuality]")
-                config_lines.append(
-                    f"qc_applied = {st.session_state.get('qc_applied', False)}"
-                )
-                if st.session_state.get("qc_applied", False):
-                    config_lines.append(
-                        f"correlation_threshold = {st.session_state.get('correlation_threshold', 64)}"
-                    )
-                    config_lines.append(
-                        f"echo_intensity_threshold = {st.session_state.get('echo_intensity_threshold', 40)}"
-                    )
-                    config_lines.append(
-                        f"error_velocity_threshold = {st.session_state.get('error_velocity_threshold', 2000)}"
-                    )
-                config_lines.append("")
-
-                # Profile operation settings
-                config_lines.append("[ProfileOperation]")
-                config_lines.append(
-                    f"profile_applied = {st.session_state.get('profile_applied', False)}"
-                )
-                config_lines.append("")
-
-                # Velocity check settings
-                config_lines.append("[VelocityCheck]")
-                config_lines.append(
-                    f"velocity_applied = {st.session_state.get('velocity_applied', False)}"
-                )
-                if st.session_state.get("velocity_applied", False):
-                    config_lines.append(
-                        f"cutoff_u = {st.session_state.get('cutoff_u', 2500)}"
-                    )
-                    config_lines.append(
-                        f"cutoff_v = {st.session_state.get('cutoff_v', 2500)}"
-                    )
-                    config_lines.append(
-                        f"cutoff_w = {st.session_state.get('cutoff_w', 500)}"
-                    )
-                config_lines.append("")
-
-                # Custom attributes
-                if (
-                    st.session_state.add_attributes
-                    and st.session_state.custom_attributes
-                ):
-                    config_lines.append("[Attributes]")
-                    for key, value in st.session_state.custom_attributes.items():
-                        if value:
-                            config_lines.append(f"{key} = {value}")
-                    config_lines.append("")
-
-                config_content = "\n".join(config_lines)
-
-                # Show preview
                 with st.expander("Preview config.ini", expanded=True):
                     st.code(config_content, language="ini")
 
-                # Download button
                 st.download_button(
                     label="📥 Download config.ini",
                     data=config_content.encode("utf-8"),

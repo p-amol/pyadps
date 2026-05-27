@@ -222,10 +222,18 @@ def _full_ss(proc: MagicMock, **overrides) -> Dict[str, Any]:
 
 @pytest.fixture(scope="module", autouse=True)
 def inject_pyadps_mock():
-    _originals = {
-        k: sys.modules.get(k)
-        for k in ("pyadps", "pyadps.io", "pyadps.io.accessors", "pyadps.processing")
-    }
+    _tracked = (
+        "pyadps",
+        "pyadps.io",
+        "pyadps.io.accessors",
+        "pyadps.processing",
+        "pyadps.processing.config",
+    )
+    _originals = {k: sys.modules.get(k) for k in _tracked}
+
+    # Import the real ProcessingConfig before replacing the package tree so
+    # the page's `from pyadps.processing.config import ProcessingConfig` works.
+    from pyadps.processing.config import ProcessingConfig as _RealProcessingConfig
 
     mock_pyadps = types.ModuleType("pyadps")
     mock_pyadps.__path__ = []
@@ -242,9 +250,15 @@ def inject_pyadps_mock():
     mock_io.accessors = mock_accessors
 
     mock_processing = types.ModuleType("pyadps.processing")
+    mock_processing.__path__ = []
+    mock_processing.__package__ = "pyadps.processing"
     mock_processing.ProcessedDataset = MagicMock(
         side_effect=lambda ds: MagicMock(dataset=ds)
     )
+
+    mock_config = types.ModuleType("pyadps.processing.config")
+    mock_config.ProcessingConfig = _RealProcessingConfig
+    mock_processing.config = mock_config
 
     sys.modules.update(
         {
@@ -252,6 +266,7 @@ def inject_pyadps_mock():
             "pyadps.io": mock_io,
             "pyadps.io.accessors": mock_accessors,
             "pyadps.processing": mock_processing,
+            "pyadps.processing.config": mock_config,
         }
     )
 
@@ -1779,6 +1794,491 @@ class TestCoverageGaps:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 xr.register_dataset_accessor("fixed_leader")(_FLStub)
+
+
+# ===========================================================================
+# CLASS 14 — build_config_from_session()
+# ===========================================================================
+
+
+def _make_page_module(inject_pyadps_mock):
+    """Load write page module and return it with ds/proc set."""
+    import importlib.util
+    import streamlit as st
+
+    ds_mod = _make_ds()
+    proc_mod = _make_proc(ds_mod)
+
+    spec = importlib.util.spec_from_file_location("write_page_bcfs", SCRIPT_PATH)
+    mod = importlib.util.module_from_spec(spec)
+
+    with (
+        patch.object(st, "set_page_config"),
+        patch.object(st, "stop", side_effect=SystemExit(0)),
+        patch.object(st, "error"),
+        patch.object(st, "header"),
+        patch.object(st, "write"),
+        patch.object(st, "tabs", return_value=[MagicMock() for _ in range(4)]),
+        patch.dict(
+            "streamlit.session_state",
+            {
+                "processor": proc_mod,
+                "write_initialized": True,
+                "export_format": "NetCDF",
+                "export_type": "Velocity Only",
+                "apply_mask_export": True,
+                "velocity_units": "cm/s",
+                "add_attributes": False,
+                "custom_attributes": {},
+                "file_prefix": "ADCP",
+                "fname": "test.pd0",
+            },
+            clear=False,
+        ),
+    ):
+        try:
+            spec.loader.exec_module(mod)
+        except SystemExit:
+            pass
+
+    mod.ds = ds_mod
+    mod.proc = proc_mod
+    return mod
+
+
+class TestBuildConfigFromSession:
+    """Unit tests for build_config_from_session() in 08_Write_File.py."""
+
+    @pytest.fixture(scope="class")
+    def page_module(self, inject_pyadps_mock):
+        return _make_page_module(inject_pyadps_mock)
+
+    def _build(self, page_module, overrides: Dict[str, Any]):
+        """Call build_config_from_session() with the given session state keys."""
+        import streamlit as st
+
+        with patch.dict("streamlit.session_state", overrides, clear=False):
+            return page_module.build_config_from_session()
+
+    # --- return type ---
+
+    def test_returns_processing_config(self, page_module):
+        from pyadps.processing.config import ProcessingConfig
+
+        cfg = self._build(page_module, {})
+        assert isinstance(cfg, ProcessingConfig)
+
+    # --- [FileSettings] ---
+
+    def test_fname_mapped_to_input_file_name(self, page_module):
+        cfg = self._build(page_module, {"fname": "cruise001.pd0"})
+        assert cfg.input_file_name == "cruise001.pd0"
+
+    # --- [SensorTest] ---
+
+    def test_sensor_health_applied_flag(self, page_module):
+        cfg = self._build(page_module, {"sensor_health_applied": True})
+        assert cfg.isSensorTest is True
+
+    def test_roll_threshold_mapped(self, page_module):
+        cfg = self._build(page_module, {"apply_roll_check": True, "roll_threshold": 20.0})
+        assert cfg.isRollCheck_ST is True
+        assert cfg.roll_cutoff_ST == 20.0
+
+    def test_pitch_threshold_mapped(self, page_module):
+        cfg = self._build(
+            page_module, {"apply_pitch_check": True, "pitch_threshold": 12.5}
+        )
+        assert cfg.isPitchCheck_ST is True
+        assert cfg.pitch_cutoff_ST == 12.5
+
+    def test_sound_speed_correction_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {
+                "apply_sound_speed_correction": True,
+                "correct_velocity": True,
+                "horizontal_only": False,
+            },
+        )
+        assert cfg.isSoundModified_ST is True
+        assert cfg.isVelocityModified_ST is True
+        assert cfg.isVelocityModified_HorizontalOnly_ST is False
+
+    def test_depth_option_fixed_value_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {"depth_modified": True, "depth_option": "Fixed Value", "depth_fixed_value": 25.0},
+        )
+        assert cfg.isDepthModified_ST is True
+        assert cfg.depthoption_ST == "Fixed Value"
+        assert cfg.fixeddepth_ST == 25.0
+
+    def test_depth_option_file_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {"depth_modified": True, "depth_option": "File", "depth_fixed_value": 0.0},
+        )
+        assert cfg.depthoption_ST == "File"
+        assert cfg.fixeddepth_ST == 0.0
+
+    def test_depth_option_none_default(self, page_module):
+        cfg = self._build(page_module, {})
+        assert cfg.depthoption_ST == "None"
+        assert cfg.fixeddepth_ST == 0.0
+
+    def test_salinity_option_fixed_value_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {
+                "salinity_modified": True,
+                "salinity_option": "Fixed Value",
+                "salinity_fixed_value": 34.5,
+            },
+        )
+        assert cfg.isSalinityModified_ST is True
+        assert cfg.salinityoption_ST == "Fixed Value"
+        assert cfg.fixedsalinity_ST == 34.5
+
+    def test_salinity_option_file_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {"salinity_modified": True, "salinity_option": "File", "salinity_fixed_value": 35.0},
+        )
+        assert cfg.salinityoption_ST == "File"
+
+    def test_salinity_option_none_default(self, page_module):
+        cfg = self._build(page_module, {})
+        assert cfg.salinityoption_ST == "None"
+        assert cfg.fixedsalinity_ST == 35.0
+
+    def test_temperature_option_fixed_value_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {
+                "temperature_modified": True,
+                "temperature_option": "Fixed Value",
+                "temperature_fixed_value": 22.0,
+            },
+        )
+        assert cfg.isTemperatureModified_ST is True
+        assert cfg.temperatureoption_ST == "Fixed Value"
+        assert cfg.fixedtemperature_ST == 22.0
+
+    def test_temperature_option_file_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {
+                "temperature_modified": True,
+                "temperature_option": "File",
+                "temperature_fixed_value": 15.0,
+            },
+        )
+        assert cfg.temperatureoption_ST == "File"
+
+    def test_temperature_option_none_default(self, page_module):
+        cfg = self._build(page_module, {})
+        assert cfg.temperatureoption_ST == "None"
+        assert cfg.fixedtemperature_ST == 15.0
+
+    # --- [QCTest] ---
+
+    def test_qc_applied_flag(self, page_module):
+        cfg = self._build(page_module, {"qc_applied": True})
+        assert cfg.isQCTest is True
+
+    def test_qc_thresholds_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {
+                "qc_applied": True,
+                "correlation_threshold": 80,
+                "echo_intensity_threshold": 10,
+                "error_velocity_threshold": 1500,
+                "false_target_threshold": 45,
+                "percent_good_threshold": 25,
+            },
+        )
+        assert cfg.ct_QCT == 80.0
+        assert cfg.et_QCT == 10.0
+        assert cfg.evt_QCT == 1500.0
+        assert cfg.ft_QCT == 45.0
+        assert cfg.pgt_QCT == 25.0
+
+    def test_threebeam_mode_and_beam_ignore(self, page_module):
+        cfg = self._build(
+            page_module, {"threebeam_mode": True, "beam_ignore": 2}
+        )
+        assert cfg.is3beam_QCT is True
+        assert cfg.beam_ignore_QCT == 2
+
+    def test_beam_ignore_none_when_absent(self, page_module):
+        cfg = self._build(page_module, {"beam_ignore": None})
+        assert cfg.beam_ignore_QCT is None
+
+    # --- [ProfileTest] ---
+
+    def test_profile_applied_flag(self, page_module):
+        cfg = self._build(page_module, {"profile_applied": True})
+        assert cfg.isProfileTest is True
+
+    def test_trim_start_mapped(self, page_module):
+        cfg = self._build(page_module, {"trim_start_ens": 5, "trim_end_ens": 15})
+        assert cfg.trim_start_PT == 5
+        assert cfg.trim_end_PT == 15
+
+    def test_has_trim_true_when_start_nonzero(self, page_module):
+        cfg = self._build(page_module, {"trim_start_ens": 3, "trim_end_ens": 19})
+        assert cfg.isTrimEndsCheck_PT is True
+
+    def test_has_trim_true_when_end_less_than_max(self, page_module):
+        # n_ens = 20 (from _make_ds), default trim_end = max(0, 19) = 19
+        cfg = self._build(page_module, {"trim_start_ens": 0, "trim_end_ens": 15})
+        assert cfg.isTrimEndsCheck_PT is True
+
+    def test_has_trim_false_when_full_range(self, page_module):
+        # trim_start=0, trim_end=n_ens-1=19 → no trim
+        cfg = self._build(page_module, {"trim_start_ens": 0, "trim_end_ens": 19})
+        assert cfg.isTrimEndsCheck_PT is False
+
+    def test_side_lobe_settings_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {"apply_side_lobe": True, "water_depth": 80.0, "extra_cells": 2},
+        )
+        assert cfg.isCutBinSideLobeCheck_PT is True
+        assert cfg.water_depth_PT == 80.0
+        assert cfg.extra_cells_PT == 2
+
+    def test_cut_regions_dicts_converted_to_lists(self, page_module):
+        """Dict-format cut_regions must be converted to [min_cell, max_cell,
+        min_ensemble, max_ensemble] lists — the bug this fix addresses."""
+        cut_regions = [
+            {"min_cell": 2, "max_cell": 5, "min_ensemble": 0, "max_ensemble": 100},
+            {"min_cell": 10, "max_cell": 12, "min_ensemble": 50, "max_ensemble": 200},
+        ]
+        cfg = self._build(
+            page_module,
+            {"cut_regions": cut_regions, "profile_applied": True},
+        )
+        assert cfg.isCutBinManualCheck_PT is True
+        assert cfg.cut_bins_regions_PT == [
+            [2, 5, 0, 100],
+            [10, 12, 50, 200],
+        ]
+
+    def test_cut_regions_serializes_as_integers_not_strings(self, page_module):
+        """cut_bins_regions in the generated INI must contain integers."""
+        cut_regions = [
+            {"min_cell": 3, "max_cell": 7, "min_ensemble": 10, "max_ensemble": 90}
+        ]
+        cfg = self._build(page_module, {"cut_regions": cut_regions})
+        ini = cfg.to_ini_string()
+        # Find the cut_bins_regions line and verify it has integers
+        for line in ini.splitlines():
+            if "cut_bins_regions" in line:
+                assert "[3, 7, 10, 90]" in line, f"Expected integers in: {line}"
+                break
+
+    def test_empty_cut_regions_produces_empty_list(self, page_module):
+        cfg = self._build(page_module, {"cut_regions": []})
+        assert cfg.cut_bins_regions_PT == []
+        assert cfg.isCutBinManualCheck_PT is False
+
+    def test_regrid_settings_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {
+                "apply_regrid": True,
+                "regrid_method": "nearest",
+                "end_cell_option": "surface",
+                "boundary_limit": 5.0,
+            },
+        )
+        assert cfg.isRegridCheck_PT is True
+        assert cfg.regrid_method_PT == "nearest"
+        assert cfg.regrid_end_cell_option_PT == "surface"
+        assert cfg.regrid_boundary_limit_PT == 5.0
+
+    def test_regrid_cell_size_from_dataset(self, page_module):
+        cfg = self._build(page_module, {"apply_regrid": True})
+        # The mock dataset stub returns depth_cell_length = 400 cm → 4.0 m
+        assert cfg.regrid_cell_size_PT == pytest.approx(4.0)
+
+    def test_beam_direction_lowercased(self, page_module):
+        cfg = self._build(page_module, {"beam_direction": "Up"})
+        assert cfg.beam_direction_PT == "up"
+
+    def test_beam_direction_already_lowercase(self, page_module):
+        cfg = self._build(page_module, {"beam_direction": "down"})
+        assert cfg.beam_direction_PT == "down"
+
+    def test_beam_direction_none_falls_back(self, page_module):
+        cfg = self._build(page_module, {"beam_direction": None})
+        assert cfg.beam_direction_PT == "up"
+
+    # --- [VelocityTest] ---
+
+    def test_velocity_applied_flag(self, page_module):
+        cfg = self._build(page_module, {"velocity_applied": True})
+        assert cfg.isVelocityTest is True
+
+    def test_velocity_cutoff_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {
+                "apply_threshold": True,
+                "cutoff_u": 1800,
+                "cutoff_v": 2000,
+                "cutoff_w": 400,
+            },
+        )
+        assert cfg.isCutoffCheck_VT is True
+        assert cfg.maxuvel_VT == 1800.0
+        assert cfg.maxvvel_VT == 2000.0
+        assert cfg.maxwvel_VT == 400.0
+
+    def test_magnetic_declination_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {
+                "apply_magnetic": True,
+                "magnetic_method": "api",
+                "magnetic_lat": 12.5,
+                "magnetic_lon": 80.3,
+                "magnetic_year": 2024,
+                "magnetic_depth": 50,
+                "magnetic_declination": -3.5,
+            },
+        )
+        assert cfg.isMagnetCheck_VT is True
+        assert cfg.magnet_lat_VT == 12.5
+        assert cfg.magnet_lon_VT == 80.3
+        assert cfg.magnet_year_VT == 2024
+        assert cfg.magnet_depth_VT == 50.0
+        assert cfg.magnet_user_input_VT == -3.5
+
+    def test_magnetic_declination_none_falls_back_to_zero(self, page_module):
+        cfg = self._build(page_module, {"magnetic_declination": None})
+        assert cfg.magnet_user_input_VT == 0.0
+
+    def test_despike_settings_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {"apply_despike": True, "despike_kernel": 9, "despike_cutoff": 2.5},
+        )
+        assert cfg.isDespikeCheck_VT is True
+        assert cfg.despike_kernel_VT == 9
+        assert cfg.despike_cutoff_VT == 2.5
+
+    def test_flatline_settings_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {"apply_flatline": True, "flatline_kernel": 7, "flatline_cutoff": 4.0},
+        )
+        assert cfg.isFlatlineCheck_VT is True
+        assert cfg.flatline_kernel_VT == 7
+        assert cfg.flatline_cutoff_VT == 4.0
+
+    # --- [Attributes] ---
+
+    def test_custom_attributes_mapped(self, page_module):
+        cfg = self._build(
+            page_module,
+            {
+                "add_attributes": True,
+                "custom_attributes": {"cruise_number": "CR001", "ship_name": "RV Test"},
+            },
+        )
+        assert cfg.isAttributes is True
+        assert cfg.attributes["cruise_number"] == "CR001"
+        assert cfg.attributes["ship_name"] == "RV Test"
+
+    def test_empty_attribute_values_excluded(self, page_module):
+        """Attributes with empty string values must not appear in the config."""
+        cfg = self._build(
+            page_module,
+            {
+                "add_attributes": True,
+                "custom_attributes": {"cruise_number": "", "ship_name": "RV Test"},
+            },
+        )
+        assert "cruise_number" not in cfg.attributes
+        assert cfg.attributes["ship_name"] == "RV Test"
+
+    # --- full INI round-trip via ProcessingConfig ---
+
+    def test_generated_ini_has_profiletest_section(self, page_module):
+        """The generated INI must contain [ProfileTest], not a hand-rolled section."""
+        cut_regions = [
+            {"min_cell": 0, "max_cell": 3, "min_ensemble": 0, "max_ensemble": 50}
+        ]
+        cfg = self._build(
+            page_module,
+            {
+                "profile_applied": True,
+                "trim_start_ens": 2,
+                "trim_end_ens": 18,
+                "apply_side_lobe": True,
+                "water_depth": 100.0,
+                "extra_cells": 2,
+                "cut_regions": cut_regions,
+                "apply_regrid": True,
+                "regrid_method": "nearest",
+                "end_cell_option": "cell",
+                "boundary_limit": 0.0,
+                "beam_direction": "up",
+            },
+        )
+        ini = cfg.to_ini_string()
+        assert "[ProfileTest]" in ini
+        assert "trim_start = 2" in ini
+        assert "cut_sidelobe = True" in ini
+        assert "regrid = True" in ini
+
+    def test_generated_ini_parseable_by_from_ini(self, page_module):
+        """INI produced by build_config_from_session must round-trip via from_ini."""
+        import tempfile, os
+        from pyadps.processing.config import ProcessingConfig
+
+        cfg = self._build(
+            page_module,
+            {
+                "fname": "myfile.pd0",
+                "qc_applied": True,
+                "correlation_threshold": 70,
+                "profile_applied": True,
+                "trim_start_ens": 3,
+                "trim_end_ens": 16,
+                "cut_regions": [
+                    {
+                        "min_cell": 1,
+                        "max_cell": 4,
+                        "min_ensemble": 0,
+                        "max_ensemble": 100,
+                    }
+                ],
+                "velocity_applied": True,
+                "cutoff_u": 2000,
+            },
+        )
+        ini_str = cfg.to_ini_string()
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".ini", delete=False
+        ) as f:
+            f.write(ini_str)
+            tmp = f.name
+        try:
+            rt = ProcessingConfig.from_ini(tmp)
+        finally:
+            os.unlink(tmp)
+
+        assert rt.input_file_name == "myfile.pd0"
+        assert rt.isQCTest is True
+        assert rt.ct_QCT == 70.0
+        assert rt.trim_start_PT == 3
+        assert rt.cut_bins_regions_PT == [[1, 4, 0, 100]]
+        assert rt.maxuvel_VT == 2000.0
 
 
 # ===========================================================================

@@ -209,6 +209,14 @@ if "sensor_health_initialized" not in st.session_state:
     st.session_state.salinity_modified = False
     st.session_state.temperature_modified = False
 
+    # Replacement option metadata (for config generation)
+    st.session_state.depth_option = "None"
+    st.session_state.depth_fixed_value = 0.0
+    st.session_state.salinity_option = "None"
+    st.session_state.salinity_fixed_value = 35.0
+    st.session_state.temperature_option = "None"
+    st.session_state.temperature_fixed_value = 15.0
+
     # Threshold settings
     st.session_state.roll_threshold = 15.0
     st.session_state.pitch_threshold = 15.0
@@ -252,6 +260,12 @@ if st.session_state.sensor_health_applied:
         st.session_state.temp_depth_data = None
         st.session_state.temp_salinity_data = None
         st.session_state.temp_temperature_data = None
+        st.session_state.depth_option = "None"
+        st.session_state.depth_fixed_value = 0.0
+        st.session_state.salinity_option = "None"
+        st.session_state.salinity_fixed_value = 35.0
+        st.session_state.temperature_option = "None"
+        st.session_state.temperature_fixed_value = 15.0
         st.rerun()
 
 # =============================================================================
@@ -373,6 +387,10 @@ with tab1:
                     total_ensembles, fixed_depth / scale if scale else fixed_depth
                 )
                 st.session_state.depth_modified = True
+                st.session_state.depth_option = "Fixed Value"
+                st.session_state.depth_fixed_value = float(
+                    st.session_state.temp_depth_data[0]
+                )
                 st.success(f"✅ Depth will be set to {fixed_depth} m when saved.")
             else:
                 st.warning("Please enter a depth value.")
@@ -400,6 +418,8 @@ with tab1:
                             data / scale if scale else data
                         )
                         st.session_state.depth_modified = True
+                        st.session_state.depth_option = "File"
+                        st.session_state.depth_fixed_value = 0.0
                         st.success("✅ Depth data will be applied when saved.")
 
                         # Show preview
@@ -409,6 +429,8 @@ with tab1:
         if st.button("Reset Depth to Original", key="reset_depth"):
             st.session_state.temp_depth_data = None
             st.session_state.depth_modified = False
+            st.session_state.depth_option = "None"
+            st.session_state.depth_fixed_value = 0.0
             st.rerun()
 
 # =============================================================================
@@ -509,6 +531,8 @@ with tab2:
                     total_ensembles, fixed_salinity
                 )
                 st.session_state.salinity_modified = True
+                st.session_state.salinity_option = "Fixed Value"
+                st.session_state.salinity_fixed_value = float(fixed_salinity)
                 st.success(
                     f"✅ Salinity will be set to {fixed_salinity} PSU when saved."
                 )
@@ -534,6 +558,8 @@ with tab2:
                     else:
                         st.session_state.temp_salinity_data = data
                         st.session_state.salinity_modified = True
+                        st.session_state.salinity_option = "File"
+                        st.session_state.salinity_fixed_value = 35.0
                         st.success("✅ Salinity data will be applied when saved.")
 
                         # Show preview
@@ -545,6 +571,8 @@ with tab2:
         if st.button("Reset Salinity to Original", key="reset_salinity"):
             st.session_state.temp_salinity_data = None
             st.session_state.salinity_modified = False
+            st.session_state.salinity_option = "None"
+            st.session_state.salinity_fixed_value = 35.0
             st.rerun()
 
 # =============================================================================
@@ -644,6 +672,8 @@ with tab3:
                     total_ensembles, fixed_temp
                 )
                 st.session_state.temperature_modified = True
+                st.session_state.temperature_option = "Fixed Value"
+                st.session_state.temperature_fixed_value = float(fixed_temp)
                 st.success(f"✅ Temperature will be set to {fixed_temp} °C when saved.")
             else:
                 st.warning("Please enter a temperature value.")
@@ -667,6 +697,8 @@ with tab3:
                     else:
                         st.session_state.temp_temperature_data = data
                         st.session_state.temperature_modified = True
+                        st.session_state.temperature_option = "File"
+                        st.session_state.temperature_fixed_value = 15.0
                         st.success("✅ Temperature data will be applied when saved.")
 
                         # Show preview
@@ -680,6 +712,8 @@ with tab3:
         if st.button("Reset Temperature to Original", key="reset_temp"):
             st.session_state.temp_temperature_data = None
             st.session_state.temperature_modified = False
+            st.session_state.temperature_option = "None"
+            st.session_state.temperature_fixed_value = 15.0
             st.rerun()
 
 # =============================================================================
@@ -1102,6 +1136,12 @@ with tab8:
             st.session_state.apply_roll_check = False
             st.session_state.apply_pitch_check = False
             st.session_state.apply_sound_speed_correction = False
+            st.session_state.depth_option = "None"
+            st.session_state.depth_fixed_value = 0.0
+            st.session_state.salinity_option = "None"
+            st.session_state.salinity_fixed_value = 35.0
+            st.session_state.temperature_option = "None"
+            st.session_state.temperature_fixed_value = 15.0
 
             st.success("✅ All sensor health data reset to original values.")
             st.rerun()

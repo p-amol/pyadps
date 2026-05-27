@@ -286,6 +286,20 @@ class ProcessingConfig:
         kwargs = {}
 
         # ========================
+        # FILE SETTINGS
+        # ========================
+        if "FileSettings" in config:
+            kwargs["input_file_name"] = config.get(
+                "FileSettings", "input_file_name", fallback=""
+            )
+            kwargs["input_file_path"] = config.get(
+                "FileSettings", "input_file_path", fallback=""
+            )
+            kwargs["output_file_path"] = config.get(
+                "FileSettings", "output_file_path", fallback=""
+            )
+
+        # ========================
         # TIME SETTINGS
         # ========================
         if "FixTime" in config:
@@ -562,6 +576,15 @@ class ProcessingConfig:
             Populated parser ready to be written.
         """
         config = configparser.ConfigParser()
+
+        # ========================
+        # FILE SETTINGS
+        # ========================
+        config["FileSettings"] = {
+            "input_file_name": self.input_file_name,
+            "input_file_path": self.input_file_path,
+            "output_file_path": self.output_file_path,
+        }
 
         # ========================
         # TIME SETTINGS

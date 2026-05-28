@@ -956,63 +956,16 @@ with tab5:
         st.divider()
 
         if st.button("🔬 Apply Signal Quality Tests", type="primary", key="save_qc"):
-            # Get a FRESH runner from the MAIN processor
-            # This ensures all statistics and history are properly tracked
-            runner = proc.get_signal_quality_runner()
-
             try:
-                # Re-apply all selected checks to the main processor
-                # Guard against None thresholds (from empty number_input)
-                if (
-                    st.session_state.apply_correlation
-                    and st.session_state.correlation_threshold is not None
-                ):
-                    runner.correlation(
-                        cutoff=int(st.session_state.correlation_threshold),
-                        threebeam=st.session_state.threebeam_mode,
-                        beam_ignore=st.session_state.beam_ignore,
-                    )
-
-                if (
-                    st.session_state.apply_echo_intensity
-                    and st.session_state.echo_intensity_threshold is not None
-                ):
-                    runner.echo_intensity(
-                        cutoff=int(st.session_state.echo_intensity_threshold),
-                        threebeam=st.session_state.threebeam_mode,
-                        beam_ignore=st.session_state.beam_ignore,
-                    )
-
-                if (
-                    st.session_state.apply_error_velocity
-                    and st.session_state.error_velocity_threshold is not None
-                ):
-                    runner.error_velocity(
-                        cutoff=int(st.session_state.error_velocity_threshold),
-                    )
-
-                if (
-                    st.session_state.apply_percent_good
-                    and st.session_state.percent_good_threshold is not None
-                ):
-                    runner.percent_good(
-                        cutoff=int(st.session_state.percent_good_threshold),
-                        threebeam=st.session_state.threebeam_mode,
-                    )
-
-                if (
-                    st.session_state.apply_false_target
-                    and st.session_state.false_target_threshold is not None
-                ):
-                    runner.false_target(
-                        cutoff=int(st.session_state.false_target_threshold),
-                        threebeam=st.session_state.threebeam_mode,
-                        beam_ignore=st.session_state.beam_ignore,
-                    )
-
-                # Commit the runner to the MAIN processor
-                # This captures all statistics and processing history
-                proc.commit_runner(runner)
+                proc.apply_signal_quality(
+                    correlation=int(st.session_state.correlation_threshold) if st.session_state.apply_correlation and st.session_state.correlation_threshold is not None else None,
+                    echo_intensity=int(st.session_state.echo_intensity_threshold) if st.session_state.apply_echo_intensity and st.session_state.echo_intensity_threshold is not None else None,
+                    error_velocity=int(st.session_state.error_velocity_threshold) if st.session_state.apply_error_velocity and st.session_state.error_velocity_threshold is not None else None,
+                    percent_good=int(st.session_state.percent_good_threshold) if st.session_state.apply_percent_good and st.session_state.percent_good_threshold is not None else None,
+                    false_target=int(st.session_state.false_target_threshold) if st.session_state.apply_false_target and st.session_state.false_target_threshold is not None else None,
+                    threebeam=st.session_state.threebeam_mode,
+                    beam_ignore=st.session_state.beam_ignore,
+                )
 
                 # Handle orientation change (if applicable)
                 if st.session_state.beam_direction_modified:
@@ -1068,9 +1021,10 @@ with tab5:
                 st.write("---")
                 st.write("**📈 QC Test Statistics:**")
 
-                if runner.statistics:
+                report = proc.reports[-1] if proc.reports else None
+                if report and report.checks:
                     stats_data = []
-                    for stat in runner.statistics:
+                    for stat in report.checks:
                         stats_data.append(
                             {
                                 "Check": stat.check_name,

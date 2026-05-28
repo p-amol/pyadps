@@ -701,6 +701,7 @@ class ProcessedDataset:
         cut_bins_manual: Optional[List[Union[List[Optional[int]], CutRegion]]] = None,
         # Regrid
         regrid: bool = False,
+        regrid_cell_size: float = 1.0,
         regrid_method: str = "nearest",
         regrid_end_cell_option: str = "cell",
         regrid_boundary_limit: float = 0.0,
@@ -886,6 +887,7 @@ class ProcessedDataset:
             self.config.cut_bins_regions_PT = []
         # Regrid
         self.config.isRegridCheck_PT = regrid
+        self.config.regrid_cell_size_PT = regrid_cell_size
         self.config.regrid_method_PT = regrid_method
         self.config.regrid_end_cell_option_PT = regrid_end_cell_option
         self.config.regrid_boundary_limit_PT = regrid_boundary_limit
@@ -1538,7 +1540,10 @@ class ProcessedDataset:
 
         logger.info(f"Reading ADCP binary file: {bin_path}")
         ds = pyadps.read(str(bin_path))
-        return cls(ds)
+        proc = cls(ds)
+        proc.config.input_file_name = bin_path.name
+        proc.config.input_file_path = str(bin_path.parent)
+        return proc
 
     # ========================================================================
     # SAVE WITH CONFIG  (convenience wrapper)

@@ -1030,47 +1030,27 @@ with tab5:
         st.divider()
 
         if st.button("📊 Apply Profile Operations", type="primary", key="save_profile"):
-            # Get a FRESH runner from the MAIN processor
-            runner = proc.get_profile_operation_runner()
-
             try:
-                # Apply trim
                 start_count, end_count = _trim_to_counts()
-                trimends = _trim_trimends()
-                if start_count is not None or end_count is not None:
-                    runner.trim_ensembles(start=start_count, end=end_count)
-
-                # Apply side lobe
-                if st.session_state.apply_side_lobe:
-                    runner.cut_bins_side_lobe(
-                        orientation=st.session_state.beam_direction.lower(),
-                        water_depth=st.session_state.water_depth,
-                        extra_cells=st.session_state.extra_cells,
-                    )
-
-                # Apply manual cuts
-                for region in st.session_state.cut_regions:
-                    runner.cut_bins_manual(
-                        min_cell=region["min_cell"],
-                        max_cell=region["max_cell"],
-                        min_ensemble=region["min_ensemble"],
-                        max_ensemble=region["max_ensemble"],
-                    )
-
-                # Apply regrid (must be last)
-                if st.session_state.apply_regrid:
-                    runner.regrid(
-                        method=st.session_state.regrid_method,
-                        end_cell_option=st.session_state.end_cell_option,
-                        trimends=trimends,
-                        orientation=st.session_state.beam_direction.lower(),
-                        boundary_limit=st.session_state.boundary_limit
-                        if st.session_state.end_cell_option == "manual"
-                        else 0.0,
-                    )
-
-                # Commit the runner to the MAIN processor
-                proc.commit_runner(runner)
+                proc.apply_profile_operation(
+                    trim_start=start_count,
+                    trim_end=end_count,
+                    cut_bins_side_lobe=st.session_state.apply_side_lobe,
+                    water_depth=st.session_state.water_depth,
+                    extra_cells=st.session_state.extra_cells,
+                    beam_direction=st.session_state.beam_direction.lower(),
+                    cut_bins_manual=[
+                        [r["min_cell"], r["max_cell"], r["min_ensemble"], r["max_ensemble"]]
+                        for r in st.session_state.cut_regions
+                    ] or None,
+                    regrid=st.session_state.apply_regrid,
+                    regrid_cell_size=get_cell_size(),
+                    regrid_method=st.session_state.regrid_method,
+                    regrid_end_cell_option=st.session_state.end_cell_option,
+                    regrid_boundary_limit=st.session_state.boundary_limit
+                    if st.session_state.end_cell_option == "manual"
+                    else 0.0,
+                )
 
                 st.session_state.profile_applied = True
 
@@ -1081,10 +1061,11 @@ with tab5:
                 st.success("✅ Profile operations applied successfully!")
 
                 # Display statistics
+                report = proc.reports[-1] if proc.reports else None
                 st.write("**📈 Processing Statistics:**")
-                if runner.statistics:
+                if report and report.checks:
                     stats_data = []
-                    for stat in runner.statistics:
+                    for stat in report.checks:
                         stats_data.append(
                             {
                                 "Operation": stat.check_name,
@@ -1098,9 +1079,9 @@ with tab5:
                     st.dataframe(stats_df, hide_index=True, use_container_width=True)
 
                 # Show modifications (regrid)
-                if runner.modifications:
+                if report and report.modifications:
                     st.write("**🔄 Data Modifications:**")
-                    for mod in runner.modifications:
+                    for mod in report.modifications:
                         st.write(
                             f"- {mod.operation}: {mod.original_stats} → {mod.modified_stats}"
                         )

@@ -213,6 +213,21 @@ class _MockProcessor:
         self.reports.append(runner.get_pipeline_report())
         return self
 
+    def apply_sensor_health(self, roll=False, roll_threshold=15.0, pitch=False,
+                             pitch_threshold=15.0, correct_sound_speed=False,
+                             correct_velocity=True, horizontal_only=True,
+                             temperature=None, salinity=None, transducer_depth=None):
+        runner = self.get_sensor_health_runner()
+        if roll:
+            runner.roll_check(threshold=roll_threshold)
+        if pitch:
+            runner.pitch_check(threshold=pitch_threshold)
+        if correct_sound_speed:
+            runner.correct_sound_speed(correct_velocity=correct_velocity,
+                                       horizontal_only=horizontal_only)
+        self.commit_runner(runner)
+        return self
+
     def get_current_stats(self) -> dict:
         mask   = self.dataset["mask"].values
         total  = int(mask.size)

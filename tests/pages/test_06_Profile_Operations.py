@@ -953,13 +953,9 @@ class TestTab5SaveButton:
     def test_sets_profile_applied(self, proc):
         assert self._click_save(proc).session_state["profile_applied"] is True
 
-    def test_calls_commit_runner(self, proc):
+    def test_calls_apply_profile_operation(self, proc):
         self._click_save(proc)
-        proc.commit_runner.assert_called()
-
-    def test_calls_get_profile_runner(self, proc):
-        self._click_save(proc)
-        proc.get_profile_operation_runner.assert_called()
+        proc.apply_profile_operation.assert_called()
 
     def test_resets_preview_run(self, proc):
         assert self._click_save(proc).session_state["profile_preview_run"] is False
@@ -1124,7 +1120,8 @@ class TestSaveWithOperations:
         })
         [b for b in at.button if "Apply Profile" in b.label][0].click().run()
         assert not at.exception
-        proc.get_profile_operation_runner.return_value.trim_ensembles.assert_called()
+        proc.apply_profile_operation.assert_called()
+        assert proc.apply_profile_operation.call_args.kwargs.get("trim_start") == 5
 
     def test_save_with_side_lobe(self, proc):
         at = _make_loaded_at(proc, extra_ss={
@@ -1138,7 +1135,8 @@ class TestSaveWithOperations:
         })
         [b for b in at.button if "Apply Profile" in b.label][0].click().run()
         assert not at.exception
-        proc.get_profile_operation_runner.return_value.cut_bins_side_lobe.assert_called()
+        proc.apply_profile_operation.assert_called()
+        assert proc.apply_profile_operation.call_args.kwargs.get("cut_bins_side_lobe") is True
 
     def test_save_with_manual_cut(self, proc):
         region = {"min_cell": 0, "max_cell": 5, "min_ensemble": 0, "max_ensemble": 10}
@@ -1153,7 +1151,9 @@ class TestSaveWithOperations:
         })
         [b for b in at.button if "Apply Profile" in b.label][0].click().run()
         assert not at.exception
-        proc.get_profile_operation_runner.return_value.cut_bins_manual.assert_called()
+        proc.apply_profile_operation.assert_called()
+        cut_manual = proc.apply_profile_operation.call_args.kwargs.get("cut_bins_manual")
+        assert cut_manual is not None and len(cut_manual) > 0
 
     def test_save_with_regrid(self, proc):
         at = _make_loaded_at(proc, extra_ss={
@@ -1167,7 +1167,8 @@ class TestSaveWithOperations:
         })
         [b for b in at.button if "Apply Profile" in b.label][0].click().run()
         assert not at.exception
-        proc.get_profile_operation_runner.return_value.regrid.assert_called()
+        proc.apply_profile_operation.assert_called()
+        assert proc.apply_profile_operation.call_args.kwargs.get("regrid") is True
 
     def test_save_with_statistics(self, ds):
         """Lines 1143-1156: runner.statistics non-empty → stats table shown."""
@@ -1199,11 +1200,11 @@ class TestSaveWithOperations:
 
 
 class TestSaveErrorPath:
-    """Lines 1178-1179: commit_runner raises → st.error displayed."""
+    """apply_profile_operation raises → st.error displayed."""
 
     def test_commit_raises_shows_error(self, ds):
         proc_err = _make_mock_processor(ds)
-        proc_err.commit_runner.side_effect = RuntimeError("commit failed")
+        proc_err.apply_profile_operation.side_effect = RuntimeError("apply failed")
         at = _make_loaded_at(proc_err)
         [b for b in at.button if "Apply Profile" in b.label][0].click().run()
         assert not at.exception

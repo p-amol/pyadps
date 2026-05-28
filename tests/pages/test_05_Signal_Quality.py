@@ -776,13 +776,9 @@ class TestTab5SaveButton:
         at = self._click_save(proc)
         assert at.session_state["qc_applied"] is True
 
-    def test_save_calls_commit_runner(self, proc):
+    def test_save_calls_apply_signal_quality(self, proc):
         self._click_save(proc)
-        proc.commit_runner.assert_called()
-
-    def test_save_calls_get_signal_quality_runner(self, proc):
-        self._click_save(proc)
-        proc.get_signal_quality_runner.assert_called()
+        proc.apply_signal_quality.assert_called()
 
     def test_save_resets_qc_preview_run_to_false(self, proc):
         at = self._click_save(proc)
@@ -1797,7 +1793,7 @@ class TestSaveErrorPath:
 
     def test_commit_raises_shows_error(self, ds):
         proc_err = _make_mock_processor(ds)
-        proc_err.commit_runner.side_effect = RuntimeError("commit failed")
+        proc_err.apply_signal_quality.side_effect = RuntimeError("apply failed")
         at = _make_loaded_at(proc_err)
         [b for b in at.button if "Apply Signal Quality Tests" in b.label][0].click().run()
         assert not at.exception

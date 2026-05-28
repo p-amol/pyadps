@@ -1328,40 +1328,20 @@ with tab6:
         st.divider()
 
         if st.button("🌊 Apply Velocity Tests", type="primary", key="save_velocity"):
-            # Get a FRESH runner from the MAIN processor
-            runner = proc.get_velocity_check_runner()
-
             try:
-                # Re-apply all selected operations to the main processor
-                if (
-                    st.session_state.apply_magnetic
-                    and st.session_state.magnetic_declination is not None
-                ):
-                    runner.magnetic_correction(
-                        declination=st.session_state.magnetic_declination
-                    )
-
-                if st.session_state.apply_threshold:
-                    runner.threshold(
-                        cutoff_u=float(st.session_state.cutoff_u),
-                        cutoff_v=float(st.session_state.cutoff_v),
-                        cutoff_w=float(st.session_state.cutoff_w),
-                    )
-
-                if st.session_state.apply_despike:
-                    runner.despike(
-                        kernel_size=st.session_state.despike_kernel,
-                        cutoff=st.session_state.despike_cutoff,
-                    )
-
-                if st.session_state.apply_flatline:
-                    runner.flatline(
-                        kernel_size=st.session_state.flatline_kernel,
-                        cutoff=st.session_state.flatline_cutoff,
-                    )
-
-                # Commit the runner to the MAIN processor
-                proc.commit_runner(runner)
+                proc.apply_velocity_check(
+                    magnetic_correction=st.session_state.apply_magnetic,
+                    declination=st.session_state.magnetic_declination if st.session_state.apply_magnetic else None,
+                    cutoff_u=float(st.session_state.cutoff_u) if st.session_state.apply_threshold else None,
+                    cutoff_v=float(st.session_state.cutoff_v) if st.session_state.apply_threshold else None,
+                    cutoff_w=float(st.session_state.cutoff_w) if st.session_state.apply_threshold else None,
+                    despike=st.session_state.apply_despike,
+                    despike_kernel=st.session_state.despike_kernel,
+                    despike_cutoff=st.session_state.despike_cutoff,
+                    flatline=st.session_state.apply_flatline,
+                    flatline_kernel=st.session_state.flatline_kernel,
+                    flatline_cutoff=st.session_state.flatline_cutoff,
+                )
 
                 st.session_state.velocity_applied = True
 
@@ -1398,11 +1378,12 @@ with tab6:
                 st.write(styled_summary.to_html(), unsafe_allow_html=True)
 
                 # Show statistics
-                if runner.statistics:
+                report = proc.reports[-1] if proc.reports else None
+                if report and report.checks:
                     st.write("---")
                     st.write("**📈 QC Test Statistics:**")
                     stats_data = []
-                    for stat in runner.statistics:
+                    for stat in report.checks:
                         threshold_str = str(stat.threshold) if stat.threshold else "N/A"
                         stats_data.append(
                             {

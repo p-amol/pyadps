@@ -1010,6 +1010,8 @@ def main():
 
             # Create ProcessedDataset
             st.session_state.processor = ProcessedDataset(ds)
+            st.session_state.processor.config.input_file_name = uploaded_file.name
+            st.session_state.processor.config.input_file_path = fpath
             st.session_state.processing_step = 0
 
             # Set file prefix

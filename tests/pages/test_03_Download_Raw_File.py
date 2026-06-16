@@ -664,8 +664,8 @@ class TestAttributeYesSection:
         at.session_state["ds"] = mock_ds
         at.session_state["fname"] = "adcp.000"
         at.session_state["attributes"] = {}
-        at.session_state["custom_attributes"] = {}
-        at.session_state["custom_attr_count"] = custom_attr_count
+        at.session_state["raw_custom_attributes"] = {}
+        at.session_state["raw_custom_attr_count"] = custom_attr_count
         at.run()
         # Switch the attribute radio to "Yes" via set_value
         return _switch_radio(at, "attribute", "Yes")

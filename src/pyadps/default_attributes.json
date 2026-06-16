@@ -1,0 +1,86 @@
+[
+  {
+    "key": "Cruise_No",
+    "label": "Cruise No.",
+    "widget": "text_input",
+    "column": 1
+  },
+  {
+    "key": "Ship_Name",
+    "label": "Ship Name",
+    "widget": "text_input",
+    "column": 1
+  },
+  {
+    "key": "Project_No",
+    "label": "Project No.",
+    "widget": "text_input",
+    "column": 1
+  },
+  {
+    "key": "Water_Depth_m",
+    "label": "Water Depth (m)",
+    "widget": "text_input",
+    "column": 1
+  },
+  {
+    "key": "Deployment_Depth_m",
+    "label": "Deployment Depth (m)",
+    "widget": "text_input",
+    "column": 1
+  },
+  {
+    "key": "Deployment_Date",
+    "label": "Deployment Date",
+    "widget": "date_input",
+    "column": 1
+  },
+  {
+    "key": "Recovery_Date",
+    "label": "Recovery Date",
+    "widget": "date_input",
+    "column": 1
+  },
+  {
+    "key": "Latitude",
+    "label": "Latitude",
+    "widget": "text_input",
+    "column": 2
+  },
+  {
+    "key": "Longitude",
+    "label": "Longitude",
+    "widget": "text_input",
+    "column": 2
+  },
+  {
+    "key": "Platform_Type",
+    "label": "Platform Type",
+    "widget": "text_input",
+    "column": 2
+  },
+  {
+    "key": "Participants",
+    "label": "Participants",
+    "widget": "text_area",
+    "column": 2
+  },
+  {
+    "key": "File_Created_By",
+    "label": "File Created By",
+    "widget": "text_input",
+    "column": 2
+  },
+  {
+    "key": "Contact",
+    "label": "Contact",
+    "widget": "text_input",
+    "column": 2
+  },
+  {
+    "key": "Comments",
+    "label": "Comments",
+    "widget": "text_area",
+    "column": 2
+  }
+]

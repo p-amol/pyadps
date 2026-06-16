@@ -5,6 +5,7 @@ Refactored for pyadps v1.0.0 compatibility.
 Provides checkbox-based selection for downloading data components as NetCDF.
 """
 
+import json
 import os
 import tempfile
 
@@ -12,6 +13,11 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import xarray as xr
+
+# Load default attribute definitions from shared config
+_ATTR_JSON = os.path.join(os.path.dirname(__file__), "..", "default_attributes.json")
+with open(_ATTR_JSON) as _f:
+    DEFAULT_ATTRIBUTES = json.load(_f)
 
 # =============================================================================
 # SESSION STATE CHECK
@@ -31,8 +37,12 @@ if "fname" not in st.session_state:
 if "attributes" not in st.session_state:
     st.session_state.attributes = {}
 
-if "custom_attributes" not in st.session_state:
-    st.session_state.custom_attributes = {}
+# raw_custom_attributes: user-added ad-hoc key-value pairs on the raw download page
+if "raw_custom_attributes" not in st.session_state:
+    st.session_state.raw_custom_attributes = {}
+
+if "raw_custom_attr_count" not in st.session_state:
+    st.session_state.raw_custom_attr_count = 0
 
 if "add_attributes_DRW" not in st.session_state:
     st.session_state.add_attributes_DRW = "No"
@@ -175,7 +185,7 @@ def add_user_attributes(dataset: xr.Dataset) -> xr.Dataset:
             dataset.attrs[key] = value
 
     # Add custom attributes
-    for key, value in st.session_state.custom_attributes.items():
+    for key, value in st.session_state.raw_custom_attributes.items():
         if key and value:  # Only add if both key and value are non-empty
             dataset.attrs[key] = value
 
@@ -316,80 +326,74 @@ st.session_state.add_attributes_DRW = st.radio(
 if st.session_state.add_attributes_DRW == "Yes":
     st.write("### Please fill in the attributes:")
 
-    # Two-column layout for standard attributes
+    # Two-column layout driven by default_attributes.json
     col1, col2 = st.columns(2)
+    col_map = {1: col1, 2: col2}
 
-    with col1:
-        st.session_state.attributes["Cruise_No."] = st.text_input("Cruise No.")
-        st.session_state.attributes["Ship_Name"] = st.text_input("Ship Name")
-        st.session_state.attributes["Project_No."] = st.text_input("Project No.")
-        st.session_state.attributes["Water_Depth_m"] = st.text_input("Water Depth (m)")
-        st.session_state.attributes["Deployment_Depth_m"] = st.text_input(
-            "Deployment Depth (m)"
-        )
-        st.session_state.attributes["Deployment_Date"] = st.date_input(
-            "Deployment Date"
-        )
-        st.session_state.attributes["Recovery_Date"] = st.date_input("Recovery Date")
-
-    with col2:
-        st.session_state.attributes["Latitude"] = st.text_input("Latitude")
-        st.session_state.attributes["Longitude"] = st.text_input("Longitude")
-        st.session_state.attributes["Platform_Type"] = st.text_input("Platform Type")
-        st.session_state.attributes["Participants"] = st.text_area("Participants")
-        st.session_state.attributes["File_created_by"] = st.text_input(
-            "File created by"
-        )
-        st.session_state.attributes["Contact"] = st.text_input("Contact")
-        st.session_state.attributes["Comments"] = st.text_area("Comments")
+    for field in DEFAULT_ATTRIBUTES:
+        with col_map[field["column"]]:
+            existing = st.session_state.attributes.get(field["key"], "")
+            if field["widget"] == "date_input":
+                st.session_state.attributes[field["key"]] = st.date_input(
+                    field["label"],
+                    value=existing if existing else None,
+                    key=f"drw_attr_{field['key']}",
+                )
+            elif field["widget"] == "text_area":
+                st.session_state.attributes[field["key"]] = st.text_area(
+                    field["label"],
+                    value=existing,
+                    key=f"drw_attr_{field['key']}",
+                )
+            else:
+                st.session_state.attributes[field["key"]] = st.text_input(
+                    field["label"],
+                    value=existing,
+                    key=f"drw_attr_{field['key']}",
+                )
 
     # Custom attributes section
     st.write("---")
     st.write("### Add Custom Attributes")
 
-    # Initialize custom attributes counter if not exists
-    if "custom_attr_count" not in st.session_state:
-        st.session_state.custom_attr_count = 0
-
     # Button to add new custom attribute
     if st.button("➕ Add Custom Attribute"):
-        st.session_state.custom_attr_count += 1
+        st.session_state.raw_custom_attr_count += 1
         st.rerun()
 
     # Display custom attribute input fields
-    if st.session_state.custom_attr_count > 0:
+    if st.session_state.raw_custom_attr_count > 0:
         st.write("Enter your custom attributes:")
 
-        for i in range(st.session_state.custom_attr_count):
+        for i in range(st.session_state.raw_custom_attr_count):
             col_key, col_value, col_remove = st.columns([2, 3, 1])
 
             with col_key:
                 attr_key = st.text_input(
                     f"Attribute Name {i + 1}",
-                    key=f"custom_attr_key_{i}",
+                    key=f"raw_custom_attr_key_{i}",
                     placeholder="e.g., Instrument_Model",
                 )
 
             with col_value:
                 attr_value = st.text_input(
                     f"Attribute Value {i + 1}",
-                    key=f"custom_attr_value_{i}",
+                    key=f"raw_custom_attr_value_{i}",
                     placeholder="e.g., Workhorse Sentinel 300",
                 )
 
             with col_remove:
                 st.write("")  # Spacing
                 st.write("")  # Spacing
-                if st.button("🗑️", key=f"remove_attr_{i}"):
-                    # Remove this attribute
-                    if attr_key in st.session_state.custom_attributes:
-                        del st.session_state.custom_attributes[attr_key]
-                    st.session_state.custom_attr_count -= 1
+                if st.button("🗑️", key=f"raw_remove_attr_{i}"):
+                    if attr_key in st.session_state.raw_custom_attributes:
+                        del st.session_state.raw_custom_attributes[attr_key]
+                    st.session_state.raw_custom_attr_count -= 1
                     st.rerun()
 
             # Store the custom attribute
             if attr_key and attr_value:
-                st.session_state.custom_attributes[attr_key] = attr_value
+                st.session_state.raw_custom_attributes[attr_key] = attr_value
 
     st.info("Attributes will be added to the NetCDF file once you generate it.")
 

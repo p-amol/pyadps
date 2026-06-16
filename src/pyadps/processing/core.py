@@ -1079,6 +1079,51 @@ class ProcessedDataset:
         return self
 
     # ========================================================================
+    # CUSTOM ATTRIBUTES
+    # ========================================================================
+
+    def apply_attributes(self, attributes: Dict[str, Any]) -> "ProcessedDataset":
+        """
+        Add custom global attributes to the dataset.
+
+        Useful for recording metadata (cruise number, vessel name, contact
+        information, etc.) that should travel with the dataset. Recorded in
+        ``self.config`` so ``export_config()`` / ``export_config_string()``
+        capture it alongside every other processing step, and it can be
+        replayed later via ``apply_config()``.
+
+        Parameters
+        ----------
+        attributes : dict
+            Mapping of attribute name to value, written to
+            ``self.dataset.attrs``. Ignored if empty.
+
+        Returns
+        -------
+        ProcessedDataset
+            Self for method chaining.
+
+        Examples
+        --------
+        >>> proc.apply_attributes({"cruise_number": "CR001", "vessel": "RV Test"})
+        """
+        if not attributes:
+            logger.debug("Attributes: no attributes provided, skipping")
+            return self
+
+        for key, value in attributes.items():
+            self.dataset.attrs[key] = value
+
+        self.processing_log.append(f"Applied {len(attributes)} custom attribute(s)")
+
+        # ---- record in config ------------------------------------------------
+        self.config.isAttributes = True
+        self.config.attributes = {**self.config.attributes, **attributes}
+        # ----------------------------------------------------------------------
+
+        return self
+
+    # ========================================================================
     # STEP 6: FINALIZE
     # ========================================================================
 
@@ -1443,9 +1488,8 @@ class ProcessedDataset:
         # ------------------------------------------------------------------
         # Custom dataset attributes
         # ------------------------------------------------------------------
-        if config.isAttributes and config.attributes:
-            for key, value in config.attributes.items():
-                self.dataset.attrs[key] = value
+        if config.isAttributes:
+            self.apply_attributes(config.attributes)
 
         self.processing_log.append("Configuration applied")
         return self

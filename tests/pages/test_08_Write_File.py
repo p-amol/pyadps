@@ -18,6 +18,7 @@ Run:
 
 from __future__ import annotations
 
+import json
 import sys
 import types
 import warnings
@@ -42,6 +43,12 @@ SCRIPT_PATH = str(
     / "pages"
     / "08_Write_File.py"
 )
+
+_ATTR_JSON_PATH = (
+    Path(__file__).parent.parent.parent / "src" / "pyadps" / "default_attributes.json"
+)
+with open(_ATTR_JSON_PATH) as _attr_f:
+    DEFAULT_ATTRIBUTES = json.load(_attr_f)
 
 
 # ===========================================================================
@@ -179,6 +186,15 @@ def _make_proc(ds: Optional[xr.Dataset] = None) -> MagicMock:
     def _to_nc(filepath, **kw):
         ds.to_netcdf(filepath)
 
+    # apply_attributes mirrors ProcessedDataset.apply_attributes: writes
+    # straight into dataset.attrs, so downstream assertions on
+    # proc.dataset.attrs reflect what the page actually requested.
+    def _apply_attrs(attributes):
+        for key, value in attributes.items():
+            ds.attrs[key] = value
+
+    proc.apply_attributes.side_effect = _apply_attrs
+
     proc.velocity_to_netcdf.side_effect = _vel_to_nc
     proc.to_netcdf.side_effect = _to_nc
     proc.export_config_string.return_value = "[FileSettings]\ninput_file_name = test.pd0\n"
@@ -197,7 +213,10 @@ def _full_ss(proc: MagicMock, **overrides) -> Dict[str, Any]:
         "apply_mask_export": True,
         "velocity_units": "cm/s",
         "add_attributes": False,
-        "custom_attributes": {},
+        "write_std_attributes": {field["key"]: "" for field in DEFAULT_ATTRIBUTES},
+        "write_custom_attributes": {},
+        "write_custom_attr_count": 0,
+        "raw_custom_attributes": {},
         # referenced by config generator
         "fname": "test_file.pd0",
         "time_axis_modified": False,
@@ -366,7 +385,10 @@ class TestSessionStateInit:
         assert at.session_state["apply_mask_export"] is True
         assert at.session_state["velocity_units"] == "cm/s"
         assert at.session_state["add_attributes"] is False
-        assert at.session_state["custom_attributes"] == {}
+        assert at.session_state["write_std_attributes"] == {
+            field["key"]: "" for field in DEFAULT_ATTRIBUTES
+        }
+        assert at.session_state["write_custom_attributes"] == {}
 
     def test_second_run_skips_init(self, proc):
         """When write_initialized=True the init block is skipped entirely.
@@ -527,31 +549,31 @@ class TestTab2Attributes:
         at = _run(ss)
         # Attribute text inputs should not be present
         ti_keys = [t.key for t in at.text_input]
-        assert "attr_cruise" not in ti_keys
+        assert "wf_attr_Cruise_No" not in ti_keys
 
     def test_attribute_inputs_shown_when_enabled(self, proc):
-        ss = _full_ss(proc, add_attributes=True, custom_attributes={})
+        ss = _full_ss(proc, add_attributes=True)
         at = _run(ss)
         ti_keys = [t.key for t in at.text_input]
-        assert "attr_cruise" in ti_keys
-        assert "attr_ship" in ti_keys
-        assert "attr_lat" in ti_keys
-        assert "attr_lon" in ti_keys
+        assert "wf_attr_Cruise_No" in ti_keys
+        assert "wf_attr_Ship_Name" in ti_keys
+        assert "wf_attr_Latitude" in ti_keys
+        assert "wf_attr_Longitude" in ti_keys
 
     def test_attributes_saved_to_session_state(self, proc):
         ss = _full_ss(
             proc,
             add_attributes=True,
-            custom_attributes={"cruise_number": "CR001", "ship_name": "RV Test"},
+            write_std_attributes={"Cruise_No": "CR001", "Ship_Name": "RV Test"},
         )
         at = _run(ss)
         assert not at.exception
-        attrs = at.session_state["custom_attributes"]
-        assert attrs["cruise_number"] == "CR001"
+        attrs = at.session_state["write_std_attributes"]
+        assert attrs["Cruise_No"] == "CR001"
 
     def test_empty_attributes_show_info(self, proc):
         """When add_attributes=True but all values empty, shows 'No attributes' info."""
-        ss = _full_ss(proc, add_attributes=True, custom_attributes={})
+        ss = _full_ss(proc, add_attributes=True)
         at = _run(ss)
         assert not at.exception
 
@@ -560,31 +582,29 @@ class TestTab2Attributes:
         assert not at.exception
 
     def test_all_attribute_fields_present(self, proc):
-        ss = _full_ss(proc, add_attributes=True, custom_attributes={})
+        ss = _full_ss(proc, add_attributes=True)
         at = _run(ss)
         ti_keys = {t.key for t in at.text_input}
-        expected = {
-            "attr_cruise",
-            "attr_ship",
-            "attr_project",
-            "attr_water_depth",
-            "attr_deploy_depth",
-            "attr_deploy_date",
-            "attr_recovery_date",
-            "attr_lat",
-            "attr_lon",
-            "attr_platform",
-            "attr_participants",
-            "attr_created_by",
-            "attr_contact",
+        expected_text = {
+            f"wf_attr_{field['key']}"
+            for field in DEFAULT_ATTRIBUTES
+            if field["widget"] not in ("text_area", "date_input")
         }
-        assert expected.issubset(ti_keys)
+        assert expected_text.issubset(ti_keys)
+
+        date_keys = {d.key for d in at.date_input}
+        expected_date = {
+            f"wf_attr_{field['key']}"
+            for field in DEFAULT_ATTRIBUTES
+            if field["widget"] == "date_input"
+        }
+        assert expected_date.issubset(date_keys)
 
     def test_comments_text_area_present(self, proc):
-        ss = _full_ss(proc, add_attributes=True, custom_attributes={})
+        ss = _full_ss(proc, add_attributes=True)
         at = _run(ss)
         ta_keys = {t.key for t in at.text_area}
-        assert "attr_comments" in ta_keys
+        assert "wf_attr_Comments" in ta_keys
 
 
 # ===========================================================================
@@ -646,7 +666,7 @@ class TestTab3ExportNetCDFVelocity:
             export_format="NetCDF",
             export_type="Velocity Only",
             add_attributes=True,
-            custom_attributes={"cruise_number": "CR001", "ship_name": "RV Test"},
+            write_custom_attributes={"cruise_number": "CR001", "ship_name": "RV Test"},
         )
         at = _run(ss)
         next(b for b in at.button if b.key == "generate_export").click().run()
@@ -698,7 +718,7 @@ class TestTab3ExportNetCDFVelocity:
             export_format="NetCDF",
             export_type="Velocity Only",
             add_attributes=True,
-            custom_attributes={"cruise_number": "CR001", "ship_name": "RV Test"},
+            write_custom_attributes={"cruise_number": "CR001", "ship_name": "RV Test"},
         )
         at = _run(ss)
         next(b for b in at.button if b.key == "generate_export").click().run()
@@ -713,7 +733,7 @@ class TestTab3ExportNetCDFVelocity:
             export_format="NetCDF",
             export_type="Velocity Only",
             add_attributes=True,
-            custom_attributes={"cruise_number": "", "ship_name": "RV Test"},
+            write_custom_attributes={"cruise_number": "", "ship_name": "RV Test"},
         )
         at = _run(ss)
         next(b for b in at.button if b.key == "generate_export").click().run()
@@ -749,7 +769,7 @@ class TestTab3ExportNetCDFFull:
         ss = _full_ss(
             proc,
             add_attributes=True,
-            custom_attributes={"project_number": "P42", "contact": "foo@bar.com"},
+            write_custom_attributes={"project_number": "P42", "contact": "foo@bar.com"},
         )
         at = _run(ss)
         next(r for r in at.radio if r.key == "export_type_radio").set_value(
@@ -778,7 +798,7 @@ class TestTab3ExportNetCDFFull:
         ss = _full_ss(
             proc,
             add_attributes=True,
-            custom_attributes={"cruise_number": "CR42", "ship_name": "RV Sea"},
+            write_custom_attributes={"cruise_number": "CR42", "ship_name": "RV Sea"},
         )
         at = _run(ss)
         next(r for r in at.radio if r.key == "export_type_radio").set_value(
@@ -912,7 +932,7 @@ class TestTab3ExportCSV:
         at = _run(ss)
         assert not at.exception
         info_vals = [i.value or "" for i in at.info]
-        assert any("no custom" in v.lower() for v in info_vals)
+        assert any("no attributes" in v.lower() for v in info_vals)
 
     def test_attributes_count_shown_when_enabled(self):
         """With add_attributes=True, success banner appears in Tab 3."""
@@ -921,12 +941,12 @@ class TestTab3ExportCSV:
         ss = _full_ss(
             proc,
             add_attributes=True,
-            custom_attributes={"cruise_number": "CR001"},
+            write_custom_attributes={"cruise_number": "CR001"},
         )
         at = _run(ss)
         assert not at.exception
         success_vals = [s.value or "" for s in at.success]
-        assert any("1" in v and "custom" in v.lower() for v in success_vals)
+        assert any("1" in v and "included" in v.lower() for v in success_vals)
 
 
 # ===========================================================================
@@ -1019,39 +1039,49 @@ class TestTab4ConfigFile:
         assert not at.exception
 
     def test_config_with_custom_attrs(self, proc):
-        """Config includes [Attributes] section when custom attrs set."""
+        """Custom attrs are applied to proc (and so reach the config) when set."""
         ss = _full_ss(
             proc,
             add_attributes=True,
-            custom_attributes={"cruise_number": "CR001", "ship_name": "RV Test"},
+            write_std_attributes={},
+            write_custom_attributes={"cruise_number": "CR001", "ship_name": "RV Test"},
+            write_custom_attr_count=0,
         )
         at = _run(ss)
         cb = next(c for c in at.checkbox if c.key == "generate_config_checkbox")
         cb.check().run()
         next(b for b in at.button if b.key == "gen_config_btn").click().run()
         assert not at.exception
+        proc.apply_attributes.assert_called_with(
+            {"cruise_number": "CR001", "ship_name": "RV Test"}
+        )
 
     def test_config_attrs_with_empty_value_skipped(self, proc):
-        """Custom attrs with empty value are not written to config."""
+        """Custom attrs with empty value are not forwarded to apply_attributes."""
         ss = _full_ss(
             proc,
             add_attributes=True,
-            custom_attributes={"cruise_number": "", "ship_name": "RV Test"},
+            write_std_attributes={},
+            write_custom_attributes={"cruise_number": "", "ship_name": "RV Test"},
+            write_custom_attr_count=0,
         )
         at = _run(ss)
         cb = next(c for c in at.checkbox if c.key == "generate_config_checkbox")
         cb.check().run()
         next(b for b in at.button if b.key == "gen_config_btn").click().run()
         assert not at.exception
+        proc.apply_attributes.assert_called_with({"ship_name": "RV Test"})
 
     def test_config_no_attrs_section_when_disabled(self, proc):
         """No [Attributes] section written when add_attributes=False."""
+        call_count_before = proc.apply_attributes.call_count
         ss = _full_ss(proc, add_attributes=False)
         at = _run(ss)
         cb = next(c for c in at.checkbox if c.key == "generate_config_checkbox")
         cb.check().run()
         next(b for b in at.button if b.key == "gen_config_btn").click().run()
         assert not at.exception
+        assert proc.apply_attributes.call_count == call_count_before
 
     def test_config_all_processing_stages_applied(self, proc):
         """All flags True: sensor_health, qc, profile, velocity."""

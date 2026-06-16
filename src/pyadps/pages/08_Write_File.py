@@ -15,14 +15,21 @@ Architecture:
 - No complex mask variable management - all handled by ProcessedDataset
 """
 
+import json
 import os
 import tempfile
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
+
+# Load default attribute definitions from shared config
+_ATTR_JSON = os.path.join(os.path.dirname(__file__), "..", "default_attributes.json")
+with open(_ATTR_JSON) as _f:
+    DEFAULT_ATTRIBUTES = json.load(_f)
 
 # =============================================================================
 # PAGE CONFIGURATION AND VALIDATION
@@ -249,9 +256,17 @@ if not st.session_state.write_initialized:
     st.session_state.apply_mask_export = True
     st.session_state.velocity_units = "cm/s"
 
-    # Custom attributes
+    # Standard attributes: seeded from Page 03 values if the user filled them in
     st.session_state.add_attributes = False
-    st.session_state.custom_attributes = {}
+    raw_attrs = st.session_state.get("attributes", {})
+    st.session_state.write_std_attributes = {
+        field["key"]: str(raw_attrs[field["key"]]) if field["key"] in raw_attrs and raw_attrs[field["key"]] else ""
+        for field in DEFAULT_ATTRIBUTES
+    }
+
+    # Extra custom attributes added on this page
+    st.session_state.write_custom_attributes = {}
+    st.session_state.write_custom_attr_count = 0
 
     st.session_state.write_initialized = True
 
@@ -267,6 +282,28 @@ Export your processed ADCP data to NetCDF or CSV format. You can choose between:
 - **Velocity Only** (recommended): Exports just U, V, W velocity components with QC mask applied
 - **Full Dataset**: Exports the complete dataset including all variables and metadata
 """)
+
+
+# =============================================================================
+# ATTRIBUTE TAB CALLBACKS
+# Using on_click callbacks avoids calling st.rerun() explicitly, which would
+# reset the active tab back to the first one.
+# =============================================================================
+
+
+def _add_write_custom_attr():
+    st.session_state.write_custom_attr_count += 1
+
+
+def _remove_write_custom_attr(idx: int):
+    key_to_remove = st.session_state.get(f"wf_custom_attr_key_{idx}", "")
+    if key_to_remove in st.session_state.write_custom_attributes:
+        del st.session_state.write_custom_attributes[key_to_remove]
+    st.session_state.write_custom_attr_count -= 1
+
+
+def _remove_raw_custom_attr(attr_key: str):
+    st.session_state.raw_custom_attributes.pop(attr_key, None)
 
 
 # =============================================================================
@@ -374,134 +411,150 @@ with tab1:
 
 
 # =============================================================================
-# TAB 2: CUSTOM ATTRIBUTES
+# TAB 2: ATTRIBUTES
 # =============================================================================
 
 with tab2:
-    st.header("Custom Attributes", divider="blue")
+    st.header("Attributes", divider="blue")
 
     st.write("""
-    Add custom metadata attributes to your exported NetCDF file. These attributes 
-    provide important context about the deployment and data collection.
+    Add metadata attributes to your exported NetCDF file. Fields pre-filled from
+    the **Download Raw File** page can be edited here before export.
     """)
 
+    raw_page_filled = any(
+        st.session_state.get("attributes", {}).get(f["key"]) for f in DEFAULT_ATTRIBUTES
+    )
+    if raw_page_filled:
+        st.info("📋 Fields below have been pre-filled from the Download Raw File page. Edit as needed.")
+
     st.session_state.add_attributes = st.checkbox(
-        "Add custom attributes to export",
+        "Add attributes to export",
         value=st.session_state.add_attributes,
         key="add_attrs_checkbox",
     )
 
     if st.session_state.add_attributes:
         col1, col2 = st.columns(2)
+        col_map = {1: col1, 2: col2}
 
-        with col1:
-            st.write("**Deployment Information:**")
+        for field in DEFAULT_ATTRIBUTES:
+            with col_map[field["column"]]:
+                current = st.session_state.write_std_attributes.get(field["key"], "")
+                if field["widget"] == "date_input":
+                    try:
+                        current_date = (
+                            datetime.strptime(current, "%Y-%m-%d").date()
+                            if current
+                            else None
+                        )
+                    except ValueError:
+                        current_date = None
+                    selected_date = st.date_input(
+                        field["label"],
+                        value=current_date,
+                        key=f"wf_attr_{field['key']}",
+                    )
+                    # Stored as an ISO string so export/config code keeps treating
+                    # attribute values uniformly as strings.
+                    st.session_state.write_std_attributes[field["key"]] = (
+                        selected_date.isoformat()
+                        if isinstance(selected_date, date)
+                        else ""
+                    )
+                elif field["widget"] == "text_area":
+                    st.session_state.write_std_attributes[field["key"]] = st.text_area(
+                        field["label"],
+                        value=current,
+                        key=f"wf_attr_{field['key']}",
+                    )
+                else:
+                    st.session_state.write_std_attributes[field["key"]] = st.text_input(
+                        field["label"],
+                        value=current,
+                        key=f"wf_attr_{field['key']}",
+                    )
 
-            cruise = st.text_input(
-                "Cruise Number",
-                value=st.session_state.custom_attributes.get("cruise_number", ""),
-                key="attr_cruise",
-            )
-            ship = st.text_input(
-                "Ship Name",
-                value=st.session_state.custom_attributes.get("ship_name", ""),
-                key="attr_ship",
-            )
-            project = st.text_input(
-                "Project Number",
-                value=st.session_state.custom_attributes.get("project_number", ""),
-                key="attr_project",
-            )
-            water_depth = st.text_input(
-                "Water Depth (m)",
-                value=st.session_state.custom_attributes.get("water_depth", ""),
-                key="attr_water_depth",
-            )
-            deploy_depth = st.text_input(
-                "Deployment Depth (m)",
-                value=st.session_state.custom_attributes.get("deployment_depth", ""),
-                key="attr_deploy_depth",
-            )
-            deploy_date = st.text_input(
-                "Deployment Date",
-                value=st.session_state.custom_attributes.get("deployment_date", ""),
-                key="attr_deploy_date",
-            )
-            recovery_date = st.text_input(
-                "Recovery Date",
-                value=st.session_state.custom_attributes.get("recovery_date", ""),
-                key="attr_recovery_date",
-            )
+        # ── Custom attributes from Download Raw File page ──────────────────────
+        raw_custom = st.session_state.get("raw_custom_attributes", {})
+        if raw_custom:
+            st.write("---")
+            st.write("### Custom Attributes from Download Raw File")
+            st.caption("Carried over from page 03. Edit values as needed.")
+            for attr_key, attr_val in list(raw_custom.items()):
+                col_k, col_v, col_del = st.columns([2, 3, 1])
+                with col_k:
+                    st.text_input("Name", value=attr_key, disabled=True, key=f"wf_rca_k_{attr_key}")
+                with col_v:
+                    raw_custom[attr_key] = st.text_input(
+                        "Value", value=attr_val, key=f"wf_rca_v_{attr_key}"
+                    )
+                with col_del:
+                    st.write("")
+                    st.write("")
+                    st.button(
+                        "🗑️",
+                        key=f"wf_rca_del_{attr_key}",
+                        on_click=_remove_raw_custom_attr,
+                        args=(attr_key,),
+                    )
+            st.session_state.raw_custom_attributes = raw_custom
 
-        with col2:
-            st.write("**Location & Contact:**")
+        # ── Additional custom attributes added on this page ────────────────────
+        st.write("---")
+        st.write("### Add Custom Attributes")
 
-            latitude = st.text_input(
-                "Latitude",
-                value=st.session_state.custom_attributes.get("latitude", ""),
-                key="attr_lat",
-            )
-            longitude = st.text_input(
-                "Longitude",
-                value=st.session_state.custom_attributes.get("longitude", ""),
-                key="attr_lon",
-            )
-            platform = st.text_input(
-                "Platform Type",
-                value=st.session_state.custom_attributes.get("platform_type", ""),
-                key="attr_platform",
-            )
-            participants = st.text_input(
-                "Participants",
-                value=st.session_state.custom_attributes.get("participants", ""),
-                key="attr_participants",
-            )
-            created_by = st.text_input(
-                "File Created By",
-                value=st.session_state.custom_attributes.get("file_created_by", ""),
-                key="attr_created_by",
-            )
-            contact = st.text_input(
-                "Contact",
-                value=st.session_state.custom_attributes.get("contact", ""),
-                key="attr_contact",
-            )
-            comments = st.text_area(
-                "Comments",
-                value=st.session_state.custom_attributes.get("comments", ""),
-                key="attr_comments",
-            )
+        st.button(
+            "➕ Add Custom Attribute",
+            key="wf_add_custom_attr",
+            on_click=_add_write_custom_attr,
+        )
 
-        # Update session state
-        st.session_state.custom_attributes = {
-            "cruise_number": cruise,
-            "ship_name": ship,
-            "project_number": project,
-            "water_depth": water_depth,
-            "deployment_depth": deploy_depth,
-            "deployment_date": deploy_date,
-            "recovery_date": recovery_date,
-            "latitude": latitude,
-            "longitude": longitude,
-            "platform_type": platform,
-            "participants": participants,
-            "file_created_by": created_by,
-            "contact": contact,
-            "comments": comments,
-        }
+        if st.session_state.write_custom_attr_count > 0:
+            st.write("Enter your custom attributes:")
+            for i in range(st.session_state.write_custom_attr_count):
+                col_key, col_value, col_remove = st.columns([2, 3, 1])
 
-        # Show preview
-        with st.expander("Preview Attributes"):
-            attrs_df = pd.DataFrame(
-                [(k, v) for k, v in st.session_state.custom_attributes.items() if v],
-                columns=["Attribute", "Value"],
-            )
-            if not attrs_df.empty:
+                with col_key:
+                    attr_key = st.text_input(
+                        f"Attribute Name {i + 1}",
+                        key=f"wf_custom_attr_key_{i}",
+                        placeholder="e.g., Instrument_Model",
+                    )
+                with col_value:
+                    attr_value = st.text_input(
+                        f"Attribute Value {i + 1}",
+                        key=f"wf_custom_attr_value_{i}",
+                        placeholder="e.g., Workhorse Sentinel 300",
+                    )
+                with col_remove:
+                    st.write("")
+                    st.write("")
+                    st.button(
+                        "🗑️",
+                        key=f"wf_remove_attr_{i}",
+                        on_click=_remove_write_custom_attr,
+                        args=(i,),
+                    )
+
+                if attr_key and attr_value:
+                    st.session_state.write_custom_attributes[attr_key] = attr_value
+
+        # ── Preview ────────────────────────────────────────────────────────────
+        with st.expander("Preview All Attributes"):
+            all_attrs = {
+                **{k: v for k, v in st.session_state.write_std_attributes.items() if v},
+                **{k: v for k, v in st.session_state.get("raw_custom_attributes", {}).items() if v},
+                **{k: v for k, v in st.session_state.write_custom_attributes.items() if v},
+            }
+            if all_attrs:
+                attrs_df = pd.DataFrame(
+                    list(all_attrs.items()), columns=["Attribute", "Value"]
+                )
                 st.dataframe(attrs_df, hide_index=True, use_container_width=True)
             else:
                 st.info("No attributes entered yet.")
 
-    # Instruction to proceed to Export tab
     st.info(
         "💡 After configuring attributes, proceed to the **Export Data** tab to download your files."
     )
@@ -566,11 +619,15 @@ with tab3:
 
     # Show attributes status
     if st.session_state.add_attributes:
-        n_attrs = len([v for v in st.session_state.custom_attributes.values() if v])
-        st.success(f"✅ {n_attrs} custom attributes will be included in the export.")
+        n_attrs = (
+            len([v for v in st.session_state.write_std_attributes.values() if v])
+            + len([v for v in st.session_state.get("raw_custom_attributes", {}).values() if v])
+            + len([v for v in st.session_state.write_custom_attributes.values() if v])
+        )
+        st.success(f"✅ {n_attrs} attributes will be included in the export.")
     else:
         st.info(
-            "ℹ️ No custom attributes configured. Configure in the **Attributes** tab if needed."
+            "ℹ️ No attributes configured. Configure in the **Attributes** tab if needed."
         )
 
     st.divider()
@@ -584,23 +641,24 @@ with tab3:
                 # Create temporary directory
                 temp_dir = tempfile.mkdtemp()
 
+                # Merge all attribute sources into one dict for export
+                all_export_attrs = {}
+                if st.session_state.add_attributes:
+                    all_export_attrs.update(
+                        {k: v for k, v in st.session_state.write_std_attributes.items() if v}
+                    )
+                    all_export_attrs.update(
+                        {k: v for k, v in st.session_state.get("raw_custom_attributes", {}).items() if v}
+                    )
+                    all_export_attrs.update(
+                        {k: v for k, v in st.session_state.write_custom_attributes.items() if v}
+                    )
+                    proc.apply_attributes(all_export_attrs)
+
                 if st.session_state.export_format == "NetCDF":
                     if st.session_state.export_type == "Velocity Only":
-                        # Use velocity_to_netcdf for velocity-only export
                         filename = get_prefixed_filename("velocity.nc")
                         filepath = os.path.join(temp_dir, filename)
-
-                        # Add custom attributes to the processor dataset before export
-                        if (
-                            st.session_state.add_attributes
-                            and st.session_state.custom_attributes
-                        ):
-                            for (
-                                key,
-                                value,
-                            ) in st.session_state.custom_attributes.items():
-                                if value:  # Only add non-empty attributes
-                                    proc.dataset.attrs[key] = value
 
                         proc.velocity_to_netcdf(
                             filepath,
@@ -609,7 +667,6 @@ with tab3:
                             include_metadata=True,
                         )
 
-                        # Read file for download
                         with open(filepath, "rb") as f:
                             file_data = f.read()
 
@@ -622,37 +679,15 @@ with tab3:
 
                         st.success(f"✅ Velocity file generated: {filename}")
 
-                        # Show what was included
                         if st.session_state.add_attributes:
-                            n_attrs = len(
-                                [
-                                    v
-                                    for v in st.session_state.custom_attributes.values()
-                                    if v
-                                ]
-                            )
-                            st.write(f"📝 Included {n_attrs} custom attributes")
+                            st.write(f"📝 Included {len(all_export_attrs)} attributes")
 
                     else:
-                        # Use to_netcdf for full dataset export
                         filename = get_prefixed_filename("processed.nc")
                         filepath = os.path.join(temp_dir, filename)
 
-                        # Add custom attributes to the processor dataset before export
-                        if (
-                            st.session_state.add_attributes
-                            and st.session_state.custom_attributes
-                        ):
-                            for (
-                                key,
-                                value,
-                            ) in st.session_state.custom_attributes.items():
-                                if value:  # Only add non-empty attributes
-                                    proc.dataset.attrs[key] = value
-
                         proc.to_netcdf(filepath)
 
-                        # Read file for download
                         with open(filepath, "rb") as f:
                             file_data = f.read()
 
@@ -665,16 +700,8 @@ with tab3:
 
                         st.success(f"✅ Full dataset file generated: {filename}")
 
-                        # Show what was included
                         if st.session_state.add_attributes:
-                            n_attrs = len(
-                                [
-                                    v
-                                    for v in st.session_state.custom_attributes.values()
-                                    if v
-                                ]
-                            )
-                            st.write(f"📝 Included {n_attrs} custom attributes")
+                            st.write(f"📝 Included {len(all_export_attrs)} attributes")
 
                 else:  # CSV format
                     st.write("Generating CSV files...")
@@ -776,6 +803,19 @@ with tab4:
 
         if st.button("📄 Generate config.ini", key="gen_config_btn"):
             try:
+                if st.session_state.add_attributes:
+                    all_export_attrs = {}
+                    all_export_attrs.update(
+                        {k: v for k, v in st.session_state.write_std_attributes.items() if v}
+                    )
+                    all_export_attrs.update(
+                        {k: v for k, v in st.session_state.get("raw_custom_attributes", {}).items() if v}
+                    )
+                    all_export_attrs.update(
+                        {k: v for k, v in st.session_state.write_custom_attributes.items() if v}
+                    )
+                    proc.apply_attributes(all_export_attrs)
+
                 config_content = proc.export_config_string()
 
                 with st.expander("Preview config.ini", expanded=True):
@@ -819,7 +859,12 @@ with st.sidebar:
     st.write(f"- Apply Mask: {'✅' if st.session_state.apply_mask_export else '❌'}")
     if st.session_state.export_type == "Velocity Only":
         st.write(f"- Units: {st.session_state.velocity_units}")
-    st.write(f"- Custom Attrs: {'✅' if st.session_state.add_attributes else '❌'}")
+    n_attrs_total = (
+        len([v for v in st.session_state.write_std_attributes.values() if v])
+        + len([v for v in st.session_state.get("raw_custom_attributes", {}).values() if v])
+        + len([v for v in st.session_state.write_custom_attributes.values() if v])
+    ) if st.session_state.add_attributes else 0
+    st.write(f"- Attrs: {'✅ ' + str(n_attrs_total) if st.session_state.add_attributes else '❌'}")
 
     st.write("---")
 

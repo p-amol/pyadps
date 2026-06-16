@@ -620,6 +620,28 @@ Velocity checks validate the measured current velocities to identify unreliable 
 u_label, v_label, w_label = get_velocity_labels()
 
 # =============================================================================
+# CALLBACKS
+# =============================================================================
+# Mutating state in on_click callbacks (rather than calling st.rerun() inside
+# an if st.button(): block) avoids resetting the active tab back to the first one.
+
+
+def _reset_magnetic_declination():
+    st.session_state.apply_magnetic = False
+    st.session_state.magnetic_declination = None
+    st.session_state.preview_velocity_proc = ProcessedDataset(proc.dataset)
+    st.session_state.velocity_preview_run = False
+
+
+def _reset_velocity_tests():
+    st.session_state.preview_velocity_proc = ProcessedDataset(proc.dataset)
+    st.session_state.velocity_preview_run = False
+    st.session_state.velocity_preview_stats = None
+    st.session_state.apply_magnetic = False
+    st.session_state.magnetic_declination = None
+
+
+# =============================================================================
 # TABS
 # =============================================================================
 
@@ -754,14 +776,11 @@ with tab1:
             f"✓ Magnetic declination: **{st.session_state.magnetic_declination:.3f}°**"
         )
 
-    if st.button("Reset Magnetic Declination", key="reset_magnetic"):
-        st.session_state.apply_magnetic = False
-        st.session_state.magnetic_declination = None
-        # Reset staging processor
-        st.session_state.preview_velocity_proc = ProcessedDataset(proc.dataset)
-        st.session_state.velocity_preview_run = False
-        st.info("Magnetic declination reset.")
-        st.rerun()
+    st.button(
+        "Reset Magnetic Declination",
+        key="reset_magnetic",
+        on_click=_reset_magnetic_declination,
+    )
 
 
 # =============================================================================
@@ -1426,21 +1445,13 @@ with tab6:
 
         st.divider()
 
-        if st.button("Reset Velocity Tests", key="reset_velocity"):
-            # Note: This only resets the velocity step, not the entire processor
-            # For a full reset, the main processor would need to be reset
-
-            # Reset staging processor
-            st.session_state.preview_velocity_proc = ProcessedDataset(proc.dataset)
-
-            # Reset session state
-            st.session_state.velocity_preview_run = False
-            st.session_state.velocity_preview_stats = None
-            st.session_state.apply_magnetic = False
-            st.session_state.magnetic_declination = None
-
-            st.success("✅ Velocity test settings reset.")
-            st.rerun()
+        # Note: This only resets the velocity step, not the entire processor.
+        # For a full reset, the main processor would need to be reset.
+        st.button(
+            "Reset Velocity Tests",
+            key="reset_velocity",
+            on_click=_reset_velocity_tests,
+        )
 
         st.info("""
             ℹ️ Resetting will:

@@ -368,6 +368,37 @@ preview_profile_proc = st.session_state.preview_profile_proc
 
 
 # =============================================================================
+# CALLBACKS
+# Mutating state in on_click callbacks (rather than calling st.rerun() inside
+# an `if st.button():` block) avoids resetting the active tab back to the
+# first one - a known Streamlit limitation made worse when conditional
+# content sits before st.tabs(). See: github.com/streamlit/streamlit/issues/6257
+# =============================================================================
+
+
+def _clear_all_regions():
+    st.session_state.cut_regions = []
+
+
+def _reset_profile_operations():
+    proc.reset()
+    st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
+    st.session_state.profile_applied = False
+    st.session_state.profile_preview_run = False
+    st.session_state.profile_preview_stats = None
+    st.session_state.trim_start_ens = 0
+    st.session_state.trim_end_ens = max(0, get_total_ensembles() - 1)
+    st.session_state.apply_side_lobe = False
+    st.session_state.cut_regions = []
+    st.session_state.apply_regrid = False
+
+
+def _reset_profile_preview():
+    st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
+    st.session_state.profile_preview_run = False
+
+
+# =============================================================================
 # PAGE HEADER
 # =============================================================================
 
@@ -383,9 +414,15 @@ st.write(
     """
 )
 
-# Show current processing status
-if st.session_state.profile_applied:
-    st.success("✅ Profile operations have been applied to this dataset.")
+# Show current processing status.
+# Wrapped in an always-drawn container: an *unconditional* container before
+# st.tabs() doesn't break tab state, but conditional content directly in the
+# main body (appearing/disappearing across reruns) does. See:
+# github.com/streamlit/streamlit/issues/6257
+status_container = st.container()
+with status_container:
+    if st.session_state.profile_applied:
+        st.success("✅ Profile operations have been applied to this dataset.")
 
 # =============================================================================
 # TABS
@@ -719,10 +756,11 @@ with tab3:
                     f"Ensembles [{region['min_ensemble']}-{region['max_ensemble']}]"
                 )
 
-            if st.button("🗑️ Clear All Regions", key="clear_regions"):
-                st.session_state.cut_regions = []
-                st.success("All regions cleared!")
-                st.rerun()
+            st.button(
+                "🗑️ Clear All Regions",
+                key="clear_regions",
+                on_click=_clear_all_regions,
+            )
         else:
             st.write("*No regions defined.*")
 
@@ -1107,25 +1145,11 @@ with tab5:
     with col_reset:
         st.write("**🔄 Reset Processing:**")
 
-        if st.button("Reset Profile Operations", key="reset_profile"):
-            # Reset the main processor
-            proc.reset()
-
-            # Reset staging processor
-            st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
-
-            # Reset session state
-            st.session_state.profile_applied = False
-            st.session_state.profile_preview_run = False
-            st.session_state.profile_preview_stats = None
-            st.session_state.trim_start_ens = 0
-            st.session_state.trim_end_ens = max(0, get_total_ensembles() - 1)
-            st.session_state.apply_side_lobe = False
-            st.session_state.cut_regions = []
-            st.session_state.apply_regrid = False
-
-            st.success("✅ Profile operations reset to original values.")
-            st.rerun()
+        st.button(
+            "Reset Profile Operations",
+            key="reset_profile",
+            on_click=_reset_profile_operations,
+        )
 
         st.info(
             """
@@ -1142,11 +1166,11 @@ with tab5:
         st.write("---")
 
         # Preview local reset
-        if st.button("Reset Preview Only", key="reset_preview"):
-            st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
-            st.session_state.profile_preview_run = False
-            st.success("Preview reset to current processor state.")
-            st.rerun()
+        st.button(
+            "Reset Preview Only",
+            key="reset_preview",
+            on_click=_reset_profile_preview,
+        )
 
 
 # =============================================================================

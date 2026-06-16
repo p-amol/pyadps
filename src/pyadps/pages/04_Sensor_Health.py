@@ -226,6 +226,55 @@ if "sensor_health_initialized" not in st.session_state:
     st.session_state.temp_temperature_data = None
 
 # =============================================================================
+# CALLBACKS
+# Mutating state in on_click callbacks (rather than calling st.rerun() inside
+# an `if st.button():` block) avoids resetting the active tab back to the
+# first one - a known Streamlit limitation made worse when conditional
+# content sits before st.tabs(). See: github.com/streamlit/streamlit/issues/6257
+# =============================================================================
+
+
+def _reset_sensor_health_all():
+    proc.reset()
+    st.session_state.sensor_health_applied = False
+    st.session_state.depth_modified = False
+    st.session_state.salinity_modified = False
+    st.session_state.temperature_modified = False
+    st.session_state.temp_depth_data = None
+    st.session_state.temp_salinity_data = None
+    st.session_state.temp_temperature_data = None
+
+
+def _reset_depth():
+    st.session_state.temp_depth_data = None
+    st.session_state.depth_modified = False
+
+
+def _reset_salinity():
+    st.session_state.temp_salinity_data = None
+    st.session_state.salinity_modified = False
+
+
+def _reset_temperature():
+    st.session_state.temp_temperature_data = None
+    st.session_state.temperature_modified = False
+
+
+def _reset_sensor_health_full():
+    proc.reset()
+    st.session_state.sensor_health_applied = False
+    st.session_state.depth_modified = False
+    st.session_state.salinity_modified = False
+    st.session_state.temperature_modified = False
+    st.session_state.temp_depth_data = None
+    st.session_state.temp_salinity_data = None
+    st.session_state.temp_temperature_data = None
+    st.session_state.apply_roll_check = False
+    st.session_state.apply_pitch_check = False
+    st.session_state.apply_sound_speed_correction = False
+
+
+# =============================================================================
 # PAGE HEADER
 # =============================================================================
 
@@ -240,19 +289,20 @@ st.write(
     """
 )
 
-# Show current processing status
-if st.session_state.sensor_health_applied:
-    st.success("✅ Sensor health checks have been applied to this dataset.")
-    if st.button("🔄 Reset Sensor Health", type="secondary"):
-        proc.reset()
-        st.session_state.sensor_health_applied = False
-        st.session_state.depth_modified = False
-        st.session_state.salinity_modified = False
-        st.session_state.temperature_modified = False
-        st.session_state.temp_depth_data = None
-        st.session_state.temp_salinity_data = None
-        st.session_state.temp_temperature_data = None
-        st.rerun()
+# Show current processing status.
+# Wrapped in an always-drawn container: an *unconditional* container before
+# st.tabs() doesn't break tab state, but conditional content directly in the
+# main body (appearing/disappearing across reruns) does.
+status_container = st.container()
+with status_container:
+    if st.session_state.sensor_health_applied:
+        st.success("✅ Sensor health checks have been applied to this dataset.")
+        st.button(
+            "🔄 Reset Sensor Health",
+            type="secondary",
+            key="reset_sensor_health_top",
+            on_click=_reset_sensor_health_all,
+        )
 
 # =============================================================================
 # TABS
@@ -406,10 +456,7 @@ with tab1:
                         lineplot(data, "Preview: Modified Depth", y_label="Depth (m)")
 
     if st.session_state.depth_modified:
-        if st.button("Reset Depth to Original", key="reset_depth"):
-            st.session_state.temp_depth_data = None
-            st.session_state.depth_modified = False
-            st.rerun()
+        st.button("Reset Depth to Original", key="reset_depth", on_click=_reset_depth)
 
 # =============================================================================
 # TAB 2: SALINITY SENSOR CHECK
@@ -542,10 +589,9 @@ with tab2:
                         )
 
     if st.session_state.salinity_modified:
-        if st.button("Reset Salinity to Original", key="reset_salinity"):
-            st.session_state.temp_salinity_data = None
-            st.session_state.salinity_modified = False
-            st.rerun()
+        st.button(
+            "Reset Salinity to Original", key="reset_salinity", on_click=_reset_salinity
+        )
 
 # =============================================================================
 # TAB 3: TEMPERATURE SENSOR CHECK
@@ -677,10 +723,11 @@ with tab3:
                         )
 
     if st.session_state.temperature_modified:
-        if st.button("Reset Temperature to Original", key="reset_temp"):
-            st.session_state.temp_temperature_data = None
-            st.session_state.temperature_modified = False
-            st.rerun()
+        st.button(
+            "Reset Temperature to Original",
+            key="reset_temp",
+            on_click=_reset_temperature,
+        )
 
 # =============================================================================
 # TAB 4: HEADING SENSOR CHECK
@@ -1054,24 +1101,11 @@ with tab8:
     with col2:
         st.write("**🔄 Reset Processing:**")
 
-        if st.button("Reset Sensor Health", key="reset_all_button"):
-            # Reset the processor
-            proc.reset()
-
-            # Reset session state
-            st.session_state.sensor_health_applied = False
-            st.session_state.depth_modified = False
-            st.session_state.salinity_modified = False
-            st.session_state.temperature_modified = False
-            st.session_state.temp_depth_data = None
-            st.session_state.temp_salinity_data = None
-            st.session_state.temp_temperature_data = None
-            st.session_state.apply_roll_check = False
-            st.session_state.apply_pitch_check = False
-            st.session_state.apply_sound_speed_correction = False
-
-            st.success("✅ All sensor health data reset to original values.")
-            st.rerun()
+        st.button(
+            "Reset Sensor Health",
+            key="reset_all_button",
+            on_click=_reset_sensor_health_full,
+        )
 
         st.info(
             """

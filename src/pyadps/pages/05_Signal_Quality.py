@@ -348,6 +348,37 @@ preview_qc_proc = st.session_state.preview_qc_proc
 
 
 # =============================================================================
+# CALLBACKS
+# Mutating state in on_click callbacks (rather than calling st.rerun() inside
+# an `if st.button():` block) avoids resetting the active tab back to the
+# first one - a known Streamlit limitation made worse when conditional
+# content sits before st.tabs(). See: github.com/streamlit/streamlit/issues/6257
+# =============================================================================
+
+
+def _reset_qc_top():
+    proc.reset()
+    st.session_state.qc_applied = False
+    st.session_state.qc_preview_run = False
+    st.session_state.qc_preview_stats = None
+
+
+def _reset_qc_preview():
+    st.session_state.preview_qc_proc = ProcessedDataset(proc.dataset)
+    st.session_state.qc_preview_run = False
+    st.session_state.qc_preview_stats = None
+
+
+def _reset_qc_full():
+    proc.reset()
+    st.session_state.preview_qc_proc = ProcessedDataset(proc.dataset)
+    st.session_state.qc_applied = False
+    st.session_state.qc_preview_run = False
+    st.session_state.qc_preview_stats = None
+    st.session_state.beam_direction_modified = False
+
+
+# =============================================================================
 # PAGE HEADER
 # =============================================================================
 
@@ -360,15 +391,20 @@ st.write(
     """
 )
 
-# Show current processing status
-if st.session_state.qc_applied:
-    st.success("✅ Signal quality tests have been applied to this dataset.")
-    if st.button("🔄 Reset QC Tests", type="secondary"):
-        proc.reset()
-        st.session_state.qc_applied = False
-        st.session_state.qc_preview_run = False
-        st.session_state.qc_preview_stats = None
-        st.rerun()
+# Show current processing status.
+# Wrapped in an always-drawn container: an *unconditional* container before
+# st.tabs() doesn't break tab state, but conditional content directly in the
+# main body (appearing/disappearing across reruns) does.
+status_container = st.container()
+with status_container:
+    if st.session_state.qc_applied:
+        st.success("✅ Signal quality tests have been applied to this dataset.")
+        st.button(
+            "🔄 Reset QC Tests",
+            type="secondary",
+            key="reset_qc_top",
+            on_click=_reset_qc_top,
+        )
 
 # =============================================================================
 # TABS
@@ -684,14 +720,12 @@ with tab2:
 
     # Local reset button for staging processor
     if st.session_state.qc_preview_run:
-        if st.button("🔄 Reset Preview", type="secondary", key="reset_preview"):
-            st.session_state.preview_qc_proc = ProcessedDataset(proc.dataset)
-            st.session_state.qc_preview_run = False
-            st.session_state.qc_preview_stats = None
-            st.success(
-                "✅ Preview reset. Staging processor restored to main processor state."
-            )
-            st.rerun()
+        st.button(
+            "🔄 Reset Preview",
+            type="secondary",
+            key="reset_preview",
+            on_click=_reset_qc_preview,
+        )
 
     # Show current threshold summary
     st.divider()
@@ -1058,21 +1092,7 @@ with tab5:
     with col_reset:
         st.write("**🔄 Reset Processing:**")
 
-        if st.button("Reset QC Tests", key="reset_qc"):
-            # Reset the main processor
-            proc.reset()
-
-            # Reset staging processor
-            st.session_state.preview_qc_proc = ProcessedDataset(proc.dataset)
-
-            # Reset session state
-            st.session_state.qc_applied = False
-            st.session_state.qc_preview_run = False
-            st.session_state.qc_preview_stats = None
-            st.session_state.beam_direction_modified = False
-
-            st.success("✅ Signal quality tests reset to original values.")
-            st.rerun()
+        st.button("Reset QC Tests", key="reset_qc", on_click=_reset_qc_full)
 
         st.info(
             """

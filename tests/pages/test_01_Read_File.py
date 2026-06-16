@@ -552,6 +552,18 @@ class TestWithDataState:
         assert "Sensor Information" in tab_labels
         assert "Coordinate Transform" in tab_labels
 
+    def test_uniformity_check_shown_eagerly(self):
+        """Uniformity Check results render without needing a button click."""
+        warnings = " ".join(w.value for w in self.at.warning)
+        successes = " ".join(s.value for s in self.at.success)
+        # Our mock has one non-uniform field (pings_per_ensemble)
+        assert "non-uniform" in warnings.lower() or "uniform" in successes.lower()
+
+    def test_raw_fields_shown_eagerly(self):
+        """Raw Fixed Leader fields render without needing a button click."""
+        assert not self.at.exception
+        assert len(self.at.dataframe) > 0
+
     def test_variable_leader_subtabs(self):
         """Variable Leader sub-tabs are rendered."""
         tab_labels = [t.label for t in self.at.tabs]
@@ -579,66 +591,22 @@ class TestWithDataState:
 class TestButtonInteractions:
     """Test that clicking buttons produces expected UI state changes."""
 
-    def test_check_file_health_button_click(self, mock_ds, mock_header, mock_processor):
-        """Clicking 'Check File Health' shows health check results."""
-        from streamlit.testing.v1 import AppTest
-
+    def test_file_health_check_shown_eagerly(self, mock_ds, mock_header, mock_processor):
+        """File health check results render without needing a button click."""
         at = _make_loaded_at(mock_ds, mock_header, mock_processor)
         at.run()
 
-        # Find and click the Check File Health button
-        health_buttons = [b for b in at.button if "Health" in b.label]
-        assert len(health_buttons) > 0, "Check File Health button not found"
-        health_buttons[0].click().run()
-
         assert not at.exception
-        # After clicking, a success or error is shown
         all_messages = (
             " ".join(s.value for s in at.success)
             + " ".join(e.value for e in at.error)
         )
         assert len(all_messages) > 0
 
-    def test_show_data_types_button_click(self, mock_ds, mock_header, mock_processor):
-        """Clicking 'Show Data Types' triggers the data type list display."""
-        from streamlit.testing.v1 import AppTest
-
+    def test_data_types_shown_eagerly(self, mock_ds, mock_header, mock_processor):
+        """Available data types render without needing a button click."""
         at = _make_loaded_at(mock_ds, mock_header, mock_processor)
         at.run()
-
-        data_type_buttons = [b for b in at.button if "Data Type" in b.label]
-        assert len(data_type_buttons) > 0, "Show Data Types button not found"
-        data_type_buttons[0].click().run()
-
-        assert not at.exception
-
-    def test_run_uniformity_check_button(self, mock_ds, mock_header, mock_processor):
-        """Clicking 'Run Uniformity Check' shows uniformity results."""
-        from streamlit.testing.v1 import AppTest
-
-        at = _make_loaded_at(mock_ds, mock_header, mock_processor)
-        at.run()
-
-        uniformity_buttons = [b for b in at.button if "Uniformity" in b.label]
-        assert len(uniformity_buttons) > 0, "Run Uniformity Check button not found"
-        uniformity_buttons[0].click().run()
-
-        assert not at.exception
-        # Non-uniform fields trigger a warning
-        warnings = " ".join(w.value for w in at.warning)
-        # Our mock has one non-uniform field (pings_per_ensemble)
-        assert "non-uniform" in warnings.lower() or len(at.success) > 0
-
-    def test_load_raw_fields_button(self, mock_ds, mock_header, mock_processor):
-        """Clicking 'Load Raw Fields' shows the raw fixed leader fields."""
-        from streamlit.testing.v1 import AppTest
-
-        at = _make_loaded_at(mock_ds, mock_header, mock_processor)
-        at.run()
-
-        raw_buttons = [b for b in at.button if "Raw" in b.label]
-        assert len(raw_buttons) > 0, "Load Raw Fields button not found"
-        raw_buttons[0].click().run()
 
         assert not at.exception
 
@@ -748,12 +716,7 @@ class TestErrorHandling:
         mock_header.header.check_file.side_effect = RuntimeError("corrupt file")
 
         at = _make_loaded_at(mock_ds, mock_header, mock_processor)
-        at.run()
-
-        # Click the health check button to trigger the error path
-        health_buttons = [b for b in at.button if "Health" in b.label]
-        if health_buttons:
-            health_buttons[0].click().run()
+        at.run()  # Health check now runs eagerly, so the error path fires here
 
         assert not at.exception  # App must not crash
         # Reset for other tests
@@ -1216,11 +1179,7 @@ class TestCorruptedFileHealthPath:
             "System File Size (B)": 512,
         }
         at = _make_loaded_at(mock_ds, bad_header, mock_processor)
-        at.run()
-
-        health_buttons = [b for b in at.button if "Health" in b.label]
-        assert len(health_buttons) > 0
-        health_buttons[0].click().run()
+        at.run()  # Health check now runs eagerly
 
         assert not at.exception
         errors = " ".join(e.value for e in at.error)
@@ -1249,13 +1208,10 @@ class TestExceptionHandlerBranches:
         return at
 
     def test_show_data_types_error_branch(self, mock_ds, mock_header, mock_processor):
-        """Lines 222-223: get_available_data_types() raises → st.error shown."""
+        """get_available_data_types() raises → st.error shown."""
         mock_header.header.get_available_data_types.side_effect = RuntimeError("fail")
         at = _make_loaded_at(mock_ds, mock_header, mock_processor)
-        at.run()
-        buttons = [b for b in at.button if "Data Type" in b.label]
-        if buttons:
-            buttons[0].click().run()
+        at.run()  # Data types now render eagerly
         assert not at.exception
         mock_header.header.get_available_data_types.side_effect = None
 

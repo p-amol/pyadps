@@ -163,64 +163,66 @@ def display_file_header(ds_header) -> None:
 
     col1, col2 = st.columns(2)
 
+    # Both checks take no input and don't mutate state, so they're computed
+    # eagerly rather than gated behind a button (consistent with the other
+    # tabs on this page).
     with col1:
-        if st.button("Check File Health", use_container_width=True):
-            try:
-                check = ds_header.header.check_file()
+        st.subheader("File Health Check")
+        try:
+            check = ds_header.header.check_file()
 
-                # Determine overall health
-                critical_pass = (
-                    check.get("File Size Match", False)
-                    and check.get("Byte Uniformity", False)
-                    and check.get("Data Type Uniformity", False)
-                )
+            # Determine overall health
+            critical_pass = (
+                check.get("File Size Match", False)
+                and check.get("Byte Uniformity", False)
+                and check.get("Data Type Uniformity", False)
+            )
 
-                if critical_pass:
-                    st.success("File appears healthy!")
-                else:
-                    st.error("File may be corrupted!")
+            if critical_pass:
+                st.success("File appears healthy!")
+            else:
+                st.error("File may be corrupted!")
 
-                # Display check results
-                st.write(
-                    f"**Total Ensembles:** {ds_header.attrs.get('total_ensembles', 'N/A')}"
-                )
-                st.write(
-                    f"**File Size:** {format_file_size(check.get('System File Size (B)', 0))}"
-                )
+            # Display check results
+            st.write(
+                f"**Total Ensembles:** {ds_header.attrs.get('total_ensembles', 'N/A')}"
+            )
+            st.write(
+                f"**File Size:** {format_file_size(check.get('System File Size (B)', 0))}"
+            )
 
-                # Create summary table
-                check_items = [
-                    ("File Size Match", check.get("File Size Match", False)),
-                    ("Byte Uniformity", check.get("Byte Uniformity", False)),
-                    ("Data Type Uniformity", check.get("Data Type Uniformity", False)),
-                    ("Byte Skip Uniformity", check.get("Byte Skip Uniformity", False)),
-                    (
-                        "Address Offset Uniformity",
-                        check.get("Address Offset Uniformity", False),
-                    ),
-                    ("Data ID Uniformity", check.get("Data ID Uniformity", False)),
-                ]
+            # Create summary table
+            check_items = [
+                ("File Size Match", check.get("File Size Match", False)),
+                ("Byte Uniformity", check.get("Byte Uniformity", False)),
+                ("Data Type Uniformity", check.get("Data Type Uniformity", False)),
+                ("Byte Skip Uniformity", check.get("Byte Skip Uniformity", False)),
+                (
+                    "Address Offset Uniformity",
+                    check.get("Address Offset Uniformity", False),
+                ),
+                ("Data ID Uniformity", check.get("Data ID Uniformity", False)),
+            ]
 
-                df = pd.DataFrame(check_items, columns=["Check", "Status"])
-                df["Status"] = df["Status"].map({True: "PASS", False: "FAIL"})
-                st.dataframe(
-                    df.style.map(color_status, subset=["Status"]),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+            df = pd.DataFrame(check_items, columns=["Check", "Status"])
+            df["Status"] = df["Status"].map({True: "PASS", False: "FAIL"})
+            st.dataframe(
+                df.style.map(color_status, subset=["Status"]),
+                use_container_width=True,
+                hide_index=True,
+            )
 
-            except Exception as e:
-                st.error(f"Error checking file: {e}")
+        except Exception as e:
+            st.error(f"Error checking file: {e}")
 
     with col2:
-        if st.button("Show Data Types", use_container_width=True):
-            try:
-                data_types = ds_header.header.get_available_data_types(0)
-                st.write("**Available Data Types:**")
-                for dt in data_types:
-                    st.write(f"  - {dt}")
-            except Exception as e:
-                st.error(f"Error getting data types: {e}")
+        st.subheader("Available Data Types")
+        try:
+            data_types = ds_header.header.get_available_data_types(0)
+            for dt in data_types:
+                st.write(f"  - {dt}")
+        except Exception as e:
+            st.error(f"Error getting data types: {e}")
 
 
 # =============================================================================
@@ -372,6 +374,9 @@ def display_fixed_leader_summary(ds) -> None:
             st.error(f"Error reading thresholds: {e}")
 
     # Tab 5: Uniformity Check
+    # Computed eagerly (no button) since it takes no input and doesn't mutate
+    # state - gating it behind a button only added an extra rerun-triggering
+    # interaction with no benefit.
     with fl_tabs[4]:
         st.subheader("Fixed Leader Uniformity Check")
         st.write("""
@@ -379,49 +384,48 @@ def display_fixed_leader_summary(ds) -> None:
         Non-uniform fields may indicate configuration changes or data issues.
         """)
 
-        if st.button("Run Uniformity Check"):
-            try:
-                uniformity = ds.fixed_leader.is_uniform()
+        try:
+            uniformity = ds.fixed_leader.is_uniform()
 
-                # Separate uniform and non-uniform fields
-                uniform_fields = [k for k, v in uniformity.items() if v]
-                non_uniform_fields = [k for k, v in uniformity.items() if not v]
+            # Separate uniform and non-uniform fields
+            uniform_fields = [k for k, v in uniformity.items() if v]
+            non_uniform_fields = [k for k, v in uniformity.items() if not v]
 
-                if non_uniform_fields:
-                    st.warning(f"Found {len(non_uniform_fields)} non-uniform field(s)")
-                    st.write("**Non-uniform fields:**")
-                    for field in non_uniform_fields:
-                        st.write(f"  - :red[{field}]")
-                else:
-                    st.success("All Fixed Leader fields are uniform")
+            if non_uniform_fields:
+                st.warning(f"Found {len(non_uniform_fields)} non-uniform field(s)")
+                st.write("**Non-uniform fields:**")
+                for field in non_uniform_fields:
+                    st.write(f"  - :red[{field}]")
+            else:
+                st.success("All Fixed Leader fields are uniform")
 
-                with st.expander(f"View All Fields ({len(uniformity)} total)"):
-                    df = pd.DataFrame(
-                        list(uniformity.items()), columns=["Field", "Uniform"]
-                    )
-                    df["Uniform"] = df["Uniform"].map({True: "Yes", False: "No"})
-                    st.dataframe(
-                        df.style.map(
-                            lambda x: "color: green" if x == "Yes" else "color: red",
-                            subset=["Uniform"],
-                        ),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
+            with st.expander(f"View All Fields ({len(uniformity)} total)"):
+                df = pd.DataFrame(
+                    list(uniformity.items()), columns=["Field", "Uniform"]
+                )
+                df["Uniform"] = df["Uniform"].map({True: "Yes", False: "No"})
+                st.dataframe(
+                    df.style.map(
+                        lambda x: "color: green" if x == "Yes" else "color: red",
+                        subset=["Uniform"],
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
-            except Exception as e:
-                st.error(f"Error checking uniformity: {e}")
+        except Exception as e:
+            st.error(f"Error checking uniformity: {e}")
 
     # Tab 6: Raw Fields
+    # Also computed eagerly for the same reason as the Uniformity Check tab.
     with fl_tabs[5]:
         st.subheader("Raw Fixed Leader Fields")
-        if st.button("Load Raw Fields"):
-            try:
-                raw_fields = ds.fixed_leader.field(ens=0)
-                df = pd.DataFrame(list(raw_fields.items()), columns=["Field", "Value"])
-                st.dataframe(df, use_container_width=True, hide_index=True)
-            except Exception as e:
-                st.error(f"Error loading raw fields: {e}")
+        try:
+            raw_fields = ds.fixed_leader.field(ens=0)
+            df = pd.DataFrame(list(raw_fields.items()), columns=["Field", "Value"])
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        except Exception as e:
+            st.error(f"Error loading raw fields: {e}")
 
 
 # =============================================================================
@@ -1019,7 +1023,12 @@ def main():
                 uploaded_file.name
             )[0]
 
-            st.sidebar.success(f"Loaded: {uploaded_file.name}")
+            # st.toast() rather than st.sidebar.success(): a persistent element
+            # shown only on the upload rerun (and gone on every rerun after,
+            # once st.session_state.fname is updated above) changes the shape
+            # of everything rendered before main_tabs is created, which can
+            # reset main_tabs' active tab on the very next interaction.
+            st.toast(f"Loaded: {uploaded_file.name}", icon="✅")
 
         except Exception as e:
             st.error(f"Error reading file: {e}")

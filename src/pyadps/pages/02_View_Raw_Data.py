@@ -529,11 +529,13 @@ with tab3:
     st.header("Fixed Leader", divider="blue")
 
     st.write("""
-    Fixed Leader data contains **static configuration** that should remain constant 
-    throughout the deployment. If these values vary significantly, it may indicate 
+    Fixed Leader data contains **static configuration** that should remain constant
+    throughout the deployment. If these values vary significantly, it may indicate
     file corruption or configuration changes.
-    
+
     **Key settings** are shown first. These values are typically uniform across all ensembles.
+    Fields flagged as non-uniform by the Read File page's Uniformity Check are also
+    promoted here so they can be plotted to investigate the cause.
     """)
 
     # Get FL fields from dataset attributes (set by binary_reader.py)
@@ -542,9 +544,27 @@ with tab3:
     if not fl_fields:
         st.warning("No Fixed Leader data found in dataset.")
     else:
+        # Surface fields flagged non-uniform in the Read File page's Uniformity
+        # Check so they land in Key Configuration instead of More Variables.
+        try:
+            uniformity = ds.fixed_leader.is_uniform()
+        except Exception:
+            uniformity = {}
+        non_uniform_fields = [f for f in fl_fields if not uniformity.get(f, True)]
+
         # Separate into important and other fields
-        important_fields = [f for f in IMPORTANT_FL_FIELDS if f in fl_fields]
-        other_fields = [f for f in fl_fields if f not in IMPORTANT_FL_FIELDS]
+        important_fields = [
+            f
+            for f in list(dict.fromkeys(IMPORTANT_FL_FIELDS + non_uniform_fields))
+            if f in fl_fields
+        ]
+        other_fields = [f for f in fl_fields if f not in important_fields]
+
+        if non_uniform_fields:
+            st.warning(
+                f"⚠ {len(non_uniform_fields)} non-uniform field(s) detected: "
+                + ", ".join(get_long_name(f) for f in non_uniform_fields)
+            )
 
         # Important fields selector
         st.subheader("Key Configuration")
@@ -554,7 +574,11 @@ with tab3:
                 "Select a configuration variable to plot:",
                 important_fields,
                 horizontal=True,
-                format_func=lambda x: get_long_name(x),
+                format_func=lambda x: (
+                    f"⚠ {get_long_name(x)}"
+                    if x in non_uniform_fields
+                    else get_long_name(x)
+                ),
             )
 
             if fl_button_important and xbutton is not None:

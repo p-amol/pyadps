@@ -733,6 +733,50 @@ class TestTab3FixedLeader:
         expanders = [e.label for e in at.expander]
         assert any("More" in e for e in expanders)
 
+    def test_fl_non_uniform_field_promoted_to_key_config(self, mock_ds):
+        """
+        A field flagged non-uniform by ds.fixed_leader.is_uniform() is promoted
+        into the Key Configuration radio (not left in More Variables), and a
+        warning naming it is shown.
+        """
+        mock_ds.fixed_leader.is_uniform.return_value = {
+            "depth_cell_length": True,
+            "blank_after_transmit": True,
+            "pings_per_ensemble": True,
+            "num_cells": True,
+            "num_beams": True,
+            "low_correlation_threshold": True,
+            "firmware_version": False,
+        }
+        at = _make_loaded_at(mock_ds)
+        assert not at.exception
+
+        key_config_radio = next(
+            r for r in at.radio if "configuration variable" in r.label.lower()
+        )
+        assert any("Firmware Version" in opt for opt in key_config_radio.options)
+        assert any(opt.startswith("⚠") for opt in key_config_radio.options)
+
+        warnings = " ".join(w.value for w in at.warning)
+        assert "non-uniform" in warnings.lower()
+        assert "Firmware Version" in warnings
+
+    def test_fl_uniform_fields_not_flagged(self, mock_ds):
+        """When all FL fields are uniform, no non-uniform warning is shown."""
+        mock_ds.fixed_leader.is_uniform.return_value = {
+            "depth_cell_length": True,
+            "blank_after_transmit": True,
+            "pings_per_ensemble": True,
+            "num_cells": True,
+            "num_beams": True,
+            "low_correlation_threshold": True,
+            "firmware_version": True,
+        }
+        at = _make_loaded_at(mock_ds)
+        assert not at.exception
+        warnings = " ".join(w.value for w in at.warning)
+        assert "non-uniform field" not in warnings.lower()
+
     def test_fl_ensemble_xaxis(self, mock_ds):
         """FL tab renders correctly with ensemble x-axis."""
         at = _make_loaded_at(mock_ds)

@@ -20,9 +20,15 @@ Key Design Principles:
 
 from __future__ import annotations
 
+import json
 import logging
+import math
+from collections import Counter
+from dataclasses import dataclass
+from importlib import resources as importlib_resources
 from datetime import datetime, timezone
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional
 
 import numpy as np
 import xarray as xr
@@ -1072,3 +1078,312 @@ class SignalQualityRunner:
 
         lines.append("=" * 60)
         return "\n".join(lines)
+
+
+# ============================================================================
+# PERCENT GOOD THRESHOLD ADVISOR
+# ============================================================================
+
+# Frequency bit-code mapping from system_configuration_code (bits 13–15 of
+# the 16-bit binary string, i.e. string indices [13:16]).
+# Mirrors the table in io/accessors.py; hardware-defined, never changes.
+_FREQ_BIT_MAP: dict[str, int] = {
+    "000": 75,
+    "001": 150,
+    "010": 300,
+    "011": 600,
+    "100": 1200,
+    "101": 2400,
+    "110": 38,   # not covered by velocity_noise_coefficients.json
+}
+
+
+@dataclass
+class StdDevResult:
+    """
+    Advisory result for percent-good threshold selection.
+
+    All standard deviation values are in cm/s.
+
+    Attributes
+    ----------
+    frequency : int
+        ADCP operating frequency in kHz.
+    bin_size : float
+        Depth cell length in metres.
+    depth_range : float
+        Total profiling depth range (bin_size × num_cells) in metres.
+    pings_per_ensemble : int
+        Number of pings averaged per ensemble.
+    single_ping_std : float
+        Single-ping standard deviation at *depth_range* (cm/s).
+    ensemble_std : float
+        Effective standard deviation for the full ensemble (cm/s).
+        ``single_ping_std / sqrt(pings_per_ensemble)``
+    desired_std : float
+        User-requested standard deviation (cm/s).
+    valid_pings_required : int
+        Minimum valid pings needed to meet *desired_std*.
+        Clamped to *pings_per_ensemble* when the target is unachievable.
+    percent_good_cutoff : float
+        Recommended percent-good threshold (0–100 %).
+    achievable : bool
+        ``False`` when *desired_std* is tighter than the ensemble average;
+        the user would need more pings per ensemble to meet the target.
+    """
+
+    frequency: int
+    bin_size: float
+    depth_range: float
+    pings_per_ensemble: int
+    single_ping_std: float
+    ensemble_std: float
+    desired_std: float
+    valid_pings_required: int
+    percent_good_cutoff: float
+    achievable: bool
+
+    def __str__(self) -> str:
+        status = "achievable" if self.achievable else "NOT achievable — increase pings"
+        return (
+            f"StdDevResult:\n"
+            f"  Frequency        : {self.frequency} kHz\n"
+            f"  Bin size         : {self.bin_size} m\n"
+            f"  Depth range      : {self.depth_range} m\n"
+            f"  Pings/ensemble   : {self.pings_per_ensemble}\n"
+            f"  Single-ping std  : {self.single_ping_std:.4f} cm/s\n"
+            f"  Ensemble std     : {self.ensemble_std:.4f} cm/s\n"
+            f"  Desired std      : {self.desired_std:.4f} cm/s  [{status}]\n"
+            f"  Valid pings req. : {self.valid_pings_required}\n"
+            f"  Percent-good cut : {self.percent_good_cutoff:.1f} %"
+        )
+
+
+def _load_adcp_coefficients(path: Optional[str] = None) -> dict:
+    """Load velocity_noise_coefficients.json from package or a custom path."""
+    if path is not None:
+        p = Path(path)
+        if not p.exists():
+            raise FileNotFoundError(f"Coefficients file not found: {p}")
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    try:
+        pkg = importlib_resources.files("pyadps")
+        text = pkg.joinpath("velocity_noise_coefficients.json").read_text(encoding="utf-8")
+        return json.loads(text)
+    except Exception as e:
+        raise FileNotFoundError(
+            f"Could not load velocity_noise_coefficients.json from package: {e}. "
+            "Ensure pyadps is properly installed or supply coefficients_path."
+        ) from e
+
+
+def _extract_frequency(ds: xr.Dataset) -> int:
+    """
+    Return the most-common ADCP frequency (kHz) from the dataset.
+
+    Tries the decoded ``frequency`` field first; falls back to decoding
+    ``system_configuration_code`` with a warning.
+
+    Raises
+    ------
+    ValueError
+        If neither field is present, or if the decoded bit-code is unknown.
+    """
+    if "frequency" in ds.data_vars:
+        most_common = Counter(ds["frequency"].values).most_common(1)[0][0]
+        # Decoded field stores strings like "300 kHz"
+        return int(str(most_common).split()[0])
+
+    if "system_configuration_code" not in ds.data_vars:
+        raise ValueError(
+            "'frequency' and 'system_configuration_code' are both absent from the "
+            "dataset. Provide frequency explicitly or reload with include_decoded=True."
+        )
+
+    logger.warning(
+        "'frequency' field not found; decoding from 'system_configuration_code'. "
+        "Consider reloading with include_decoded=True."
+    )
+    syscode = Counter(ds["system_configuration_code"].values).most_common(1)[0][0]
+    bits = format(int(syscode), "016b")
+    freq = _FREQ_BIT_MAP.get(bits[13:16])
+    if freq is None:
+        raise ValueError(
+            f"Unknown frequency bit-code '{bits[13:16]}' in system_configuration_code."
+        )
+    return freq
+
+
+def _extract_fl_params(ds: xr.Dataset) -> dict:
+    """
+    Extract Fixed Leader scalar parameters from the dataset.
+
+    Uses the most-common value across all ensembles (robust for merged files).
+
+    Returns
+    -------
+    dict
+        Keys: ``frequency`` (int, kHz), ``bin_size`` (float, m),
+        ``num_cells`` (int), ``pings_per_ensemble`` (int),
+        ``depth_range`` (float, m).
+
+    Raises
+    ------
+    KeyError
+        If a required Fixed Leader field is absent.
+    """
+    def _most_common(ds: xr.Dataset, field: str):
+        if field not in ds.data_vars:
+            raise KeyError(
+                f"Required field '{field}' not found in dataset. "
+                "Ensure the dataset was loaded from read_fixed_leader() or pyadps.read()."
+            )
+        return Counter(ds[field].values).most_common(1)[0][0]
+
+    frequency = _extract_frequency(ds)
+    depth_cell_length_cm = int(_most_common(ds, "depth_cell_length"))
+    bin_size = depth_cell_length_cm / 100.0  # cm → m
+    num_cells = int(_most_common(ds, "num_cells"))
+    pings_per_ensemble = int(_most_common(ds, "pings_per_ensemble"))
+    depth_range = bin_size * num_cells
+
+    return {
+        "frequency": frequency,
+        "bin_size": bin_size,
+        "num_cells": num_cells,
+        "pings_per_ensemble": pings_per_ensemble,
+        "depth_range": depth_range,
+    }
+
+
+def compute_percent_good_threshold(
+    ds: xr.Dataset,
+    desired_std: float,
+    depth_range: Optional[float] = None,
+    n_pings: Optional[int] = None,
+    bin_size: Optional[float] = None,
+    frequency: Optional[int] = None,
+    coefficients_path: Optional[str] = None,
+) -> StdDevResult:
+    """
+    Compute the recommended percent-good cutoff for a desired current precision.
+
+    Reads instrument parameters from the dataset (Fixed Leader fields), looks up
+    the exponential noise curve from ``velocity_noise_coefficients.json``, and returns the
+    minimum percent-good threshold that achieves *desired_std*.
+
+    The exponential model is ``σ_single = a·exp(b·R) + c`` (cm/s), where *R* is
+    the full profiling depth range (``bin_size × num_cells``).  Ensemble std is
+    reduced by averaging: ``σ_ens = σ_single / √N``.  The required number of
+    valid pings is therefore ``N_valid = (σ_single / desired_std)²``.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Dataset from ``pyadps.read()`` or ``read_fixed_leader()``.
+    desired_std : float
+        Target standard deviation in cm/s.
+    depth_range : float, optional
+        Override auto-detected depth range (m).  Use a shorter range if the
+        valid data does not span the full profile; note that data beyond this
+        depth should be excluded from analysis.
+    n_pings : int, optional
+        Override pings-per-ensemble from the dataset.
+    bin_size : float, optional
+        Override bin size (m) from the dataset.
+    frequency : int, optional
+        Override ADCP frequency (kHz) from the dataset.
+    coefficients_path : str, optional
+        Path to a custom ``velocity_noise_coefficients.json``.  Defaults to the
+        package-bundled file.
+
+    Returns
+    -------
+    StdDevResult
+        Advisory result including single-ping std, ensemble std, valid pings
+        required, and percent-good cutoff.
+
+    Raises
+    ------
+    ValueError
+        If *frequency* or *bin_size* has no exponential fit in the coefficients
+        file, or if required Fixed Leader fields are missing and no override is
+        provided.
+    """
+    if desired_std <= 0:
+        raise ValueError(f"desired_std must be positive, got {desired_std}.")
+
+    # --- Extract parameters from dataset, then apply overrides ---------------
+    params = _extract_fl_params(ds)
+
+    if frequency is not None:
+        params["frequency"] = int(frequency)
+    if bin_size is not None:
+        params["bin_size"] = float(bin_size)
+    if n_pings is not None:
+        params["pings_per_ensemble"] = int(n_pings)
+    if depth_range is not None:
+        params["depth_range"] = float(depth_range)
+
+    freq = params["frequency"]
+    bsize = params["bin_size"]
+    n_total = params["pings_per_ensemble"]
+    d_range = params["depth_range"]
+
+    # --- Load coefficients and validate freq / bin_size -----------------------
+    coeffs = _load_adcp_coefficients(coefficients_path)
+
+    freq_key = next((k for k in coeffs if int(k) == freq), None)
+    if freq_key is None:
+        valid_freqs = sorted(int(k) for k in coeffs)
+        raise ValueError(
+            f"Frequency {freq} kHz has no exponential fit in the coefficients file. "
+            f"Available frequencies: {valid_freqs} kHz."
+        )
+
+    freq_coeffs = coeffs[freq_key]
+    bin_key = next((k for k in freq_coeffs if abs(float(k) - bsize) < 1e-9), None)
+    if bin_key is None:
+        valid_bins = sorted(float(k) for k in freq_coeffs)
+        raise ValueError(
+            f"Bin size {bsize} m has no exponential fit for {freq} kHz. "
+            f"Available bin sizes for {freq} kHz: {valid_bins} m."
+        )
+
+    a = freq_coeffs[bin_key]["a"]
+    b = freq_coeffs[bin_key]["b"]
+    c = freq_coeffs[bin_key]["c"]
+
+    # --- Compute standard deviations ------------------------------------------
+    single_ping_std = a * math.exp(b * d_range) + c
+    ensemble_std = single_ping_std / math.sqrt(n_total)
+
+    # --- Compute valid pings and percent-good cutoff --------------------------
+    # N_valid = (σ_single / σ_desired)²  — pings needed to reach desired_std
+    n_valid_float = (single_ping_std / desired_std) ** 2
+    n_valid = math.ceil(n_valid_float)
+    achievable = n_valid <= n_total
+
+    if not achievable:
+        logger.warning(
+            f"Desired std {desired_std} cm/s requires {n_valid} valid pings but "
+            f"only {n_total} pings are available per ensemble. "
+            "The target precision cannot be achieved with the current configuration."
+        )
+        n_valid = n_total  # clamp — pg cutoff = 100 %
+
+    pg_cutoff = n_valid * 100.0 / n_total
+
+    return StdDevResult(
+        frequency=freq,
+        bin_size=bsize,
+        depth_range=d_range,
+        pings_per_ensemble=n_total,
+        single_ping_std=single_ping_std,
+        ensemble_std=ensemble_std,
+        desired_std=desired_std,
+        valid_pings_required=n_valid,
+        percent_good_cutoff=pg_cutoff,
+        achievable=achievable,
+    )

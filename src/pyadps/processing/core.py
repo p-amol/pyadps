@@ -52,7 +52,7 @@ from .utility import (
 
 # Import Runner classes directly for cleaner code and easier testing
 from .sensor_health import SensorHealthRunner
-from .signal_quality import SignalQualityRunner
+from .signal_quality import SignalQualityRunner, StdDevResult, compute_percent_good_threshold
 from .profile_operation import ProfileOperationRunner
 from .velocity_check import VelocityCheckRunner
 from .config import ProcessingConfig
@@ -1885,6 +1885,68 @@ class ProcessedDataset:
             Runner initialized with current dataset.
         """
         return SignalQualityRunner(self.dataset)
+
+    def get_percent_good_threshold(
+        self,
+        desired_std: float,
+        depth_range: Optional[float] = None,
+        n_pings: Optional[int] = None,
+        bin_size: Optional[float] = None,
+        frequency: Optional[int] = None,
+        coefficients_path: Optional[str] = None,
+    ) -> StdDevResult:
+        """
+        Advise a percent-good cutoff for a desired current precision.
+
+        Reads ADCP parameters from the dataset (frequency, bin size, cell
+        count, pings per ensemble) and uses the bundled exponential noise
+        curves to find the minimum percent-good threshold that achieves
+        *desired_std*.
+
+        Parameters
+        ----------
+        desired_std : float
+            Target standard deviation in cm/s.
+        depth_range : float, optional
+            Override depth range (m).  Default: ``bin_size × num_cells``.
+            Use a shorter range if valid data does not span the full profile;
+            data beyond this depth should be excluded from analysis.
+        n_pings : int, optional
+            Override pings per ensemble from the dataset.
+        bin_size : float, optional
+            Override bin size (m) from the dataset.
+        frequency : int, optional
+            Override ADCP frequency (kHz) from the dataset.
+        coefficients_path : str, optional
+            Path to a custom ``velocity_noise_coefficients.json``.
+
+        Returns
+        -------
+        StdDevResult
+            Advisory result.  Print it directly for a formatted summary.
+
+        Raises
+        ------
+        ValueError
+            If frequency or bin size has no exponential fit, or if required
+            Fixed Leader fields are absent and no override is provided.
+
+        Examples
+        --------
+        >>> proc = ProcessedDataset(ds)
+        >>> result = proc.get_percent_good_threshold(desired_std=1.0)
+        >>> print(result)
+        >>> proc.apply_signal_quality(percent_good=result.percent_good_cutoff)
+        """
+        return compute_percent_good_threshold(
+            self.dataset,
+            desired_std=desired_std,
+            depth_range=depth_range,
+            n_pings=n_pings,
+            bin_size=bin_size,
+            frequency=frequency,
+            coefficients_path=coefficients_path,
+        )
 
     def get_profile_operation_runner(self) -> "ProfileOperationRunner":
         """

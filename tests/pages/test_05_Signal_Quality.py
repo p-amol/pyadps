@@ -165,6 +165,24 @@ def _make_stat_mock(
     return stat
 
 
+def _make_advisor_result(**overrides) -> MagicMock:
+    """Build a mock StdDevResult with realistic numeric attributes."""
+    result = MagicMock()
+    result.frequency = 300
+    result.bin_size = 1.0
+    result.depth_range = 30.0
+    result.pings_per_ensemble = 50
+    result.single_ping_std = 7.370
+    result.ensemble_std = 0.737
+    result.desired_std = 1.0
+    result.valid_pings_required = 55
+    result.percent_good_cutoff = 55.0
+    result.achievable = True
+    for k, v in overrides.items():
+        setattr(result, k, v)
+    return result
+
+
 def _make_mock_processor(ds: xr.Dataset) -> MagicMock:
     """
     Build a MagicMock that satisfies the ProcessedDataset API used by
@@ -175,6 +193,7 @@ def _make_mock_processor(ds: xr.Dataset) -> MagicMock:
       - .get_signal_quality_runner()
       - .commit_runner(runner)
       - .reset()
+      - .get_percent_good_threshold()
     """
     total = ds.sizes["beam"] * ds.sizes["cell"] * ds.sizes["time"]
 
@@ -194,6 +213,7 @@ def _make_mock_processor(ds: xr.Dataset) -> MagicMock:
     runner.statistics = [stat]
     runner.get_statistics.return_value = {stat.check_name: stat}
     proc.get_signal_quality_runner.return_value = runner
+    proc.get_percent_good_threshold.return_value = _make_advisor_result()
 
     return proc
 
@@ -221,6 +241,25 @@ def _make_loaded_at(proc: MagicMock, *, extra_ss: dict | None = None) -> AppTest
 # ===========================================================================
 
 
+_MOCK_NOISE_COEFFS: dict = {
+    "300": {
+        "0.5": {"a": 30.15, "b": 0.0159, "c": -2.82, "r_squared": 0.998},
+        "1.0": {"a": 21.02, "b": 0.0176, "c": -1.95, "r_squared": 0.999},
+    },
+    "600": {
+        "0.5": {"a": 15.43, "b": 0.0210, "c": -1.23, "r_squared": 0.997},
+    },
+}
+
+_MOCK_FL_PARAMS: dict = {
+    "frequency": 300,
+    "bin_size": 1.0,
+    "num_cells": 30,
+    "pings_per_ensemble": 50,
+    "depth_range": 30.0,
+}
+
+
 @pytest.fixture(scope="module", autouse=True)
 def inject_pyadps_mock():
     """
@@ -236,6 +275,12 @@ def inject_pyadps_mock():
         We supply a ProcessedDataset factory that returns a MagicMock so the
         staging-processor construction path (lines 339-347) is exercised.
 
+    pyadps.processing.signal_quality
+        The advisor tab calls _load_adcp_coefficients() and _extract_fl_params()
+        from this sub-module. We stub both functions with deterministic returns
+        (using _MOCK_NOISE_COEFFS and _MOCK_FL_PARAMS) so the tab renders
+        correctly without hitting the filesystem or real ADCP data.
+
     pyadps / pyadps.io / pyadps.io.accessors
         conftest.py has an autouse fixture whose *teardown* does:
             from pyadps.io.accessors import FixedLeaderAccessor
@@ -246,7 +291,13 @@ def inject_pyadps_mock():
     """
     _originals = {
         k: sys.modules.get(k)
-        for k in ("pyadps", "pyadps.io", "pyadps.io.accessors", "pyadps.processing")
+        for k in (
+            "pyadps",
+            "pyadps.io",
+            "pyadps.io.accessors",
+            "pyadps.processing",
+            "pyadps.processing.signal_quality",
+        )
     }
 
     # Minimal FixedLeaderAccessor stub — conftest teardown just needs to call
@@ -274,24 +325,33 @@ def inject_pyadps_mock():
     mock_accessors.FixedLeaderAccessor = _FLAccessorStub
 
     mock_processing = types.ModuleType("pyadps.processing")
+    mock_processing.__path__ = []          # needed so sub-module imports resolve
+    mock_processing.__package__ = "pyadps.processing"
     mock_processing.ProcessedDataset = MagicMock(
         side_effect=lambda ds: MagicMock(dataset=ds)
     )
 
+    mock_signal_quality = types.ModuleType("pyadps.processing.signal_quality")
+    mock_signal_quality._load_adcp_coefficients = lambda path=None: _MOCK_NOISE_COEFFS
+    mock_signal_quality._extract_fl_params = lambda ds: dict(_MOCK_FL_PARAMS)
+
     # Wire up attribute references so `import pyadps.io` style works
     mock_pyadps.io = mock_io
     mock_io.accessors = mock_accessors
+    mock_processing.signal_quality = mock_signal_quality
 
     sys.modules["pyadps"] = mock_pyadps
     sys.modules["pyadps.io"] = mock_io
     sys.modules["pyadps.io.accessors"] = mock_accessors
     sys.modules["pyadps.processing"] = mock_processing
+    sys.modules["pyadps.processing.signal_quality"] = mock_signal_quality
 
     yield {
         "pyadps": mock_pyadps,
         "io": mock_io,
         "accessors": mock_accessors,
         "processing": mock_processing,
+        "signal_quality": mock_signal_quality,
     }
 
     # Restore originals after all tests in this module finish
@@ -376,9 +436,10 @@ class TestPageLoads:
     def test_no_exception(self, loaded_at):
         assert not loaded_at.exception
 
-    def test_five_tabs_present(self, loaded_at):
+    def test_six_tabs_present(self, loaded_at):
         labels = [t.label for t in loaded_at.tabs]
         assert "📊 Noise Floor" in labels
+        assert "🎯 PG Threshold Advisor" in labels
         assert "⚙️ QC Tests" in labels
         assert "🗺️ Mask Preview" in labels
         assert "🔄 Fix Orientation" in labels
@@ -1911,7 +1972,7 @@ def page_module(inject_pyadps_mock):
          patch.object(st, "error"), \
          patch.object(st, "header"), \
          patch.object(st, "write"), \
-         patch.object(st, "tabs", return_value=[MagicMock() for _ in range(5)]), \
+         patch.object(st, "tabs", return_value=[MagicMock() for _ in range(6)]), \
          patch.dict(
              "streamlit.session_state",
              {"processor": proc_mod},
@@ -2095,3 +2156,179 @@ class TestPageFunctionsDirectly:
             # Should not raise — line 197 runs plot_data = plot_data[0, :, :]
             page_module.plot_heatmap(data_3d, "Test 3D Heatmap")
 
+
+# ===========================================================================
+# 27. PG Threshold Advisor — tab order
+#     "🎯 PG Threshold Advisor" must appear as the 2nd tab (index 1),
+#     immediately before "⚙️ QC Tests" (index 2).
+# ===========================================================================
+
+
+class TestAdvisorTabOrder:
+    """Verify the advisor tab is second in the tab strip."""
+
+    def test_pg_advisor_is_second_tab(self, loaded_at):
+        labels = [t.label for t in loaded_at.tabs]
+        assert labels[1] == "🎯 PG Threshold Advisor"
+
+    def test_qc_tests_is_third_tab(self, loaded_at):
+        labels = [t.label for t in loaded_at.tabs]
+        assert labels[2] == "⚙️ QC Tests"
+
+    def test_noise_floor_remains_first_tab(self, loaded_at):
+        labels = [t.label for t in loaded_at.tabs]
+        assert labels[0] == "📊 Noise Floor"
+
+    def test_tab_strip_has_six_entries(self, loaded_at):
+        assert len(loaded_at.tabs) == 6
+
+
+# ===========================================================================
+# 28. PG Threshold Advisor — default desired standard deviation
+#     The advisor_desired_std number input must default to 1.0 cm/s.
+# ===========================================================================
+
+
+class TestAdvisorDefaultStd:
+    """Default value of the desired-std input is 1.0 (not 0.5)."""
+
+    def test_desired_std_input_present(self, loaded_at):
+        labels = [n.label for n in loaded_at.number_input]
+        assert any("Standard Deviation" in l for l in labels)
+
+    def test_desired_std_default_is_1(self, loaded_at):
+        ni = [n for n in loaded_at.number_input
+              if "Standard Deviation" in n.label][0]
+        assert ni.value == 1.0
+
+    def test_desired_std_key_is_advisor_desired_std(self, loaded_at):
+        ni = [n for n in loaded_at.number_input
+              if "Standard Deviation" in n.label][0]
+        assert ni.key == "advisor_desired_std"
+
+
+# ===========================================================================
+# 29. PG Threshold Advisor — bias warning below 0.2 cm/s
+#     A warning about long-term ADCP bias must appear when the desired std
+#     is set to any value below 0.2 cm/s.
+# ===========================================================================
+
+
+class TestAdvisorBiasWarning:
+    """Warning appears when desired_std < 0.2; not shown at or above 0.2."""
+
+    def test_no_bias_warning_at_default(self, loaded_at):
+        """Default value of 1.0 must NOT trigger the bias warning."""
+        warning_text = " ".join(w.value for w in loaded_at.warning)
+        assert "long-term bias" not in warning_text
+
+    def test_bias_warning_shown_below_0_2(self, proc):
+        at = _make_loaded_at(proc)
+        ni = [n for n in at.number_input if "Standard Deviation" in n.label][0]
+        ni.set_value(0.1).run()
+        assert not at.exception
+        warning_text = " ".join(w.value for w in at.warning)
+        assert "0.2" in warning_text or "bias" in warning_text.lower()
+
+    def test_bias_warning_not_shown_at_0_2(self, proc):
+        """At exactly 0.2 the condition (< 0.2) is False — no bias warning."""
+        at = _make_loaded_at(proc)
+        ni = [n for n in at.number_input if "Standard Deviation" in n.label][0]
+        ni.set_value(0.2).run()
+        assert not at.exception
+        warning_text = " ".join(w.value for w in at.warning)
+        assert "long-term bias" not in warning_text
+
+    def test_bias_warning_not_shown_above_0_2(self, proc):
+        at = _make_loaded_at(proc)
+        ni = [n for n in at.number_input if "Standard Deviation" in n.label][0]
+        ni.set_value(0.5).run()
+        assert not at.exception
+        warning_text = " ".join(w.value for w in at.warning)
+        assert "long-term bias" not in warning_text
+
+    def test_bias_warning_mentions_adcp(self, proc):
+        at = _make_loaded_at(proc)
+        ni = [n for n in at.number_input if "Standard Deviation" in n.label][0]
+        ni.set_value(0.05).run()
+        warning_text = " ".join(w.value for w in at.warning)
+        assert "ADCP" in warning_text or "bias" in warning_text.lower()
+
+
+# ===========================================================================
+# 30. PG Threshold Advisor — custom parameters pre-populate from auto-detect
+#     When "Use custom instrument parameters" is checked, each override widget
+#     must default to the value returned by _extract_fl_params(), which the
+#     mock sets to _MOCK_FL_PARAMS: freq=300, bin=1.0, depth=30.0, pings=50.
+# ===========================================================================
+
+
+class TestAdvisorCustomParams:
+    """Custom param widgets default to the auto-detected instrument values."""
+
+    def _with_custom_checked(self, proc: MagicMock) -> AppTest:
+        """Return an AppTest with the 'Use custom' checkbox checked."""
+        at = _make_loaded_at(proc)
+        cb = [c for c in at.checkbox
+              if "custom instrument" in c.label.lower()][0]
+        cb.check().run()
+        assert not at.exception
+        return at
+
+    def test_custom_checkbox_present(self, loaded_at):
+        labels = [c.label for c in loaded_at.checkbox]
+        assert any("custom instrument" in l.lower() for l in labels)
+
+    def test_custom_checkbox_unchecked_by_default(self, loaded_at):
+        cb = [c for c in loaded_at.checkbox
+              if "custom instrument" in c.label.lower()][0]
+        assert cb.value is False
+
+    def test_no_freq_selectbox_when_unchecked(self, loaded_at):
+        """Frequency selectbox is absent before checking Use custom."""
+        selectboxes = [s.label for s in loaded_at.selectbox]
+        assert not any("Frequency" in l for l in selectboxes)
+
+    def test_freq_selectbox_appears_when_checked(self, proc):
+        at = self._with_custom_checked(proc)
+        labels = [s.label for s in at.selectbox]
+        assert any("Frequency" in l for l in labels)
+
+    def test_freq_default_from_detected(self, proc):
+        """Frequency selectbox defaults to 300 kHz (from _MOCK_FL_PARAMS)."""
+        at = self._with_custom_checked(proc)
+        sb = [s for s in at.selectbox if "Frequency" in s.label][0]
+        assert sb.value == 300
+
+    def test_bin_size_selectbox_appears_when_checked(self, proc):
+        at = self._with_custom_checked(proc)
+        labels = [s.label for s in at.selectbox]
+        assert any("Bin Size" in l for l in labels)
+
+    def test_bin_default_from_detected(self, proc):
+        """Bin size selectbox defaults to 1.0 m (from _MOCK_FL_PARAMS)."""
+        at = self._with_custom_checked(proc)
+        sb = [s for s in at.selectbox if "Bin Size" in s.label][0]
+        assert sb.value == 1.0
+
+    def test_depth_range_input_appears_when_checked(self, proc):
+        at = self._with_custom_checked(proc)
+        labels = [n.label for n in at.number_input]
+        assert any("Depth Range" in l for l in labels)
+
+    def test_depth_default_from_detected(self, proc):
+        """Depth range defaults to 30.0 m (from _MOCK_FL_PARAMS)."""
+        at = self._with_custom_checked(proc)
+        ni = [n for n in at.number_input if "Depth Range" in n.label][0]
+        assert ni.value == 30.0
+
+    def test_pings_input_appears_when_checked(self, proc):
+        at = self._with_custom_checked(proc)
+        labels = [n.label for n in at.number_input]
+        assert any("Pings per Ensemble" in l for l in labels)
+
+    def test_pings_default_from_detected(self, proc):
+        """Pings per ensemble defaults to 50 (from _MOCK_FL_PARAMS)."""
+        at = self._with_custom_checked(proc)
+        ni = [n for n in at.number_input if "Pings per Ensemble" in n.label][0]
+        assert ni.value == 50

@@ -1160,22 +1160,51 @@ class StdDevResult:
 
 
 def _load_adcp_coefficients(path: Optional[str] = None) -> dict:
-    """Load velocity_noise_coefficients.json from package or a custom path."""
+    """Load velocity_noise_coefficients.json from package or a custom path.
+
+    The coefficients represent the **output velocity noise** (cm/s) after
+    coordinate transformation to Earth/instrument coordinates, not raw beam
+    velocity noise.  They were derived by digitising the standard-deviation
+    vs. depth-range figures in the Teledyne RDI manual *ADCP Coordinate
+    Transformation — Formulas and Calculations* and fitting an exponential
+    model σ(R) = a·exp(b·R) + c to each (frequency, bin-size) curve.  The
+    r_squared field in each entry records the goodness of fit.
+
+    Because the coefficients come from the manual's idealised figures, they
+    represent nominal deployment conditions (uniform sound speed, no sidelobe
+    contamination, no instrument tilt).  Real-world noise may differ.
+
+    Parameters
+    ----------
+    path:
+        Optional filesystem path to a custom coefficients JSON file.  If
+        None, the file bundled with the pyadps package is used.
+
+    Returns
+    -------
+    dict
+        Nested dict keyed by frequency string (kHz) → bin-size string (m)
+        → {"a": float, "b": float, "c": float, "r_squared": float}.
+    """
     if path is not None:
         p = Path(path)
         if not p.exists():
             raise FileNotFoundError(f"Coefficients file not found: {p}")
         with open(p, encoding="utf-8") as f:
-            return json.load(f)
-    try:
-        pkg = importlib_resources.files("pyadps")
-        text = pkg.joinpath("velocity_noise_coefficients.json").read_text(encoding="utf-8")
-        return json.loads(text)
-    except Exception as e:
-        raise FileNotFoundError(
-            f"Could not load velocity_noise_coefficients.json from package: {e}. "
-            "Ensure pyadps is properly installed or supply coefficients_path."
-        ) from e
+            raw = json.load(f)
+    else:
+        try:
+            pkg = importlib_resources.files("pyadps")
+            text = pkg.joinpath("velocity_noise_coefficients.json").read_text(encoding="utf-8")
+            raw = json.loads(text)
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Could not load velocity_noise_coefficients.json from package: {e}. "
+                "Ensure pyadps is properly installed or supply coefficients_path."
+            ) from e
+    # Strip documentation keys (starting with "_") before returning so
+    # callers can iterate over frequency keys without filtering.
+    return {k: v for k, v in raw.items() if not k.startswith("_")}
 
 
 def _extract_frequency(ds: xr.Dataset) -> int:

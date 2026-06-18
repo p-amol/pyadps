@@ -410,9 +410,10 @@ with status_container:
 # TABS
 # =============================================================================
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
+tab1, tab_advisor, tab2, tab3, tab4, tab5 = st.tabs(
     [
         "📊 Noise Floor",
+        "🎯 PG Threshold Advisor",
         "⚙️ QC Tests",
         "🗺️ Mask Preview",
         "🔄 Fix Orientation",
@@ -765,6 +766,283 @@ with tab2:
         st.dataframe(config_df, hide_index=True, use_container_width=True)
     else:
         st.warning("No QC tests selected.")
+
+
+# =============================================================================
+# TAB: PERCENT GOOD THRESHOLD ADVISOR
+# =============================================================================
+
+
+@st.cache_data
+def _load_noise_coefficients() -> dict:
+    """Load velocity_noise_coefficients.json (cached for the session)."""
+    from pyadps.processing.signal_quality import _load_adcp_coefficients
+
+    return _load_adcp_coefficients()
+
+
+with tab_advisor:
+    st.subheader("Percent Good Threshold Advisor", divider="orange")
+    st.write(
+        """
+        This tool estimates the recommended **Percent Good** cutoff threshold
+        based on the acoustic noise characteristics of the ADCP. It uses an
+        exponential noise model to compute the single-ping velocity standard
+        deviation as a function of depth range, then determines how many valid
+        pings per ensemble are required to achieve a target current precision.
+        """
+    )
+
+    st.warning(
+        "**Use with caution.** The computed threshold is a guideline, not a strict "
+        "rule. The appropriate precision depends entirely on your scientific "
+        "requirements — there is no universally correct value. Thresholds computed "
+        "here assume the noise model fits your deployment conditions.",
+        icon="⚠️",
+    )
+
+    st.caption(
+        "Noise model source: *ADCP Coordinate Transformation — Formulas and "
+        "Calculations*, Teledyne RDI."
+    )
+
+    with st.expander("ℹ️ Methodological notes", expanded=False):
+        st.markdown(
+            "**Depth range**\n\n"
+            "The calculation uses the full profiling depth (bin size × number of cells) "
+            "by default. This is intentionally conservative — it returns the worst-case "
+            "noise estimate for the deepest bin. Shallower bins will have a lower "
+            "standard deviation and will therefore meet the same precision target with "
+            "fewer valid pings. If a large portion of the profile is unusable due to "
+            "surface backscatter (acoustic pings reflecting off the surface before "
+            "reaching the full range), consider reducing the depth range to match the "
+            "reliable data extent using the **Use custom instrument parameters** option "
+            "below.\n\n"
+            "**Ping independence**\n\n"
+            "The ensemble standard deviation is computed as σ_single / √N, which "
+            "assumes that the noise on successive pings is statistically independent. "
+            "This holds for typical oceanographic deployments where pings within an "
+            "ensemble are separated by at least a few seconds. It may not hold for "
+            "very high ping-rate configurations where successive pings sample nearly "
+            "the same acoustic volume."
+        )
+
+    st.divider()
+
+    noise_coeffs = _load_noise_coefficients()
+    _available_freqs = sorted(int(k) for k in noise_coeffs)
+
+    col_inputs, col_results = st.columns([1, 1], gap="large")
+
+    with col_inputs:
+        desired_std = st.number_input(
+            "Desired Standard Deviation (cm/s)",
+            min_value=0.01,
+            max_value=50.0,
+            value=1.00,
+            step=0.10,
+            format="%.2f",
+            help="Target current measurement precision in cm/s.",
+            key="advisor_desired_std",
+        )
+
+        if desired_std < 0.2:
+            st.warning(
+                "Values below **0.2 cm/s** are below the long-term bias of the "
+                "ADCP. Instrument bias will dominate the uncertainty at this level, "
+                "so there is little scientific benefit in reducing the standard "
+                "deviation further.",
+                icon="⚠️",
+            )
+
+        use_custom = st.checkbox(
+            "Use custom instrument parameters",
+            value=False,
+            key="advisor_use_custom",
+            help=(
+                "Override the parameters auto-read from the loaded file. "
+                "Useful for comparing different configurations or when "
+                "Fixed Leader fields are not available in the dataset."
+            ),
+        )
+
+        # Try to auto-detect instrument parameters from the loaded dataset
+        _detected: dict | None = None
+        try:
+            from pyadps.processing.signal_quality import _extract_fl_params
+            _detected = _extract_fl_params(proc.dataset)
+        except Exception:
+            pass
+
+        freq_override = None
+        bin_override = None
+        depth_override = None
+        pings_override = None
+
+        if use_custom:
+            st.write("**Custom Parameters:**")
+
+            # Default frequency: auto-detected, or 300 kHz as fallback
+            _def_freq = _detected["frequency"] if _detected else 300
+            _def_freq_idx = (
+                _available_freqs.index(_def_freq)
+                if _def_freq in _available_freqs
+                else (_available_freqs.index(300) if 300 in _available_freqs else 0)
+            )
+            freq_override = st.selectbox(
+                "Frequency (kHz)",
+                options=_available_freqs,
+                index=_def_freq_idx,
+                key="advisor_freq",
+            )
+
+            _bins_for_freq = sorted(
+                float(k) for k in noise_coeffs[str(freq_override)]
+            )
+
+            # Default bin size: auto-detected, matched to nearest available bin
+            _def_bin = _detected["bin_size"] if _detected else _bins_for_freq[0]
+            _def_bin_idx = next(
+                (i for i, b in enumerate(_bins_for_freq) if abs(b - _def_bin) < 1e-9),
+                0,
+            )
+            bin_override = st.selectbox(
+                "Bin Size (m)",
+                options=_bins_for_freq,
+                index=_def_bin_idx,
+                key="advisor_bin",
+            )
+
+            # Default depth range: auto-detected or bin × 30 cells
+            _def_depth = (
+                _detected["depth_range"] if _detected
+                else float(bin_override or 1.0) * 30
+            )
+            depth_override = st.number_input(
+                "Depth Range (m)",
+                min_value=0.1,
+                max_value=2000.0,
+                value=_def_depth,
+                step=1.0,
+                format="%.1f",
+                help=(
+                    "Total profiling depth (bin size × number of cells). "
+                    "Use a shorter range if valid data does not span the "
+                    "full profile — data beyond this depth should be excluded."
+                ),
+                key="advisor_depth",
+            )
+
+            # Default pings: auto-detected or 40
+            _def_pings = _detected["pings_per_ensemble"] if _detected else 40
+            pings_override = st.number_input(
+                "Pings per Ensemble",
+                min_value=1,
+                max_value=16384,
+                value=_def_pings,
+                step=1,
+                key="advisor_pings",
+            )
+
+        if st.button("Compute Threshold", type="primary", key="advisor_compute"):
+            try:
+                _result = proc.get_percent_good_threshold(
+                    desired_std=float(desired_std),
+                    frequency=int(freq_override) if freq_override is not None else None,
+                    bin_size=float(bin_override) if bin_override is not None else None,
+                    depth_range=float(depth_override) if depth_override is not None else None,
+                    n_pings=int(pings_override) if pings_override is not None else None,
+                )
+                st.session_state.advisor_result = _result
+            except ValueError as e:
+                st.error(f"❌ {e}")
+                st.session_state.advisor_result = None
+            except Exception as e:
+                st.error(
+                    f"❌ Could not compute threshold: {e}. "
+                    "Try enabling **Use custom instrument parameters** above."
+                )
+                st.session_state.advisor_result = None
+
+    with col_results:
+        _adv_result = st.session_state.get("advisor_result")
+
+        if _adv_result is None:
+            st.info(
+                "💡 Enter a desired standard deviation and click "
+                "**Compute Threshold** to get the recommended percent good cutoff."
+            )
+        else:
+            st.write("**📡 Instrument Parameters:**")
+            pc1, pc2 = st.columns(2)
+            with pc1:
+                st.metric("Frequency", f"{_adv_result.frequency} kHz")
+                st.metric("Bin Size", f"{_adv_result.bin_size:g} m")
+            with pc2:
+                st.metric("Depth Range", f"{_adv_result.depth_range:.1f} m")
+                st.metric("Pings / Ensemble", _adv_result.pings_per_ensemble)
+
+            st.divider()
+
+            st.write("**📊 Noise Model Results:**")
+            rc1, rc2 = st.columns(2)
+            with rc1:
+                st.metric(
+                    "Single-ping Std Dev",
+                    f"{_adv_result.single_ping_std:.3f} cm/s",
+                    help="Standard deviation of a single acoustic ping at the full depth range.",
+                )
+                st.metric(
+                    "Ensemble Std Dev",
+                    f"{_adv_result.ensemble_std:.3f} cm/s",
+                    help="Effective precision when averaging all pings in the ensemble.",
+                )
+            with rc2:
+                st.metric(
+                    "Valid Pings Required",
+                    _adv_result.valid_pings_required,
+                    help="Minimum valid pings needed to reach the desired precision.",
+                )
+                st.metric(
+                    "Percent Good Cutoff",
+                    f"{_adv_result.percent_good_cutoff:.1f} %",
+                )
+
+            st.divider()
+
+            if _adv_result.achievable:
+                st.success(
+                    f"✅ A precision of **{_adv_result.desired_std:.2f} cm/s** is "
+                    f"achievable. At least **{_adv_result.valid_pings_required}** of "
+                    f"{_adv_result.pings_per_ensemble} pings per ensemble must be valid."
+                )
+            else:
+                st.error(
+                    f"❌ A precision of **{_adv_result.desired_std:.2f} cm/s** is "
+                    f"**not achievable** with {_adv_result.pings_per_ensemble} "
+                    f"pings/ensemble. The best achievable precision with all pings "
+                    f"valid is **{_adv_result.ensemble_std:.3f} cm/s**. "
+                    "Increase the number of pings per ensemble or relax the target."
+                )
+
+            st.divider()
+
+            _pg_cutoff = _adv_result.percent_good_cutoff
+
+            def _apply_pg_threshold() -> None:
+                st.session_state.percent_good_threshold = int(round(_pg_cutoff))
+                st.session_state.apply_percent_good = True
+
+            st.button(
+                f"Apply {_adv_result.percent_good_cutoff:.0f} % to QC Tests",
+                type="secondary",
+                key="advisor_apply",
+                on_click=_apply_pg_threshold,
+                help="Copies this cutoff to the Percent Good threshold in the QC Tests tab.",
+            )
+            st.caption(
+                "After applying, go to the **QC Tests** tab to preview and save."
+            )
 
 
 # =============================================================================

@@ -1,4 +1,17 @@
 {
+  "_metadata": {
+    "description": "Exponential noise model coefficients for Teledyne RDI ADCP velocity standard deviation. Model: sigma(R) = a * exp(b * R) + c, where R is the profiling depth range in metres and sigma is in cm/s.",
+    "source": "Digitised from figures in: ADCP Coordinate Transformation — Formulas and Calculations, Teledyne RDI.",
+    "coordinate_system": "Output velocity noise after coordinate transformation (Earth/instrument coordinates). Geometric beam-to-output amplification is already included.",
+    "conditions": "Nominal deployment conditions (uniform sound speed, no sidelobe contamination, no instrument tilt). Real-world noise may differ.",
+    "fields": {
+      "a": "Pre-exponential coefficient (cm/s)",
+      "b": "Exponential growth rate (1/m)",
+      "c": "Asymptotic noise floor at large range (cm/s)",
+      "r_squared": "Goodness of fit for the exponential curve fitted to the digitised manual values"
+    },
+    "key_structure": "frequency_kHz -> bin_size_m -> {a, b, c, r_squared}"
+  },
   "1200": {
     "0.125": {
       "a": 0.129639,

@@ -399,38 +399,84 @@ def false_target_detection(
     identifies cells where the difference between echo intensities exceeds
     a threshold.
 
+    This is a post-collection analogue of the ADCP's WA (false target) command.
+    Because data is already in Earth coordinates, individual beams cannot be
+    selectively flagged; instead the entire depth cell is rejected. The adjacent
+    cell (x+1) is also flagged whenever a false target is detected, because the
+    ADCP samples echo intensity near the end of each depth cell.
+
     Parameters
     ----------
     ds : xr.Dataset
         Input dataset containing echo intensity data.
     cutoff : float, default 50
-        Maximum acceptable difference between echo intensity values.
+        Maximum acceptable echo intensity difference between beams. Equivalent
+        to the WA command threshold. Use a value lower than the pre-deployment
+        WA setting to apply a stricter post-collection check.
     threebeam : bool, default True
-        If True and beam_ignore is None, compares highest to second-highest
-        echo intensity (more lenient, allows one outlier beam).
-        If False, compares highest to lowest (stricter check).
+        Controls which beam pair is compared:
+
+        - True (default): compares highest to second-lowest echo intensity
+          (``max - second_lowest``). Mirrors the pre-deployment 3-beam logic:
+          the ensemble is dropped only when two or more beams are anomalous,
+          meaning even a 3-beam solution would have failed. Use this when the
+          deployment used a 3-beam solution and you want to apply a stricter
+          cutoff than the WA setting.
+        - False: compares highest to lowest (``max - min``). Flags the ensemble
+          whenever any single beam is anomalous. Use this to override a
+          pre-deployment 3-beam solution with a stricter all-beam check.
     beam_ignore : int, optional
-        Beam index (0-3) to exclude from the comparison. When specified,
-        that beam's data is removed before computing the difference.
-        If provided with threebeam=True, the remaining beams use max-min.
+        Beam index (0-3) to exclude from the comparison. Use when a beam is
+        known to be permanently faulty (identifiable from correlation, echo
+        intensity, or percent-good data). The remaining three beams are checked
+        using ``max - min`` with the specified cutoff, allowing a stricter
+        threshold than the pre-deployment WA setting without the ``threebeam``
+        flag affecting the comparison.
 
     Returns
     -------
     xr.Dataset
         Dataset with updated mask.
 
+    Post-collection use cases
+    -------------------------
+    The pre-deployment WA command runs on the instrument in beam coordinates
+    before any coordinate transformation. This function extends that check to
+    post-collected Earth-coordinate data, where only whole-ensemble rejection
+    is possible. Three typical scenarios:
+
+    1. **Override pre-deployment 3-beam leniency** — If the deployment allowed
+       a 3-beam solution but a stricter all-beam check is desired, set
+       ``threebeam=False``. Any ensemble where ``max - min > cutoff`` is
+       rejected entirely, regardless of whether a 3-beam solution was available.
+
+    2. **Apply a stricter threshold than the WA setting** — If the pre-deployment
+       WA threshold was, e.g., 100 counts and a tighter check (e.g., 30 counts)
+       is required, set ``cutoff=30``. Use ``threebeam=True`` to mirror the
+       instrument's 3-beam logic (``max - second_lowest``), or ``threebeam=False``
+       for the stricter all-beam comparison (``max - min``).
+
+    3. **Known faulty beam** — If one beam is permanently bad (identifiable from
+       correlation, echo intensity, or percent-good diagnostics), specify it with
+       ``beam_ignore``. The false target check then runs on the three remaining
+       beams using ``max - min``. This is useful when combining a known-bad-beam
+       situation with a stricter cutoff than the pre-deployment WA setting.
+
     Notes
     -----
     The algorithm works as follows:
-    1. If beam_ignore is specified, remove that beam from consideration
-    2. Sort echo values along beam dimension
-    3. If threebeam=True and beam_ignore is None: difference = max - second_highest
-       Otherwise: difference = max - min
-    4. Flag cells where difference > cutoff
 
-    The threebeam=True mode is more permissive, only flagging when the highest
-    value stands out significantly from the second-highest, allowing for normal
-    beam-to-beam variation.
+    1. If ``beam_ignore`` is specified, remove that beam from consideration.
+    2. Sort echo values along the beam dimension.
+    3. Compute the difference:
+
+       - ``threebeam=True`` and no ``beam_ignore``: ``max - second_lowest``
+       - Otherwise: ``max - min``
+
+    4. Flag cells where difference > cutoff.
+    5. Also flag the next depth cell (x+1) for each flagged cell, because the
+       ADCP samples echo intensity near the end of depth cell x, so the
+       velocity measurement at x+1 is also contaminated.
     """
     _validate_threshold("false_target", cutoff)
 
@@ -479,14 +525,15 @@ def false_target_detection(
     non_beam_coords = {d: echo.coords[d] for d in non_beam_dims}
 
     if threebeam and beam_ignore is None:
-        # Compare highest to second-highest (more lenient)
-        # Take last two values along beam axis
+        # max - second_lowest: mirrors the instrument's 3-beam Step C check.
+        # Flags only when two or more beams are anomalous (even a 3-beam
+        # solution would have failed). Index 1 in ascending sort = second_lowest.
         echo_max = np.take(sorted_echo, -1, axis=beam_axis)
-        echo_second = np.take(sorted_echo, -2, axis=beam_axis)
-        difference = echo_max - echo_second
-        logger.debug("False target: using max - second_highest (threebeam mode)")
+        echo_second_lowest = np.take(sorted_echo, 1, axis=beam_axis)
+        difference = echo_max - echo_second_lowest
+        logger.debug("False target: using max - second_lowest (threebeam mode)")
     else:
-        # Compare highest to lowest (stricter)
+        # max - min: flags whenever any single beam is anomalous.
         echo_max = np.take(sorted_echo, -1, axis=beam_axis)
         echo_min = np.take(sorted_echo, 0, axis=beam_axis)
         difference = echo_max - echo_min
@@ -500,6 +547,10 @@ def false_target_detection(
     )
 
     flag = difference_da > cutoff
+
+    # Also flag the next depth cell: the ADCP samples echo intensity near the
+    # end of cell x, so cell x+1 velocity is contaminated by the same target.
+    flag = flag | flag.shift({"cell": 1}, fill_value=False)
 
     # Update Combined Mask (Beam 3)
     flag_3d = xr.zeros_like(mask, dtype=bool)
@@ -788,12 +839,14 @@ class SignalQualityRunner:
         Parameters
         ----------
         cutoff : float, default 50
-            Maximum acceptable echo intensity difference.
+            Maximum acceptable echo intensity difference between beams.
         threebeam : bool, default True
-            If True and beam_ignore is None, compares highest to second-highest.
-            If False, compares highest to lowest.
+            If True and beam_ignore is None, compares highest to second-lowest
+            (``max - second_lowest``), mirroring the instrument's 3-beam Step C.
+            If False, compares highest to lowest (``max - min``).
         beam_ignore : int, optional
-            Beam index to exclude from comparison (0-3).
+            Beam index to exclude from comparison (0-3). When set, the
+            remaining beams are checked using ``max - min``.
 
         Returns
         -------

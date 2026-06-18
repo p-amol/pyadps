@@ -511,6 +511,40 @@ with tab2:
         )
         st.dataframe(thresh_df, hide_index=True, use_container_width=True)
 
+        with st.expander("ℹ️ How to use the False Target threshold"):
+            st.markdown(
+                """
+The **False Target** (WA command) threshold set during deployment compares echo
+intensities across beams to detect fish or debris within a depth cell. Because
+post-collection data is already in Earth coordinates, individual beams cannot be
+selectively flagged — the entire depth cell is rejected instead. The following
+scenarios guide how to set the threshold here:
+
+**1. Override pre-deployment 3-beam leniency**
+If the deployment allowed a 3-beam solution but you want a stricter all-beam
+check, disable *Enable Three-Beam Mode* below. Any ensemble where
+`max − min > threshold` is rejected entirely.
+
+**2. Apply a stricter threshold than the deployment setting**
+If the deployment WA threshold was high (e.g. 100) and you want a tighter check
+(e.g. 30), enter the new value in the *False Target Threshold* field above.
+With *Enable Three-Beam Mode* on, the comparison is `max − second lowest`,
+mirroring what the instrument's 3-beam mode would have applied. With it off,
+the stricter `max − min` comparison is used.
+
+**3. Known faulty beam**
+If one beam is permanently faulty (identifiable from correlation, echo
+intensity, or percent-good diagnostics), enable *Enable Three-Beam Mode* and
+select the faulty beam in the *Beam to Ignore* dropdown. The false target check
+then runs on the three remaining beams using `max − min`, which is useful for
+applying a stricter threshold than the deployment setting to the surviving beams.
+
+In all cases, if a false target is detected at depth cell *x*, the adjacent
+cell *x+1* is also flagged, because the ADCP samples echo intensity near the
+end of each depth cell.
+"""
+            )
+
     with col_config:
         st.write("**Configure Threshold Values:**")
 

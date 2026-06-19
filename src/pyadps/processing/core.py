@@ -564,7 +564,7 @@ class ProcessedDataset:
         self,
         # Thresholds (None or 0 = skip check)
         correlation: Optional[float] = None,
-        echo_intensity: Optional[float] = None,
+        echo_intensity: float | list[float] | None = None,
         error_velocity: Optional[float] = None,
         percent_good: Optional[float] = None,
         false_target: Optional[float] = None,
@@ -582,8 +582,10 @@ class ProcessedDataset:
         ----------
         correlation : float, optional
             Correlation threshold (0-255). None or 0 = skip.
-        echo_intensity : float, optional
-            Echo intensity threshold (0-255). None or 0 = skip.
+        echo_intensity : float or list of float, optional
+            Echo intensity threshold (0-255). Pass a single float to apply the
+            same threshold to all beams, or a list of four floats for per-beam
+            thresholds. None or 0 = skip.
         error_velocity : float, optional
             Error velocity threshold in mm/s. None or 0 = skip.
         percent_good : float, optional
@@ -615,11 +617,15 @@ class ProcessedDataset:
         ...     beam_ignore=2
         ... )
         """
+        _ei_active = (
+            (isinstance(echo_intensity, list) and len(echo_intensity) > 0)
+            or (isinstance(echo_intensity, (int, float)) and echo_intensity > 0)
+        )
         # Check if any thresholds are set
         checks_enabled = any(
             [
                 correlation and correlation > 0,
-                echo_intensity and echo_intensity > 0,
+                _ei_active,
                 error_velocity and error_velocity > 0,
                 percent_good and percent_good > 0,
                 false_target and false_target > 0,
@@ -640,9 +646,9 @@ class ProcessedDataset:
                 beam_ignore=beam_ignore,
             )
 
-        if echo_intensity and echo_intensity > 0:
+        if _ei_active:
             runner.echo_intensity(
-                cutoff=echo_intensity,
+                cutoff=echo_intensity,  # type: ignore[arg-type]
                 threebeam=threebeam,
                 beam_ignore=beam_ignore,
             )
@@ -673,7 +679,10 @@ class ProcessedDataset:
         # ---- record in config ------------------------------------------------
         self.config.isQCTest = True
         self.config.ct_QCT = correlation if correlation is not None else 0.0
-        self.config.et_QCT = echo_intensity if echo_intensity is not None else 0.0
+        self.config.et_QCT = float(
+            echo_intensity[0] if isinstance(echo_intensity, list)
+            else (echo_intensity if echo_intensity is not None else 0.0)
+        )
         self.config.evt_QCT = error_velocity if error_velocity is not None else 0.0
         self.config.pgt_QCT = percent_good if percent_good is not None else 0.0
         self.config.ft_QCT = false_target if false_target is not None else 0.0

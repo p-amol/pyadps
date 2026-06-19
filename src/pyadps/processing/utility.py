@@ -56,9 +56,10 @@ class QCCheckStats:
     ----------
     check_name : str
         Name of the check (e.g., "Roll Check", "Correlation Check")
-    threshold : float | tuple[float, float] | None
+    threshold : float | list[float] | tuple[float, float] | None
         Threshold value(s) used for the check.
         - float: Single threshold (e.g., roll=15.0)
+        - list[float]: Per-beam thresholds (e.g., echo intensity noise floor)
         - tuple: Min/max range (e.g., pressure=(0, 1000))
         - None: No threshold (e.g., regrid operation)
     cells_pre_masked : int
@@ -76,7 +77,7 @@ class QCCheckStats:
     """
 
     check_name: str
-    threshold: float | tuple[float, float] | None
+    threshold: float | list[float] | tuple[float, float] | None
     cells_pre_masked: int
     cells_newly_masked: int
     cells_total_masked: int

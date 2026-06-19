@@ -213,6 +213,7 @@ def plot_heatmap(data: np.ndarray, title: str, colorscale: str = "greys") -> Non
         yaxis_title="Cell",
         height=400,
     )
+    fig.update_yaxes(autorange="reversed")  # Cell 0 at top
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -303,16 +304,17 @@ if "qc_initialized" not in st.session_state:
     # Threshold values
     st.session_state.correlation_threshold = defaults["correlation"]
     st.session_state.echo_intensity_threshold = defaults["echo_intensity"]
+    st.session_state.echo_intensity_per_beam_threshold = None
     st.session_state.error_velocity_threshold = defaults["error_velocity"]
     st.session_state.percent_good_threshold = defaults["percent_good"]
     st.session_state.false_target_threshold = defaults["false_target"]
 
-    # Check selections
-    st.session_state.apply_correlation = True
+    # Check selections (all off by default — user opts in)
+    st.session_state.apply_correlation = False
     st.session_state.apply_echo_intensity = False
-    st.session_state.apply_error_velocity = True
+    st.session_state.apply_error_velocity = False
     st.session_state.apply_percent_good = False
-    st.session_state.apply_false_target = True
+    st.session_state.apply_false_target = False
 
     # Three-beam mode
     st.session_state.threebeam_mode = False
@@ -427,17 +429,88 @@ tab1, tab_advisor, tab2, tab3, tab4, tab5 = st.tabs(
 
 with tab1:
     st.subheader("Noise Floor Identification", divider="orange")
+    st.caption(
+        "🟡 **Optional** — Only needed when you want to derive an echo intensity "
+        "threshold from in-air data. Most deployments do not require this step unless "
+        "sensor contamination is suspected."
+    )
     st.write(
         """
-        If the ADCP collected data from the air before deployment or after recovery,
-        this data can help estimate the echo intensity threshold. The plots show
-        echo intensity profiles from selected ensembles.
-
-        **Noise floor identification:**
-        The noise level is typically around 30-40 counts throughout the profile.
-        Values significantly above this indicate valid acoustic returns.
+        If the ADCP collected data in air before deployment and/or after recovery,
+        that data can be used to estimate the **echo intensity noise floor** — the
+        minimum signal level below which an acoustic return is indistinguishable
+        from electronic noise. Thresholds derived here can be sent directly to the
+        **Echo Intensity Check** in the QC Tests tab.
         """
     )
+
+    with st.expander("ℹ️ Methodology and how to use this tab"):
+        st.markdown(
+            """
+**Why use in-air data?**
+
+When the ADCP is powered on in air, it transmits acoustic pulses that find no
+water to return from. The recorded echo intensities therefore reflect only the
+instrument's electronic noise floor. A transducer face contaminated by debris
+or biological fouling will show a measurably higher noise floor, making this a
+useful diagnostic tool alongside the actual QC check.
+
+---
+
+**Elevated echo in the first cells (exclude these)**
+
+The first several depth cells typically show higher echo intensity than the
+flat noise floor further along the profile. The reasons could include near-field
+acoustic effects, scattering from air particles, and the speed-of-sound mismatch
+between air and water shortening the effective blanking distance.
+
+Exclude these cells using the **Min Cell** input. The default of 10 is a
+reasonable starting point; adjust based on where your profile visibly flattens.
+
+---
+
+**Identifying the flat region**
+
+Beyond the elevated near-transducer zone, echo intensity in air becomes
+approximately flat with depth. This plateau is the true noise floor. Set
+**Max Cell** to the last cell of this plateau (usually the deepest bin
+recorded). If the profile is not flat — for example, it still trends downward
+— you may be looking at water returns rather than air, and the ensemble is not
+suitable for noise floor estimation.
+
+---
+
+**Per-beam thresholds vs. a single threshold**
+
+Each beam has its own transducer and analogue front-end, so noise floors can
+differ slightly between beams. Use **Per-beam threshold (4 values)** in the Send
+section below when beams differ noticeably. A single threshold is appropriate
+when all beams are consistent.
+
+---
+
+**Three-Beam Mode and Beam to Ignore (set in QC Tests tab)**
+
+- **Beam to Ignore**: If one beam shows a consistently higher noise floor than
+  the others — suggesting a fouled or damaged transducer — exclude it from all
+  QC checks using the *Beam to Ignore* selector in the QC Tests tab.
+- **Three-Beam Mode**: Changes the masking logic for the Echo Intensity Check.
+  With three-beam *off*, any single beam failing the threshold masks the entire
+  depth cell. With three-beam *on*, at least **two** beams must fail before the
+  cell is masked — more lenient, matching the 3-beam solution logic used in
+  pre-deployment settings.
+
+---
+
+**Workflow summary**
+
+1. Select a deployment or recovery ensemble where the ADCP was in air.
+2. Tick the checkbox below the corresponding plot.
+3. Adjust Min Cell (skip ringing) and Max Cell (end of flat region).
+4. Review the per-beam maxima in the statistics table.
+5. Use the **Send** section to push the derived threshold(s) to the QC Tests tab.
+"""
+        )
 
     n_ensembles = get_total_ensembles()
 
@@ -463,6 +536,244 @@ with tab1:
 
     # Convert to 0-indexed and cast to int for type safety
     plot_noise_floor(dep_ens=int(dep_ens) - 1, rec_ens=int(rec_ens) - 1)
+
+    n_cells = get_total_cells()
+    default_max_cell = max(n_cells - 1, 0)
+    default_min_cell = 10 if n_cells > 9 else default_max_cell
+
+    col_dep_ctrl, col_rec_ctrl = st.columns(2)
+
+    with col_dep_ctrl:
+        st.checkbox(
+            "Deployment ensemble is in air",
+            value=False,
+            key="noise_dep_compute",
+            help="Tick to compute noise floor statistics from the deployment ensemble.",
+        )
+        if st.session_state.noise_dep_compute:
+            st.number_input(
+                "Min cell",
+                min_value=0,
+                max_value=default_max_cell,
+                value=default_min_cell,
+                key="noise_dep_min_cell",
+                help="Exclude cells below this number (transducer ringing region).",
+            )
+            st.number_input(
+                "Max cell",
+                min_value=0,
+                max_value=default_max_cell,
+                value=default_max_cell,
+                key="noise_dep_max_cell",
+                help="Last cell to include in the statistics.",
+            )
+
+    with col_rec_ctrl:
+        st.checkbox(
+            "Recovery ensemble is in air",
+            value=False,
+            key="noise_rec_compute",
+            help="Tick to compute noise floor statistics from the recovery ensemble.",
+        )
+        if st.session_state.noise_rec_compute:
+            st.number_input(
+                "Min cell",
+                min_value=0,
+                max_value=default_max_cell,
+                value=default_min_cell,
+                key="noise_rec_min_cell",
+                help="Exclude cells below this number (transducer ringing region).",
+            )
+            st.number_input(
+                "Max cell",
+                min_value=0,
+                max_value=default_max_cell,
+                value=default_max_cell,
+                key="noise_rec_max_cell",
+                help="Last cell to include in the statistics.",
+            )
+
+    dep_active = st.session_state.noise_dep_compute
+    rec_active = st.session_state.noise_rec_compute
+
+    if (dep_active or rec_active) and "echo_intensity" not in ds.data_vars:
+        st.warning("Echo intensity data not available.")
+    elif dep_active or rec_active:
+        echo = ds["echo_intensity"].values  # (beam, cell, time)
+        n_beams = echo.shape[0]
+        dep_idx = int(dep_ens) - 1
+        rec_idx = int(rec_ens) - 1
+
+        # Compute per-beam maxima for use in stats table and send section
+        dep_max_per_beam: list[float] = []
+        rec_max_per_beam: list[float] = []
+
+        rows = []
+        for b in range(n_beams):
+            row: dict = {"Beam": f"Beam {b + 1}"}
+
+            if dep_active:
+                c0_dep = int(st.session_state.noise_dep_min_cell)
+                c1_dep = int(st.session_state.noise_dep_max_cell) + 1
+                dep_max = int(np.max(echo[b, c0_dep:c1_dep, dep_idx]))
+                row["Deployment Max"] = dep_max
+                dep_max_per_beam.append(float(dep_max))
+
+            if rec_active:
+                c0_rec = int(st.session_state.noise_rec_min_cell)
+                c1_rec = int(st.session_state.noise_rec_max_cell) + 1
+                rec_max = int(np.max(echo[b, c0_rec:c1_rec, rec_idx]))
+                row["Recovery Max"] = rec_max
+                rec_max_per_beam.append(float(rec_max))
+
+            if dep_active and rec_active:
+                row["Mean"] = round(
+                    (row["Deployment Max"] + row["Recovery Max"]) / 2, 1
+                )
+
+            rows.append(row)
+
+        # Summary row: mean of all beams' max values per column
+        summary: dict = {"Beam": "Mean of all beams"}
+        if dep_active:
+            summary["Deployment Max"] = round(float(np.mean(dep_max_per_beam)), 1)
+        if rec_active:
+            summary["Recovery Max"] = round(float(np.mean(rec_max_per_beam)), 1)
+        if dep_active and rec_active:
+            summary["Mean"] = round(
+                (summary["Deployment Max"] + summary["Recovery Max"]) / 2, 1
+            )
+        rows.append(summary)
+
+        cell_range_note = ""
+        if dep_active:
+            cell_range_note += (
+                f"Deployment: cells {st.session_state.noise_dep_min_cell}"
+                f"–{st.session_state.noise_dep_max_cell}"
+            )
+        if rec_active:
+            sep = " | " if dep_active else ""
+            cell_range_note += (
+                f"{sep}Recovery: cells {st.session_state.noise_rec_min_cell}"
+                f"–{st.session_state.noise_rec_max_cell}"
+            )
+
+        st.write(f"**Noise floor statistics ({cell_range_note}):**")
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+        # ── Send to QC Tests ─────────────────────────────────────────────────
+        st.divider()
+        st.write("**Send to Echo Intensity Threshold:**")
+
+        send_option = st.radio(
+            "Threshold mode",
+            options=["Single threshold", "Per-beam threshold (4 values)"],
+            horizontal=True,
+            key="noise_send_option",
+            label_visibility="collapsed",
+        )
+
+        if send_option == "Single threshold":
+            all_maxima = dep_max_per_beam + rec_max_per_beam
+            suggested = int(round(np.mean(all_maxima))) if all_maxima else 0
+            val = st.number_input(
+                "Threshold value",
+                min_value=0,
+                max_value=255,
+                value=suggested,
+                key="noise_single_input",
+                help="Mean of all beam maxima across active ensembles.",
+            )
+            if st.button(
+                "Send to Echo Intensity Threshold →",
+                key="noise_send_single",
+            ):
+                st.session_state.echo_intensity_threshold = int(val)
+                st.session_state.echo_intensity_per_beam_threshold = None
+                st.session_state.apply_echo_intensity = True
+                st.session_state.ei_mode_radio = "Single threshold"
+                st.success(
+                    f"Single threshold **{int(val)}** sent. "
+                    "Go to the **QC Tests** tab to preview and apply."
+                )
+
+        else:  # Per-beam threshold
+            # Initialise session state for the 4 editable inputs
+            for _b in range(n_beams):
+                if f"noise_pb_input_{_b}" not in st.session_state:
+                    st.session_state[f"noise_pb_input_{_b}"] = 0.0
+
+            # Capture loop variables for closures
+            _dep = list(dep_max_per_beam)
+            _rec = list(rec_max_per_beam)
+            _nb = n_beams
+
+            def _fill_dep() -> None:
+                for _b in range(_nb):
+                    st.session_state[f"noise_pb_input_{_b}"] = float(_dep[_b])
+
+            def _fill_avg() -> None:
+                for _b in range(_nb):
+                    st.session_state[f"noise_pb_input_{_b}"] = round(
+                        (_dep[_b] + _rec[_b]) / 2, 1
+                    )
+
+            def _fill_rec() -> None:
+                for _b in range(_nb):
+                    st.session_state[f"noise_pb_input_{_b}"] = float(_rec[_b])
+
+            col_fd, col_fa, col_fr = st.columns(3)
+            with col_fd:
+                st.button(
+                    "Fill: deployment",
+                    on_click=_fill_dep,
+                    disabled=not dep_active,
+                    key="noise_fill_dep",
+                )
+            with col_fa:
+                st.button(
+                    "Fill: avg (dep + rec)",
+                    on_click=_fill_avg,
+                    disabled=not (dep_active and rec_active),
+                    key="noise_fill_avg",
+                )
+            with col_fr:
+                st.button(
+                    "Fill: recovery",
+                    on_click=_fill_rec,
+                    disabled=not rec_active,
+                    key="noise_fill_rec",
+                )
+
+            beam_cols = st.columns(n_beams)
+            for _b, _col in enumerate(beam_cols):
+                with _col:
+                    st.number_input(
+                        f"Beam {_b + 1}",
+                        min_value=0.0,
+                        max_value=255.0,
+                        step=1.0,
+                        key=f"noise_pb_input_{_b}",
+                    )
+
+            if st.button(
+                "Send to Echo Intensity Threshold →",
+                key="noise_send_per_beam",
+            ):
+                pb_values = [
+                    float(st.session_state[f"noise_pb_input_{_b}"])
+                    for _b in range(n_beams)
+                ]
+                st.session_state.echo_intensity_per_beam_threshold = pb_values
+                st.session_state.apply_echo_intensity = True
+                st.session_state.ei_mode_radio = "Per-beam threshold (4 values)"
+                for _b, _v in enumerate(pb_values):
+                    st.session_state[f"qc_ei_pb_{_b}"] = _v
+                st.success(
+                    f"Per-beam thresholds "
+                    f"**{[int(v) for v in pb_values]}** sent. "
+                    "Go to the **QC Tests** tab to preview and apply."
+                )
 
 # =============================================================================
 # TAB 2: QC TESTS CONFIGURATION
@@ -554,6 +865,12 @@ end of each depth cell.
             value=st.session_state.apply_correlation,
             key="cb_correlation",
         )
+        st.caption(
+            "🟡 Optional — The instrument applies a correlation threshold of 64 in "
+            "real time (WC command). The factory default is well-calibrated; "
+            "post-processing with the same value is redundant. Only enable if you "
+            "need a stricter threshold than the deployment setting."
+        )
         st.session_state.correlation_threshold = st.number_input(
             "Correlation Threshold (0-255)",
             min_value=0,
@@ -568,6 +885,12 @@ end of each depth cell.
             "Apply Error Velocity Check",
             value=st.session_state.apply_error_velocity,
             key="cb_error_velocity",
+        )
+        st.caption(
+            "🟢 Recommended — The pre-deployment default (2000 mm/s, EVT command) "
+            "is too lenient for most deployments and passes nearly all data. A "
+            "tighter threshold (e.g. 50–150 mm/s) removes physically implausible "
+            "ensembles that the instrument accepted in real time."
         )
         st.session_state.error_velocity_threshold = st.number_input(
             "Error Velocity Threshold (mm/s)",
@@ -584,20 +907,60 @@ end of each depth cell.
             value=st.session_state.apply_echo_intensity,
             key="cb_echo_intensity",
         )
-        st.session_state.echo_intensity_threshold = st.number_input(
-            "Echo Intensity Threshold (0-255)",
-            min_value=0,
-            max_value=255,
-            value=st.session_state.echo_intensity_threshold,
-            disabled=not st.session_state.apply_echo_intensity,
-            key="ni_echo_intensity",
+        st.caption(
+            "🟡 Optional — Requires a noise floor estimate from in-air data "
+            "(see the Noise Floor tab). Apply only if sensor contamination is "
+            "suspected or if you want to mask returns weaker than the noise floor."
         )
+        if st.session_state.apply_echo_intensity:
+            ei_mode = st.radio(
+                "Echo intensity mode",
+                options=["Single threshold", "Per-beam threshold (4 values)"],
+                key="ei_mode_radio",
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+            if ei_mode == "Single threshold":
+                st.session_state.echo_intensity_per_beam_threshold = None
+                st.session_state.echo_intensity_threshold = st.number_input(
+                    "Echo Intensity Threshold (0-255)",
+                    min_value=0,
+                    max_value=255,
+                    value=st.session_state.echo_intensity_threshold,
+                    key="ni_echo_intensity",
+                )
+            else:
+                _pb_init: list[float] = st.session_state.get(
+                    "echo_intensity_per_beam_threshold"
+                ) or [float(st.session_state.echo_intensity_threshold)] * 4
+                for _b in range(4):
+                    if f"qc_ei_pb_{_b}" not in st.session_state:
+                        st.session_state[f"qc_ei_pb_{_b}"] = _pb_init[_b]
+                _ei_cols = st.columns(4)
+                for _b, _col in enumerate(_ei_cols):
+                    with _col:
+                        st.number_input(
+                            f"Beam {_b + 1}",
+                            min_value=0.0,
+                            max_value=255.0,
+                            step=1.0,
+                            key=f"qc_ei_pb_{_b}",
+                        )
+                st.session_state.echo_intensity_per_beam_threshold = [
+                    float(st.session_state[f"qc_ei_pb_{_b}"]) for _b in range(4)
+                ]
 
         # False target threshold
         st.session_state.apply_false_target = st.checkbox(
             "Apply False Target Check",
             value=st.session_state.apply_false_target,
             key="cb_false_target",
+        )
+        st.caption(
+            "🟡 Optional — The instrument applies a false target filter in real "
+            "time (WA command, default 50). Post-processing is only useful to apply "
+            "a stricter threshold than the deployment setting or to override lenient "
+            "3-beam logic. See the info panel for detailed scenarios."
         )
         st.session_state.false_target_threshold = st.number_input(
             "False Target Threshold (0-255)",
@@ -613,6 +976,12 @@ end of each depth cell.
             "Apply Percent Good Check",
             value=st.session_state.apply_percent_good,
             key="cb_percent_good",
+        )
+        st.caption(
+            "🔴 Important — The primary reliability indicator for ensemble-averaged "
+            "data. The pre-deployment default varies by configuration and is often "
+            "not well-tuned. Use the PG Threshold Advisor tab to derive a threshold "
+            "matched to your deployment depth and precision requirements."
         )
         st.session_state.percent_good_threshold = st.number_input(
             "Percent Good Threshold (0-100)",
@@ -634,22 +1003,29 @@ end of each depth cell.
             key="cb_threebeam",
         )
 
-        if st.session_state.threebeam_mode:
-            beam_options: dict[str, int | None] = {
-                "None": None,
-                "Beam 1": 0,
-                "Beam 2": 1,
-                "Beam 3": 2,
-                "Beam 4": 3,
-            }
-            selected_beam = st.selectbox(
-                "Beam to Ignore",
-                options=list(beam_options.keys()),
-                index=0,
-                key="sb_beam_ignore",
-            )
-            if selected_beam is not None:
-                st.session_state.beam_ignore = beam_options[selected_beam]
+        st.divider()
+
+        # Beam to ignore (independent of three-beam mode)
+        st.write("**Beam to Ignore:**")
+        beam_options: dict[str, int | None] = {
+            "None": None,
+            "Beam 1": 0,
+            "Beam 2": 1,
+            "Beam 3": 2,
+            "Beam 4": 3,
+        }
+        selected_beam = st.selectbox(
+            "Beam to Ignore",
+            options=list(beam_options.keys()),
+            index=0 if st.session_state.beam_ignore is None
+            else st.session_state.beam_ignore + 1,
+            key="sb_beam_ignore",
+            label_visibility="collapsed",
+            help="Exclude this beam from all QC checks. "
+            "Useful when a beam is permanently faulty.",
+        )
+        if selected_beam is not None:
+            st.session_state.beam_ignore = beam_options[selected_beam]
 
     # Preview button - applies to staging processor (preview_qc_proc)
     st.divider()
@@ -675,15 +1051,20 @@ end of each depth cell.
                     beam_ignore=st.session_state.beam_ignore,
                 )
 
-            if (
-                st.session_state.apply_echo_intensity
-                and st.session_state.echo_intensity_threshold is not None
-            ):
-                runner.echo_intensity(
-                    cutoff=int(st.session_state.echo_intensity_threshold),
-                    threebeam=st.session_state.threebeam_mode,
-                    beam_ignore=st.session_state.beam_ignore,
-                )
+            if st.session_state.apply_echo_intensity:
+                _ei_pb = st.session_state.get("echo_intensity_per_beam_threshold")
+                if _ei_pb is not None:
+                    runner.echo_intensity(
+                        cutoff=_ei_pb,
+                        threebeam=st.session_state.threebeam_mode,
+                        beam_ignore=st.session_state.beam_ignore,
+                    )
+                elif st.session_state.echo_intensity_threshold is not None:
+                    runner.echo_intensity(
+                        cutoff=int(st.session_state.echo_intensity_threshold),
+                        threebeam=st.session_state.threebeam_mode,
+                        beam_ignore=st.session_state.beam_ignore,
+                    )
 
             if (
                 st.session_state.apply_error_velocity
@@ -776,9 +1157,12 @@ end of each depth cell.
             ["Error Velocity", str(st.session_state.error_velocity_threshold), "✅"]
         )
     if st.session_state.apply_echo_intensity:
-        config_data.append(
-            ["Echo Intensity", str(st.session_state.echo_intensity_threshold), "✅"]
-        )
+        _ei_pb = st.session_state.get("echo_intensity_per_beam_threshold")
+        if _ei_pb is not None:
+            _ei_val = str([int(v) for v in _ei_pb])
+        else:
+            _ei_val = str(st.session_state.echo_intensity_threshold)
+        config_data.append(["Echo Intensity", _ei_val, "✅"])
     if st.session_state.apply_false_target:
         config_data.append(
             ["False Target", str(st.session_state.false_target_threshold), "✅"]
@@ -788,12 +1172,11 @@ end of each depth cell.
             ["Percent Good", str(st.session_state.percent_good_threshold), "✅"]
         )
     if st.session_state.threebeam_mode:
-        beam_str = (
-            f"Beam {st.session_state.beam_ignore + 1}"
-            if st.session_state.beam_ignore is not None
-            else "None"
+        config_data.append(["Three-Beam Mode", "Enabled", "✅"])
+    if st.session_state.beam_ignore is not None:
+        config_data.append(
+            ["Beam to Ignore", f"Beam {st.session_state.beam_ignore + 1}", "✅"]
         )
-        config_data.append(["Three-Beam Mode", beam_str, "✅"])
 
     if config_data:
         config_df = pd.DataFrame(config_data, columns=["Test", "Value", "Enabled"])
@@ -817,6 +1200,11 @@ def _load_noise_coefficients() -> dict:
 
 with tab_advisor:
     st.subheader("Percent Good Threshold Advisor", divider="orange")
+    st.caption(
+        "🟢 **Recommended** — The pre-deployment percent good setting may not reflect "
+        "your actual ensemble averaging conditions. Use this tool to derive a "
+        "scientifically justified threshold before applying the Percent Good Check."
+    )
     st.write(
         """
         This tool estimates the recommended **Percent Good** cutoff threshold
@@ -1261,9 +1649,16 @@ with tab5:
             )
 
         if st.session_state.apply_echo_intensity:
-            preview_items.append(
-                f"• Echo intensity check: threshold = {st.session_state.echo_intensity_threshold}"
-            )
+            _ei_pb = st.session_state.get("echo_intensity_per_beam_threshold")
+            if _ei_pb is not None:
+                preview_items.append(
+                    f"• Echo intensity check: per-beam thresholds "
+                    f"{[int(v) for v in _ei_pb]}"
+                )
+            else:
+                preview_items.append(
+                    f"• Echo intensity check: threshold = {st.session_state.echo_intensity_threshold}"
+                )
 
         if st.session_state.apply_error_velocity:
             preview_items.append(
@@ -1281,12 +1676,12 @@ with tab5:
             )
 
         if st.session_state.threebeam_mode:
-            beam_num = (
-                st.session_state.beam_ignore + 1
-                if st.session_state.beam_ignore is not None
-                else "None"
+            preview_items.append("• Three-beam mode: enabled")
+
+        if st.session_state.beam_ignore is not None:
+            preview_items.append(
+                f"• Beam to ignore: Beam {st.session_state.beam_ignore + 1}"
             )
-            preview_items.append(f"• Three-beam mode: ignoring beam {beam_num}")
 
         if st.session_state.beam_direction_modified:
             current_dir = st.session_state.beam_direction_current
@@ -1303,9 +1698,16 @@ with tab5:
 
         if st.button("🔬 Apply Signal Quality Tests", type="primary", key="save_qc"):
             try:
+                _ei_pb = st.session_state.get("echo_intensity_per_beam_threshold")
+                if st.session_state.apply_echo_intensity and _ei_pb is not None:
+                    _ei_arg: float | list[float] | None = _ei_pb
+                elif st.session_state.apply_echo_intensity and st.session_state.echo_intensity_threshold is not None:
+                    _ei_arg = int(st.session_state.echo_intensity_threshold)
+                else:
+                    _ei_arg = None
                 proc.apply_signal_quality(
                     correlation=int(st.session_state.correlation_threshold) if st.session_state.apply_correlation and st.session_state.correlation_threshold is not None else None,
-                    echo_intensity=int(st.session_state.echo_intensity_threshold) if st.session_state.apply_echo_intensity and st.session_state.echo_intensity_threshold is not None else None,
+                    echo_intensity=_ei_arg,
                     error_velocity=int(st.session_state.error_velocity_threshold) if st.session_state.apply_error_velocity and st.session_state.error_velocity_threshold is not None else None,
                     percent_good=int(st.session_state.percent_good_threshold) if st.session_state.apply_percent_good and st.session_state.percent_good_threshold is not None else None,
                     false_target=int(st.session_state.false_target_threshold) if st.session_state.apply_false_target and st.session_state.false_target_threshold is not None else None,

@@ -317,21 +317,22 @@ class TestEchoIntensityCheck:
         assert result["mask"].sum() == 0
 
     def test_flags_below_threshold(self, basic_dataset):
-        """Test flagging values below threshold."""
+        """Test flagging when any beam is below threshold."""
         basic_dataset["echo_intensity"].values[0, :3, :5] = 20
         result = echo_intensity_check(basic_dataset, cutoff=40)
         assert result["mask"].sum() > 0
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 1
+        # Entire cell is masked across all beams when any beam fails
+        assert result["mask"].isel(cell=0, time=0).values.all()
 
     def test_flags_at_threshold_boundary(self, basic_dataset):
-        """Test behavior at exact threshold value."""
-        basic_dataset["echo_intensity"].values[0, 0, 0] = 40  # At threshold
-        basic_dataset["echo_intensity"].values[0, 0, 1] = 39  # Below
+        """Test behavior at exact threshold value (not flagged) vs one below."""
+        basic_dataset["echo_intensity"].values[0, 0, 0] = 40  # At threshold — not flagged
+        basic_dataset["echo_intensity"].values[0, 0, 1] = 39  # Below — flagged
 
         result = echo_intensity_check(basic_dataset, cutoff=40)
 
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 0
-        assert result["mask"].isel(beam=0, cell=0, time=1).values == 1
+        assert result["mask"].isel(cell=0, time=0).values.sum() == 0
+        assert result["mask"].isel(cell=0, time=1).values.all()
 
     def test_custom_threshold(self, basic_dataset):
         """Test with custom threshold."""
@@ -339,8 +340,8 @@ class TestEchoIntensityCheck:
         basic_dataset["echo_intensity"].values[0, 0, 0] = 45
 
         result = echo_intensity_check(basic_dataset, cutoff=60)
-        # 45 < 60, should be flagged
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 1
+        # beam 0 fails at (cell=0, time=0) → all beams at that cell/time masked
+        assert result["mask"].isel(cell=0, time=0).values.all()
 
     def test_creates_mask_if_missing(self, dataset_no_mask):
         """Test that mask is created if not present."""
@@ -349,13 +350,12 @@ class TestEchoIntensityCheck:
 
     def test_alternative_variable_name_echo(self, basic_dataset):
         """Test that 'echo' variable name is also accepted."""
-        # Rename echo_intensity to echo
         basic_dataset["echo"] = basic_dataset["echo_intensity"]
         del basic_dataset["echo_intensity"]
 
         basic_dataset["echo"].values[0, 0, 0] = 20
         result = echo_intensity_check(basic_dataset, cutoff=40)
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 1
+        assert result["mask"].isel(cell=0, time=0).values.all()
 
     def test_missing_echo_returns_unchanged(self, basic_dataset):
         """Test that missing echo data returns unchanged dataset."""
@@ -363,16 +363,60 @@ class TestEchoIntensityCheck:
         result = echo_intensity_check(basic_dataset, cutoff=40)
         assert "mask" in result.data_vars
 
-    def test_threebeam_mode(self, basic_dataset):
-        """Test three-beam mode."""
+    def test_all_beams_masked_when_any_fails(self, basic_dataset):
+        """When one beam fails, all beams at that cell/time are masked."""
+        # Only beam 2 is below threshold at (cell=1, time=2)
+        basic_dataset["echo_intensity"].values[2, 1, 2] = 10
+        result = echo_intensity_check(basic_dataset, cutoff=40)
+        # All four beams at (cell=1, time=2) must be masked
+        assert result["mask"].isel(cell=1, time=2).values.all()
+        # Other cells untouched
+        assert result["mask"].isel(cell=0, time=0).values.sum() == 0
+
+    def test_threebeam_masks_only_when_two_beams_fail(self, basic_dataset):
+        """threebeam=True: no mask when only 1 beam fails; mask when 2 fail."""
+        # Only beam 0 below threshold at (cell=0, time=0)
+        basic_dataset["echo_intensity"].values[0, 0, 0] = 10
+
+        result_one = echo_intensity_check(basic_dataset, cutoff=40, threebeam=True)
+        assert result_one["mask"].isel(cell=0, time=0).values.sum() == 0
+
+        # Now also beam 1 below threshold at same location
+        basic_dataset["echo_intensity"].values[1, 0, 0] = 10
+        result_two = echo_intensity_check(basic_dataset, cutoff=40, threebeam=True)
+        assert result_two["mask"].isel(cell=0, time=0).values.all()
+
+    def test_beam_ignore_excludes_from_count(self, basic_dataset):
+        """beam_ignore removes that beam; remaining beams determine flag."""
+        # Only beam 1 fails — with beam_ignore=1 it should not be flagged
         basic_dataset["echo_intensity"].values[1, :, :] = 20
 
-        result_normal = echo_intensity_check(basic_dataset, cutoff=40)
-        result_threebeam = echo_intensity_check(
-            basic_dataset, cutoff=40, threebeam=True, beam_ignore=1
+        result_no_ignore = echo_intensity_check(basic_dataset, cutoff=40)
+        result_ignored = echo_intensity_check(
+            basic_dataset, cutoff=40, beam_ignore=1
         )
 
-        assert result_threebeam["mask"].sum() < result_normal["mask"].sum()
+        assert result_no_ignore["mask"].sum() > 0
+        assert result_ignored["mask"].sum() == 0
+
+    def test_per_beam_cutoff_list(self, basic_dataset):
+        """Per-beam cutoff list applies different thresholds per beam."""
+        # All echo = 80; set beam 2 to 50
+        basic_dataset["echo_intensity"].values[2, 0, 0] = 50
+        # Cutoff list: beam 2 has threshold 60, others 40
+        cutoffs = [40.0, 40.0, 60.0, 40.0]
+        result = echo_intensity_check(basic_dataset, cutoff=cutoffs)
+        # beam 2 < 60 → all beams at (cell=0, time=0) masked
+        assert result["mask"].isel(cell=0, time=0).values.all()
+        # Other beams at other cells: beam 2 = 80 > 60, no fail
+        assert result["mask"].isel(cell=1, time=0).values.sum() == 0
+
+    def test_per_beam_cutoff_wrong_length_falls_back(self, basic_dataset):
+        """Per-beam cutoff with wrong length falls back to cutoff[0]."""
+        basic_dataset["echo_intensity"].values[0, 0, 0] = 10
+        result = echo_intensity_check(basic_dataset, cutoff=[40, 40])  # wrong length
+        # cutoff[0]=40 used for all beams; beam 0 fails → cell masked
+        assert result["mask"].isel(cell=0, time=0).values.all()
 
     def test_preserves_attributes(self, basic_dataset):
         """Test that other data variables retain attributes."""
@@ -1417,6 +1461,91 @@ class TestCoreFunctionsSmoke:
         echo_intensity_check(basic_dataset, cutoff=40)
 
         np.testing.assert_array_equal(basic_dataset["mask"].values, original_mask)
+
+
+# ===========================================================================
+# Dimension-order preservation in echo_intensity_check
+#
+# xr.where(cell_flag, 1, mask) — where cell_flag has dims (cell, time) and
+# mask has dims (beam, cell, time) — used to produce output with dims
+# (cell, time, beam). The fix adds .transpose(*mask.dims) to restore the
+# original (beam, cell, time) order.
+# ===========================================================================
+
+
+class TestEchoIntensityCheckDimOrder:
+    """Output mask must preserve (beam, cell, time) dim order after the fix."""
+
+    def _make_ds(self, n_beam=4, n_cell=10, n_time=20, cutoff=40):
+        """Dataset where all echo values exceed cutoff so the cell-flag path fires."""
+        times = pd.date_range("2024-01-01", periods=n_time, freq="h")
+        cells = np.arange(n_cell)
+        beams = np.arange(n_beam)
+        echo = np.full((n_beam, n_cell, n_time), cutoff + 10, dtype=np.int16)
+        mask = np.zeros((n_beam, n_cell, n_time), dtype=np.int8)
+        return xr.Dataset(
+            {
+                "echo_intensity": (("beam", "cell", "time"), echo),
+                "mask": (("beam", "cell", "time"), mask),
+            },
+            coords={"time": times, "cell": cells, "beam": beams},
+        )
+
+    def _make_ds_with_failing_cells(self, n_beam=4, n_cell=10, n_time=20):
+        """Dataset where first 3 cells fail the echo threshold (trigger cell_flag)."""
+        times = pd.date_range("2024-01-01", periods=n_time, freq="h")
+        cells = np.arange(n_cell)
+        beams = np.arange(n_beam)
+        echo = np.full((n_beam, n_cell, n_time), 80, dtype=np.int16)
+        echo[:, :3, :] = 20  # below threshold=40 → cell_flag fires
+        mask = np.zeros((n_beam, n_cell, n_time), dtype=np.int8)
+        return xr.Dataset(
+            {
+                "echo_intensity": (("beam", "cell", "time"), echo),
+                "mask": (("beam", "cell", "time"), mask),
+            },
+            coords={"time": times, "cell": cells, "beam": beams},
+        )
+
+    def test_output_mask_dims_match_input_all_pass(self, basic_dataset):
+        """All values pass — mask dims unchanged."""
+        result = echo_intensity_check(basic_dataset, cutoff=40)
+        assert tuple(result["mask"].dims) == ("beam", "cell", "time")
+
+    def test_output_mask_dims_match_input_with_cell_flag(self):
+        """Some cells fail → cell_flag fires the xr.where path; dims must stay correct."""
+        ds = self._make_ds_with_failing_cells()
+        result = echo_intensity_check(ds, cutoff=40)
+        assert tuple(result["mask"].dims) == ("beam", "cell", "time")
+
+    def test_output_shape_correct_with_cell_flag(self):
+        """Shape must be (beam, cell, time) — was (cell, time, beam) before fix."""
+        n_beam, n_cell, n_time = 4, 10, 20
+        ds = self._make_ds_with_failing_cells(n_beam=n_beam, n_cell=n_cell, n_time=n_time)
+        result = echo_intensity_check(ds, cutoff=40)
+        assert result["mask"].shape == (n_beam, n_cell, n_time)
+
+    def test_cell_flag_masks_all_beams_in_flagged_cells(self):
+        """Cells that fail must be masked across all beams (cell-level flag)."""
+        ds = self._make_ds_with_failing_cells()
+        result = echo_intensity_check(ds, cutoff=40)
+        mask = result["mask"].values  # (beam, cell, time)
+        # First 3 cells are below threshold — all 4 beams should be masked
+        assert np.all(mask[:, :3, :] == 1), (
+            "All beams in failing cells must be masked"
+        )
+        # Cells 3+ are above threshold — should remain 0
+        assert np.all(mask[:, 3:, :] == 0), (
+            "Passing cells must not be masked"
+        )
+
+    def test_per_beam_threshold_list_dims_preserved(self):
+        """Per-beam list threshold also preserves (beam, cell, time) dim order."""
+        ds = self._make_ds_with_failing_cells()
+        per_beam_cutoffs = [40.0, 40.0, 40.0, 40.0]
+        result = echo_intensity_check(ds, cutoff=per_beam_cutoffs)
+        assert tuple(result["mask"].dims) == ("beam", "cell", "time")
+        assert result["mask"].shape == (4, 10, 20)
 
 
 if __name__ == "__main__":

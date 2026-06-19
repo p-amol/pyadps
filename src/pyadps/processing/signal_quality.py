@@ -154,33 +154,49 @@ def correlation_check(
 
 def echo_intensity_check(
     ds: xr.Dataset,
-    cutoff: float = DEFAULT_ECHO_THRESHOLD,
+    cutoff: float | list[float] = DEFAULT_ECHO_THRESHOLD,
     threebeam: bool = False,
     beam_ignore: int | None = None,
 ) -> xr.Dataset:
     """
     Perform echo intensity (signal strength) quality control check.
 
-    Flags cells where echo intensity is below the cutoff.
+    Flags depth cells where echo intensity falls below the noise floor threshold.
+    When any beam (or 2+ beams in three-beam mode) fails the check, the entire
+    depth cell is masked across all beams, because post-collection data is in
+    Earth coordinates and individual beams cannot be selectively dropped.
 
     Parameters
     ----------
     ds : xr.Dataset
         Input dataset containing echo intensity data.
-    cutoff : float, default 40
-        Minimum acceptable echo intensity value (0-255 scale).
+    cutoff : float or list of float, default 40
+        Minimum acceptable echo intensity (0-255 scale). A single value applies
+        the same threshold to all beams. A list of four values sets a per-beam
+        threshold, useful when beams have different noise floors (e.g. one beam
+        has a fouled transducer face). Use the Noise Floor tab to derive these
+        values from in-air recordings.
     threebeam : bool, default False
-        Enable three-beam mode (ignore one beam).
+        Controls how many beams must fail before a cell is masked:
+
+        - False (default): mask if **any** beam is below threshold. Use when
+          the pre-deployment setting did not allow a 3-beam solution, or to
+          apply a stricter post-collection check.
+        - True: mask only if **2 or more** beams are below threshold. Use when
+          the pre-deployment setting allowed a 3-beam solution and you want to
+          apply a stricter cutoff than the deployment setting while still
+          tolerating one weak beam.
     beam_ignore : int, optional
-        Beam index to ignore in three-beam mode (0-3).
+        Beam index (0-3) to exclude from the check. Use when a beam is known
+        to be permanently faulty (identifiable from correlation, echo intensity,
+        or percent-good diagnostics). The remaining three beams are checked
+        using the ``threebeam`` rule.
 
     Returns
     -------
     xr.Dataset
         Dataset with updated mask.
     """
-    _validate_threshold("echo_intensity", cutoff)
-
     var_name = "echo_intensity"
     if var_name not in ds.data_vars:
         if "echo" in ds.data_vars:
@@ -192,15 +208,52 @@ def echo_intensity_check(
     mask = _get_mask_or_create(ds)
     echo = ds[var_name]
 
-    flag = echo < cutoff
+    if "beam" not in echo.dims:
+        logger.warning("Echo intensity has no beam dimension")
+        return ds
 
-    if threebeam and beam_ignore is not None and 0 <= beam_ignore <= 3:
-        if "beam" in flag.coords:
-            is_ignored = flag["beam"] == beam_ignore
-            flag = flag & (~is_ignored)
-            logger.info(f"Three-beam mode: ignoring beam {beam_ignore}")
+    # Build per-beam threshold and compute below-threshold flag
+    if isinstance(cutoff, list):
+        for c in cutoff:
+            _validate_threshold("echo_intensity", c)
+        beam_coords = echo.coords["beam"].values
+        if len(cutoff) != len(beam_coords):
+            logger.warning(
+                f"cutoff list length {len(cutoff)} != n_beams {len(beam_coords)},"
+                " using cutoff[0] for all beams"
+            )
+            below = echo < float(cutoff[0])
+        else:
+            cutoff_da = xr.DataArray(
+                cutoff, dims=["beam"], coords={"beam": beam_coords}
+            )
+            below = echo < cutoff_da
+    else:
+        _validate_threshold("echo_intensity", cutoff)
+        below = echo < cutoff
 
-    mask_updated = xr.where(flag, 1, mask).astype(np.int8)
+    # Exclude known-bad beam from the count
+    if beam_ignore is not None:
+        if 0 <= beam_ignore < echo.sizes["beam"]:
+            beam_coords = echo.coords["beam"].values
+            keep_beams = [b for b in beam_coords if b != beam_coords[beam_ignore]]
+            below = below.sel(beam=keep_beams)
+            logger.debug(f"Echo intensity: ignoring beam {beam_ignore}")
+        else:
+            logger.warning(
+                f"beam_ignore={beam_ignore} out of range, ignoring parameter"
+            )
+
+    # Count beams below threshold at each (cell, time) point
+    n_failing = below.sum(dim="beam")
+
+    # Apply 3-beam rule: tolerate 1 bad beam when threebeam=True
+    min_failing = 2 if threebeam else 1
+    cell_flag = n_failing >= min_failing
+
+    # Mask the full depth cell across all beams. Transpose restores (beam, cell, time)
+    # order — xr.where with a (cell, time) condition reorders dims to (cell, time, beam).
+    mask_updated = xr.where(cell_flag, 1, mask).transpose(*mask.dims).astype(np.int8)
     mask_updated.attrs = mask.attrs.copy()
 
     ds_out = ds.copy(deep=True)
@@ -208,8 +261,8 @@ def echo_intensity_check(
 
     newly_flagged = int((mask_updated == 1).sum()) - int((mask == 1).sum())
     logger.info(
-        f"Echo intensity check applied: cutoff={cutoff}, "
-        f"newly flagged cells: {newly_flagged}"
+        f"Echo intensity check applied: cutoff={cutoff}, threebeam={threebeam}, "
+        f"beam_ignore={beam_ignore}, newly flagged cells: {newly_flagged}"
     )
 
     return ds_out
@@ -663,7 +716,7 @@ class SignalQualityRunner:
         self,
         check_name: str,
         check_func: Any,
-        cutoff: float,
+        cutoff: float | list[float],
         **kwargs: Any,
     ) -> SignalQualityRunner:
         """Apply check and record statistics."""
@@ -742,7 +795,7 @@ class SignalQualityRunner:
 
     def echo_intensity(
         self,
-        cutoff: float = DEFAULT_ECHO_THRESHOLD,
+        cutoff: float | list[float] = DEFAULT_ECHO_THRESHOLD,
         threebeam: bool = False,
         beam_ignore: int | None = None,
     ) -> SignalQualityRunner:
@@ -751,12 +804,14 @@ class SignalQualityRunner:
 
         Parameters
         ----------
-        cutoff : float, default 40
-            Minimum acceptable echo intensity value.
+        cutoff : float or list of float, default 40
+            Minimum acceptable echo intensity. A single value applies to all
+            beams; a list of four values sets a per-beam threshold.
         threebeam : bool, default False
-            Enable three-beam mode.
+            If True, mask only when 2+ beams are below threshold.
+            If False, mask when any beam is below threshold.
         beam_ignore : int, optional
-            Beam to ignore in three-beam mode.
+            Beam index to exclude from the check (0-3).
 
         Returns
         -------

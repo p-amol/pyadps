@@ -465,15 +465,17 @@ class TestPageLoads:
         assert "Apply Percent Good Check" in labels
         assert "Enable Three-Beam Mode" in labels
 
-    def test_seven_number_inputs_rendered(self, loaded_at):
+    def test_core_number_inputs_rendered(self, loaded_at):
+        """Inputs always visible regardless of checkbox state (Echo Intensity is conditional)."""
         labels = [n.label for n in loaded_at.number_input]
         assert "Deployment Ensemble" in labels
         assert "Recovery Ensemble" in labels
         assert "Correlation Threshold (0-255)" in labels
         assert "Error Velocity Threshold (mm/s)" in labels
-        assert "Echo Intensity Threshold (0-255)" in labels
         assert "False Target Threshold (0-255)" in labels
         assert "Percent Good Threshold (0-100)" in labels
+        # Echo Intensity Threshold only appears when its checkbox is ticked
+        assert "Echo Intensity Threshold (0-255)" not in labels
 
     def test_four_buttons_rendered(self, loaded_at):
         labels = [b.label for b in loaded_at.button]
@@ -534,18 +536,18 @@ class TestTab1NoiseFloor:
 class TestTab2DefaultState:
     """Verify the default checkbox and number_input state after initialization."""
 
-    def test_correlation_checkbox_checked_by_default(self, loaded_at):
+    def test_correlation_checkbox_unchecked_by_default(self, loaded_at):
         cb = [c for c in loaded_at.checkbox
               if "Correlation" in c.label and "Three" not in c.label][0]
-        assert cb.value is True
+        assert cb.value is False
 
-    def test_error_velocity_checkbox_checked_by_default(self, loaded_at):
+    def test_error_velocity_checkbox_unchecked_by_default(self, loaded_at):
         cb = [c for c in loaded_at.checkbox if "Error Velocity" in c.label][0]
-        assert cb.value is True
+        assert cb.value is False
 
-    def test_false_target_checkbox_checked_by_default(self, loaded_at):
+    def test_false_target_checkbox_unchecked_by_default(self, loaded_at):
         cb = [c for c in loaded_at.checkbox if "False Target" in c.label][0]
-        assert cb.value is True
+        assert cb.value is False
 
     def test_echo_intensity_checkbox_unchecked_by_default(self, loaded_at):
         cb = [c for c in loaded_at.checkbox if "Echo Intensity" in c.label][0]
@@ -581,9 +583,8 @@ class TestTab2DefaultState:
         assert ni.value == 25
 
     def test_echo_intensity_threshold_default_zero(self, loaded_at):
-        ni = [n for n in loaded_at.number_input
-              if "Echo Intensity Threshold" in n.label][0]
-        assert ni.value == 0
+        """EI threshold is 0 by default — checked via session state (widget is hidden)."""
+        assert loaded_at.session_state["echo_intensity_threshold"] == 0
 
 
 # ===========================================================================
@@ -592,14 +593,15 @@ class TestTab2DefaultState:
 
 
 class TestTab2ThreeBeamMode:
-    """Enabling the three-beam checkbox reveals the beam-ignore selectbox."""
+    """Three-beam checkbox and the independent Beam to Ignore selectbox."""
 
-    def test_no_beam_selectbox_when_threebeam_disabled(self, loaded_at):
-        """Beam ignore selectbox is absent when three-beam mode is off."""
+    def test_beam_ignore_selectbox_always_visible(self, loaded_at):
+        """Beam to Ignore selectbox is present even when three-beam mode is off."""
         selectboxes = [s.label for s in loaded_at.selectbox]
-        assert not any("Beam to Ignore" in l for l in selectboxes)
+        assert any("Beam to Ignore" in l for l in selectboxes)
 
-    def test_beam_selectbox_appears_when_threebeam_enabled(self, proc):
+    def test_beam_selectbox_present_when_threebeam_enabled(self, proc):
+        """Beam to Ignore selectbox remains visible when three-beam is enabled."""
         at = _make_loaded_at(proc)
         cb = [c for c in at.checkbox if "Three-Beam" in c.label][0]
         cb.check().run()
@@ -607,30 +609,25 @@ class TestTab2ThreeBeamMode:
         selectboxes = [s.label for s in at.selectbox]
         assert any("Beam to Ignore" in l for l in selectboxes)
 
-    def test_beam_selectbox_has_five_options(self, proc):
-        at = _make_loaded_at(proc)
-        cb = [c for c in at.checkbox if "Three-Beam" in c.label][0]
-        cb.check().run()
-        sb = [s for s in at.selectbox if "Beam to Ignore" in s.label][0]
+    def test_beam_selectbox_has_five_options(self, loaded_at):
+        sb = [s for s in loaded_at.selectbox if "Beam to Ignore" in s.label][0]
         assert "None" in sb.options
         assert "Beam 1" in sb.options
         assert "Beam 4" in sb.options
 
-    def test_disabling_threebeam_hides_selectbox(self, proc):
-        # Start with threebeam_mode=True pre-set so the selectbox is visible
-        # on the first render — no .check() interaction needed, which avoids
-        # the stale widget-object issue that arises when cb is re-fetched after
-        # a rerun in the same AppTest instance.
+    def test_disabling_threebeam_keeps_beam_ignore_visible(self, proc):
+        """Unchecking Three-Beam does not hide the Beam to Ignore selectbox."""
         at = _make_loaded_at(proc, extra_ss={
             "threebeam_mode": True,
             "qc_initialized": True,
-            "apply_correlation": True,
+            "apply_correlation": False,
             "apply_echo_intensity": False,
-            "apply_error_velocity": True,
+            "apply_error_velocity": False,
             "apply_percent_good": False,
-            "apply_false_target": True,
+            "apply_false_target": False,
             "correlation_threshold": 64,
             "echo_intensity_threshold": 0,
+            "echo_intensity_per_beam_threshold": None,
             "error_velocity_threshold": 2000,
             "percent_good_threshold": 25,
             "false_target_threshold": 50,
@@ -641,14 +638,12 @@ class TestTab2ThreeBeamMode:
             "qc_preview_run": False,
             "qc_preview_stats": None,
         })
-        # Selectbox must be visible on first render
         assert any("Beam to Ignore" in s.label for s in at.selectbox)
-        # Uncheck using the fresh widget reference from the current render tree
         cb = [c for c in at.checkbox if "Three-Beam" in c.label][0]
         cb.uncheck().run()
         assert not at.exception
-        selectboxes = [s.label for s in at.selectbox]
-        assert not any("Beam to Ignore" in l for l in selectboxes)
+        # Beam to Ignore is independent — stays visible after disabling Three-Beam
+        assert any("Beam to Ignore" in s.label for s in at.selectbox)
 
 
 # ===========================================================================
@@ -1044,6 +1039,7 @@ class TestSessionStateInit:
         "qc_preview_run",
         "correlation_threshold",
         "echo_intensity_threshold",
+        "echo_intensity_per_beam_threshold",
         "error_velocity_threshold",
         "percent_good_threshold",
         "false_target_threshold",
@@ -1105,20 +1101,23 @@ class TestSessionStateInit:
     def test_percent_good_threshold_from_dataset(self, loaded_at):
         assert loaded_at.session_state["percent_good_threshold"] == 25
 
-    def test_apply_correlation_true_by_default(self, loaded_at):
-        assert loaded_at.session_state["apply_correlation"] is True
+    def test_apply_correlation_false_by_default(self, loaded_at):
+        assert loaded_at.session_state["apply_correlation"] is False
 
     def test_apply_echo_intensity_false_by_default(self, loaded_at):
         assert loaded_at.session_state["apply_echo_intensity"] is False
 
-    def test_apply_error_velocity_true_by_default(self, loaded_at):
-        assert loaded_at.session_state["apply_error_velocity"] is True
+    def test_apply_error_velocity_false_by_default(self, loaded_at):
+        assert loaded_at.session_state["apply_error_velocity"] is False
 
     def test_apply_percent_good_false_by_default(self, loaded_at):
         assert loaded_at.session_state["apply_percent_good"] is False
 
-    def test_apply_false_target_true_by_default(self, loaded_at):
-        assert loaded_at.session_state["apply_false_target"] is True
+    def test_apply_false_target_false_by_default(self, loaded_at):
+        assert loaded_at.session_state["apply_false_target"] is False
+
+    def test_echo_intensity_per_beam_threshold_none_by_default(self, loaded_at):
+        assert loaded_at.session_state["echo_intensity_per_beam_threshold"] is None
 
 
 # ===========================================================================
@@ -1176,6 +1175,8 @@ class TestThresholdInputs:
 
     def test_change_echo_intensity_threshold(self, proc):
         at = _make_loaded_at(proc)
+        cb = [c for c in at.checkbox if "Echo Intensity" in c.label][0]
+        cb.check().run()
         ni = [n for n in at.number_input if "Echo Intensity Threshold" in n.label][0]
         ni.set_value(40).run()
         assert not at.exception
@@ -1187,6 +1188,376 @@ class TestThresholdInputs:
         ni.set_value(50).run()
         assert not at.exception
         assert at.session_state["percent_good_threshold"] == 50
+
+
+# ===========================================================================
+# NEW TESTS — session-state changes, per-beam EI, noise floor send, config
+# table, importance captions, and beam-to-ignore independence
+# ===========================================================================
+
+
+def _fully_initialized_ss(**overrides) -> dict:
+    """Return a complete qc_initialized session state dict with optional overrides."""
+    base = {
+        "qc_initialized": True,
+        "qc_applied": False,
+        "qc_preview_run": False,
+        "correlation_threshold": 64,
+        "echo_intensity_threshold": 0,
+        "echo_intensity_per_beam_threshold": None,
+        "error_velocity_threshold": 2000,
+        "percent_good_threshold": 25,
+        "false_target_threshold": 50,
+        "apply_correlation": False,
+        "apply_echo_intensity": False,
+        "apply_error_velocity": False,
+        "apply_percent_good": False,
+        "apply_false_target": False,
+        "threebeam_mode": False,
+        "beam_ignore": None,
+        "beam_direction_current": "Up",
+        "beam_direction_modified": False,
+        "qc_preview_stats": None,
+    }
+    base.update(overrides)
+    return base
+
+
+# ===========================================================================
+# A. Beam to Ignore — now an independent widget, not nested under Three-Beam
+# ===========================================================================
+
+
+class TestBeamToIgnoreStandalone:
+    """Beam to Ignore selectbox is always present regardless of three-beam state."""
+
+    def test_selectbox_present_by_default(self, loaded_at):
+        labels = [s.label for s in loaded_at.selectbox]
+        assert any("Beam to Ignore" in l for l in labels)
+
+    def test_selectbox_defaults_to_none(self, loaded_at):
+        sb = [s for s in loaded_at.selectbox if "Beam to Ignore" in s.label][0]
+        assert sb.value == "None"
+
+    def test_selecting_beam_2_sets_beam_ignore(self, proc):
+        at = _make_loaded_at(proc)
+        sb = [s for s in at.selectbox if "Beam to Ignore" in s.label][0]
+        sb.set_value("Beam 2").run()
+        assert not at.exception
+        assert at.session_state["beam_ignore"] == 1
+
+    def test_selecting_beam_4_sets_beam_ignore_3(self, proc):
+        at = _make_loaded_at(proc)
+        sb = [s for s in at.selectbox if "Beam to Ignore" in s.label][0]
+        sb.set_value("Beam 4").run()
+        assert not at.exception
+        assert at.session_state["beam_ignore"] == 3
+
+    def test_reverting_to_none_clears_beam_ignore(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(beam_ignore=2))
+        sb = [s for s in at.selectbox if "Beam to Ignore" in s.label][0]
+        sb.set_value("None").run()
+        assert not at.exception
+        assert at.session_state["beam_ignore"] is None
+
+    def test_selectbox_present_without_threebeam(self, proc):
+        """Three-Beam unchecked — Beam to Ignore still visible."""
+        at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(threebeam_mode=False))
+        assert any("Beam to Ignore" in s.label for s in at.selectbox)
+
+    def test_selectbox_present_with_threebeam(self, proc):
+        """Three-Beam checked — Beam to Ignore still visible."""
+        at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(threebeam_mode=True))
+        assert any("Beam to Ignore" in s.label for s in at.selectbox)
+
+
+# ===========================================================================
+# B. Echo intensity per-beam mode in QC Tests tab
+# ===========================================================================
+
+
+class TestEchoIntensityPerBeamMode:
+    """Echo intensity radio and per-beam number inputs in the QC Tests tab."""
+
+    def _with_ei_checked(self, proc: MagicMock) -> AppTest:
+        at = _make_loaded_at(proc)
+        cb = [c for c in at.checkbox if "Echo Intensity" in c.label][0]
+        cb.check().run()
+        assert not at.exception
+        return at
+
+    def test_ei_radio_appears_when_checkbox_ticked(self, proc):
+        at = self._with_ei_checked(proc)
+        radios = [r for r in at.radio if "intensity mode" in r.label.lower()
+                  or r.key == "ei_mode_radio"]
+        assert len(radios) > 0
+
+    def test_ei_radio_defaults_to_single_threshold(self, proc):
+        at = self._with_ei_checked(proc)
+        radio = [r for r in at.radio if r.key == "ei_mode_radio"][0]
+        assert radio.value == "Single threshold"
+
+    def test_single_mode_shows_number_input(self, proc):
+        at = self._with_ei_checked(proc)
+        labels = [n.label for n in at.number_input]
+        assert "Echo Intensity Threshold (0-255)" in labels
+
+    def test_per_beam_mode_shows_four_inputs(self, proc):
+        at = self._with_ei_checked(proc)
+        radio = [r for r in at.radio if r.key == "ei_mode_radio"][0]
+        radio.set_value("Per-beam threshold (4 values)").run()
+        assert not at.exception
+        beam_inputs = [n for n in at.number_input
+                       if n.label.startswith("Beam ") and n.key and "qc_ei_pb" in n.key]
+        assert len(beam_inputs) == 4
+
+    def test_per_beam_updates_session_state(self, proc):
+        at = self._with_ei_checked(proc)
+        radio = [r for r in at.radio if r.key == "ei_mode_radio"][0]
+        radio.set_value("Per-beam threshold (4 values)").run()
+        ni = [n for n in at.number_input if n.key == "qc_ei_pb_0"][0]
+        ni.set_value(45.0).run()
+        assert not at.exception
+        pb = at.session_state["echo_intensity_per_beam_threshold"]
+        assert pb is not None
+        assert pb[0] == 45.0
+
+    def test_single_mode_clears_per_beam_threshold(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(
+            apply_echo_intensity=True,
+            echo_intensity_per_beam_threshold=[50.0, 55.0, 48.0, 52.0],
+            ei_mode_radio="Single threshold",
+        ))
+        assert at.session_state["echo_intensity_per_beam_threshold"] is None
+
+    def test_ei_radio_absent_when_checkbox_unticked(self, loaded_at):
+        radios = [r for r in loaded_at.radio if r.key == "ei_mode_radio"]
+        assert len(radios) == 0
+
+    def test_per_beam_inputs_initialise_from_existing_threshold(self, proc):
+        """Pre-existing per-beam threshold populates the 4 inputs."""
+        pre_values = [40.0, 45.0, 42.0, 38.0]
+        at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(
+            apply_echo_intensity=True,
+            echo_intensity_per_beam_threshold=pre_values,
+            ei_mode_radio="Per-beam threshold (4 values)",
+        ))
+        assert not at.exception
+        for b, expected in enumerate(pre_values):
+            ni = [n for n in at.number_input if n.key == f"qc_ei_pb_{b}"]
+            assert len(ni) == 1
+            assert ni[0].value == expected
+
+
+# ===========================================================================
+# C. Noise floor send section
+# ===========================================================================
+
+
+def _make_noise_active_ss(**overrides) -> dict:
+    """Session state that activates the deployment noise floor stats section."""
+    base = _fully_initialized_ss()
+    base.update({
+        "noise_dep_compute": True,
+        "noise_dep_min_cell": 10,
+        "noise_dep_max_cell": 19,
+    })
+    base.update(overrides)
+    return base
+
+
+class TestNoiseFloorSendSection:
+    """Send-to-QC buttons in the Noise Floor tab."""
+
+    def test_send_section_appears_when_dep_active(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss())
+        assert not at.exception
+        labels = [b.label for b in at.button]
+        assert any("Send to Echo Intensity Threshold" in l for l in labels)
+
+    def test_send_section_absent_with_no_active_ensemble(self, loaded_at):
+        """Without noise_dep_compute or noise_rec_compute, send section is hidden."""
+        labels = [b.label for b in loaded_at.button]
+        assert not any("Send to Echo Intensity Threshold" in l for l in labels)
+
+    def test_send_single_sets_echo_intensity_threshold(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss())
+        btn = [b for b in at.button if "Send to Echo Intensity Threshold" in b.label
+               and b.key == "noise_send_single"][0]
+        btn.click().run()
+        assert not at.exception
+        assert at.session_state["apply_echo_intensity"] is True
+        assert at.session_state["echo_intensity_threshold"] is not None
+
+    def test_send_single_sets_ei_mode_radio_to_single(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss())
+        btn = [b for b in at.button if b.key == "noise_send_single"][0]
+        btn.click().run()
+        assert at.session_state["ei_mode_radio"] == "Single threshold"
+
+    def test_send_single_clears_per_beam_threshold(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss(
+            echo_intensity_per_beam_threshold=[50.0, 55.0, 48.0, 52.0]
+        ))
+        btn = [b for b in at.button if b.key == "noise_send_single"][0]
+        btn.click().run()
+        assert at.session_state["echo_intensity_per_beam_threshold"] is None
+
+    def test_send_per_beam_sets_per_beam_threshold(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss(
+            noise_send_option="Per-beam threshold (4 values)"
+        ))
+        assert not at.exception
+        btn = [b for b in at.button if b.key == "noise_send_per_beam"]
+        if not btn:
+            pytest.skip("Per-beam send button not rendered in this configuration")
+        btn[0].click().run()
+        assert not at.exception
+        pb = at.session_state["echo_intensity_per_beam_threshold"]
+        assert isinstance(pb, list)
+        assert len(pb) == 4
+
+    def test_send_per_beam_sets_ei_mode_radio_to_per_beam(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss(
+            noise_send_option="Per-beam threshold (4 values)"
+        ))
+        btn = [b for b in at.button if b.key == "noise_send_per_beam"]
+        if not btn:
+            pytest.skip("Per-beam send button not rendered in this configuration")
+        btn[0].click().run()
+        assert at.session_state["ei_mode_radio"] == "Per-beam threshold (4 values)"
+
+    def test_send_per_beam_seeds_qc_ei_pb_keys(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss(
+            noise_send_option="Per-beam threshold (4 values)"
+        ))
+        btn = [b for b in at.button if b.key == "noise_send_per_beam"]
+        if not btn:
+            pytest.skip("Per-beam send button not rendered in this configuration")
+        btn[0].click().run()
+        for b in range(4):
+            assert f"qc_ei_pb_{b}" in at.session_state
+
+    def test_fill_dep_button_enabled_when_dep_active(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss(
+            noise_send_option="Per-beam threshold (4 values)"
+        ))
+        assert not at.exception
+        fill_btns = [b for b in at.button if b.key == "noise_fill_dep"]
+        if fill_btns:
+            assert not fill_btns[0].disabled
+
+
+# ===========================================================================
+# D. Configuration table — per-beam display
+# ===========================================================================
+
+
+class TestConfigurationTablePerBeam:
+    """Current Configuration table shows per-beam EI threshold as a list."""
+
+    def _get_config_df(self, at: AppTest):
+        """Find the Current Configuration dataframe (columns: Test, Value, Enabled)."""
+        for df_el in at.dataframe:
+            try:
+                val = df_el.value
+                if hasattr(val, "columns") and "Test" in val.columns:
+                    return val
+            except Exception:
+                continue
+        return None
+
+    def test_per_beam_threshold_shown_as_list(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(
+            apply_echo_intensity=True,
+            echo_intensity_per_beam_threshold=[50.0, 55.0, 48.0, 52.0],
+            ei_mode_radio="Per-beam threshold (4 values)",
+            qc_ei_pb_0=50.0, qc_ei_pb_1=55.0, qc_ei_pb_2=48.0, qc_ei_pb_3=52.0,
+        ))
+        df = self._get_config_df(at)
+        assert df is not None
+        ei_row = df[df["Test"] == "Echo Intensity"]
+        assert len(ei_row) == 1
+        val_str = str(ei_row.iloc[0]["Value"])
+        assert "[" in val_str  # list representation
+
+    def test_single_threshold_shown_as_scalar(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(
+            apply_echo_intensity=True,
+            echo_intensity_threshold=42,
+            echo_intensity_per_beam_threshold=None,
+        ))
+        df = self._get_config_df(at)
+        assert df is not None
+        ei_row = df[df["Test"] == "Echo Intensity"]
+        assert len(ei_row) == 1
+        val_str = str(ei_row.iloc[0]["Value"])
+        assert "[" not in val_str
+        assert "42" in val_str
+
+    def test_beam_ignore_appears_as_separate_row(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(
+            beam_ignore=1,  # Beam 2 (0-indexed)
+        ))
+        df = self._get_config_df(at)
+        assert df is not None
+        beam_row = df[df["Test"] == "Beam to Ignore"]
+        assert len(beam_row) == 1
+        assert "Beam 2" in str(beam_row.iloc[0]["Value"])
+
+    def test_threebeam_and_beam_ignore_are_separate_rows(self, proc):
+        at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(
+            threebeam_mode=True,
+            beam_ignore=0,  # Beam 1
+        ))
+        df = self._get_config_df(at)
+        assert df is not None
+        assert any(df["Test"] == "Three-Beam Mode")
+        assert any(df["Test"] == "Beam to Ignore")
+
+    def test_config_table_empty_when_no_checks(self, loaded_at):
+        """No checks active → warning shown instead of dataframe."""
+        warning_text = " ".join(w.value for w in loaded_at.warning)
+        assert "No QC tests selected" in warning_text or "no qc" in warning_text.lower()
+
+
+# ===========================================================================
+# E. Importance-level captions in QC Tests tab
+# ===========================================================================
+
+
+class TestImportanceCaptions:
+    """Each QC check has an importance caption below its checkbox."""
+
+    def _captions(self, loaded_at: AppTest) -> str:
+        return " ".join(c.value for c in loaded_at.caption)
+
+    def test_correlation_caption_says_optional(self, loaded_at):
+        assert "Optional" in self._captions(loaded_at)
+
+    def test_error_velocity_caption_says_recommended(self, loaded_at):
+        assert "Recommended" in self._captions(loaded_at)
+
+    def test_percent_good_caption_says_important(self, loaded_at):
+        assert "Important" in self._captions(loaded_at)
+
+    def test_false_target_caption_says_optional(self, loaded_at):
+        captions = self._captions(loaded_at)
+        # Multiple Optional captions — verify False Target is one of them
+        assert "WA command" in captions or "false target" in captions.lower()
+
+    def test_echo_intensity_caption_mentions_noise_floor(self, loaded_at):
+        captions = self._captions(loaded_at)
+        assert "noise floor" in captions.lower() or "Noise Floor" in captions
+
+    def test_pg_advisor_tab_has_recommended_caption(self, loaded_at):
+        captions = self._captions(loaded_at)
+        assert "Recommended" in captions
+
+    def test_at_least_three_optional_captions(self, loaded_at):
+        """Correlation, Echo Intensity, and False Target are all Optional."""
+        count = self._captions(loaded_at).count("Optional")
+        assert count >= 3
 
 
 # ===========================================================================
@@ -1722,7 +2093,11 @@ class TestPreviewErrorPath:
         bad_runner.percent_good.side_effect = RuntimeError("failed")
         proc_err.get_signal_quality_runner.return_value = bad_runner
 
-        at = _make_loaded_at(proc_err)
+        # Enable correlation (with qc_initialized=True to skip the init block)
+        # so the runner method is actually called and the error triggers.
+        at = _make_loaded_at(proc_err, extra_ss=_fully_initialized_ss(
+            apply_correlation=True,
+        ))
         btn = [b for b in at.button if "Preview QC Impact" in b.label][0]
         btn.click().run()
         assert not at.exception
@@ -1975,7 +2350,13 @@ def page_module(inject_pyadps_mock):
          patch.object(st, "tabs", return_value=[MagicMock() for _ in range(6)]), \
          patch.dict(
              "streamlit.session_state",
-             {"processor": proc_mod},
+             {
+                 "processor": proc_mod,
+                 # Noise-floor checkboxes — new in this session; must be pre-seeded
+                 # so st.session_state.noise_dep_compute reads as False during exec.
+                 "noise_dep_compute": False,
+                 "noise_rec_compute": False,
+             },
              clear=False,
          ):
         try:

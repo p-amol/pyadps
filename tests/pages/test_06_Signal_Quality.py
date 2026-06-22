@@ -1,9 +1,9 @@
 """
-Test Suite for 05_Signal_Quality.py — Signal Quality Control Page (v1.0.0)
+Test Suite for 06_Signal_Quality.py — Signal Quality Control Page (v1.0.0)
 ====================================================================
 Uses Streamlit's AppTest framework (streamlit.testing.v1.AppTest) to run
 the *actual* Streamlit script in a simulated runtime, giving real line and
-branch coverage on 05_Signal_Quality.py itself.
+branch coverage on 06_Signal_Quality.py itself.
 
 Strategy
 --------
@@ -37,8 +37,8 @@ TestStagingProcessorInit  — preview_qc_proc created on first run
 TestThresholdInputs       — number_input changes update session state
 
 Run with:
-    pytest test_05_Signal_Quality.py -v
-    pytest test_05_Signal_Quality.py -v --tb=short
+    pytest test_06_Signal_Quality.py -v
+    pytest test_06_Signal_Quality.py -v --tb=short
 """
 
 from __future__ import annotations
@@ -57,18 +57,18 @@ from streamlit.testing.v1 import AppTest
 # ---------------------------------------------------------------------------
 # SCRIPT PATH
 # Standard installed layout:
-#   pyadps/tests/pages/test_05_Signal_Quality.py   ← __file__
+#   pyadps/tests/pages/test_06_Signal_Quality.py   ← __file__
 #   .parent                                  → pyadps/tests/pages/
 #   .parent.parent                           → pyadps/tests/
 #   .parent.parent.parent                    → pyadps/
-#   / src/pyadps/pages/05_Signal_Quality.py
+#   / src/pyadps/pages/06_Signal_Quality.py
 # ---------------------------------------------------------------------------
 SCRIPT_PATH = str(
-    Path(__file__).parent.parent.parent / "src" / "pyadps" / "pages" / "05_Signal_Quality.py"
+    Path(__file__).parent.parent.parent / "src" / "pyadps" / "pages" / "06_Signal_Quality.py"
 )
 assert Path(SCRIPT_PATH).exists(), (
     f"Script not found at {SCRIPT_PATH}\n"
-    f"Expected layout: pyadps/src/pyadps/pages/05_Signal_Quality.py\n"
+    f"Expected layout: pyadps/src/pyadps/pages/06_Signal_Quality.py\n"
     f"Test file is at: {__file__}"
 )
 
@@ -87,7 +87,7 @@ def _make_ds(
 ) -> xr.Dataset:
     """
     Build a minimal but complete xr.Dataset whose variables cover every
-    branch in 05_Signal_Quality.py's helper functions.
+    branch in 06_Signal_Quality.py's helper functions.
     """
     time = pd.date_range("2024-01-01", periods=n_ens, freq="h")
     rng = np.random.default_rng(42)
@@ -186,7 +186,7 @@ def _make_advisor_result(**overrides) -> MagicMock:
 def _make_mock_processor(ds: xr.Dataset) -> MagicMock:
     """
     Build a MagicMock that satisfies the ProcessedDataset API used by
-    05_Signal_Quality.py:
+    06_Signal_Quality.py:
       - .dataset
       - .processing_log
       - .get_current_stats()
@@ -271,7 +271,7 @@ def inject_pyadps_mock():
     What we mock and why
     --------------------
     pyadps.processing
-        05_Signal_Quality.py does ``from pyadps.processing import ProcessedDataset``.
+        06_Signal_Quality.py does ``from pyadps.processing import ProcessedDataset``.
         We supply a ProcessedDataset factory that returns a MagicMock so the
         staging-processor construction path (lines 339-347) is exercised.
 
@@ -384,7 +384,7 @@ def loaded_at(proc) -> AppTest:
 
 class TestNoProcessorState:
     """
-    Covers lines 37-39 of 05_Signal_Quality.py:
+    Covers lines 37-39 of 06_Signal_Quality.py:
         if "processor" not in st.session_state or st.session_state.processor is None:
             st.error(...)
             st.stop()
@@ -953,7 +953,7 @@ class TestTab5ResetButton:
 
 class TestQCAlreadyApplied:
     """When qc_applied is True the page shows a success banner and a top
-    reset button (lines 364-371 of 05_Signal_Quality.py)."""
+    reset button (lines 364-371 of 06_Signal_Quality.py)."""
 
     def test_no_exception_when_already_applied(self, proc):
         at = _make_loaded_at(proc, extra_ss={"qc_applied": True})
@@ -2282,7 +2282,7 @@ class TestSidebarProcessingLog:
 @pytest.fixture(scope="module")
 def page_module(inject_pyadps_mock):
     """
-    Load 05_Signal_Quality.py as a Python module via importlib so its functions
+    Load 06_Signal_Quality.py as a Python module via importlib so its functions
     can be called directly.  The module-scoped inject_pyadps_mock fixture
     ensures pyadps.processing is mocked before the page is imported.
 

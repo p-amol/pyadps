@@ -516,13 +516,13 @@ class TestWithDataState:
         """App renders without exception when data is loaded."""
         assert not self.at.exception
 
-    def test_five_main_tabs_present(self):
-        """All five main content tabs are rendered."""
+    def test_four_main_tabs_present(self):
+        """All four main content tabs are rendered."""
         tab_labels = [t.label for t in self.at.tabs]
-        expected = ["File Header", "Fixed Leader", "Variable Leader",
-                    "Time Diagnostics", "Data Overview"]
+        expected = ["File Header", "Fixed Leader", "Variable Leader", "Data Overview"]
         for label in expected:
             assert label in tab_labels, f"Tab '{label}' not found in {tab_labels}"
+        assert "Time Diagnostics" not in tab_labels
 
     def test_sidebar_shows_current_file(self):
         """Sidebar displays the current filename."""

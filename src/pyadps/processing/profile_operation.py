@@ -19,9 +19,9 @@ Key Design Principles:
 - **QC before regridding**: QC checks must be done on original cells before regridding
 - **Statistics tracking**: Comprehensive reporting via shared dataclasses
 
-âš ï¸ IMPORTANT SEQUENCING:
+IMPORTANT SEQUENCING:
 1. Quality control checks MUST happen BEFORE regridding
-2. Regridding CHANGES dataset structure (cell â†’ depth dimension)
+2. Regridding CHANGES dataset structure (cell and depth dimension)
 3. After regridding, cell-based masks are no longer compatible
 """
 
@@ -272,7 +272,7 @@ def cut_bins_side_lobe(
     ----------
     ds : xr.Dataset
         Input ADCP dataset with:
-        - 'transducer_depth' coordinate (mm, varies by ensemble/time)
+        - 'transducer_depth' coordinate (dm, varies by ensemble/time)
         - Fixed leader attributes: beam_angle, beam_direction, depth_cell_length
     orientation : str, optional
         Beam direction override ('up' or 'down'). If None, uses dataset attributes.
@@ -291,8 +291,8 @@ def cut_bins_side_lobe(
     Notes
     -----
     Formula (from v0 profile_test.py):
-        depth = transducer_depth / 10  (mm to cm, vectorized for all ensembles)
-        valid_depth = (water_depth - sgn * depth) * cos(beam_angle) + sgn * bin1_distance
+        depth = transducer_depth / 10  (dm to m, vectorized for all ensembles)
+        valid_depth = (water_depth - sgn * depth) * cos(beam_angle) - bin1_distance
         valid_cells = floor(valid_depth * 100 / cell_size) - extra_cells
 
     References
@@ -339,10 +339,10 @@ def cut_bins_side_lobe(
     transducer_depth_m = ds["transducer_depth"].values / 10  # dm to m (array)
 
     # Calculate valid_depth in METERS (following legacy formula)
-    # valid_depth = (water_column_depth - sgn * depth) * cos(angle) + sgn * bin1dist
+    # valid_depth = (water_column_depth - sgn * depth) * cos(angle) - bin1dist
     valid_depth_m = (water_depth_m - sgn * transducer_depth_m) * np.cos(
         beam_angle_rad
-    ) + sgn * bin1_dist_m
+    ) - bin1_dist_m
 
     # Calculate valid cells: convert valid_depth from m to cm, divide by cell_size in cm
     # valid_cells = valid_depth * 100 / cell_size_cm
@@ -361,9 +361,7 @@ def cut_bins_side_lobe(
 
         if num_cells > c:
             # Mark cells beyond valid_cells as contaminated (all beams)
-            pre_count = (mask_values[:, c:, i] == 1).sum()
             mask_values[:, c:, i] = 1
-            post_count = (mask_values[:, c:, i] == 1).sum()
             newly_flagged = (num_cells - c) * n_beams
             contaminated_per_ensemble[i] = num_cells - c
             total_contaminated += newly_flagged
@@ -554,7 +552,7 @@ def regrid(
     transducer depth) to a uniform regular depth grid for easier analysis and
     visualization.
 
-    âš ï¸ WARNING: This operation changes the dataset structure from (beam, cell, time)
+    WARNING: This operation changes the dataset structure from (beam, cell, time)
     to (beam, depth, time). After regridding, cell-based masks are no longer valid.
 
     Mask Handling Strategy:

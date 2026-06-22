@@ -40,8 +40,8 @@ AppTest design decisions
 
 Usage
 -----
-    pytest tests/pages/test_04_Sensor_Health.py -v
-    pytest tests/pages/test_04_Sensor_Health.py -v --tb=short
+    pytest tests/pages/test_05_Sensor_Health.py -v
+    pytest tests/pages/test_05_Sensor_Health.py -v --tb=short
 """
 
 from __future__ import annotations
@@ -64,11 +64,11 @@ from streamlit.testing.v1 import AppTest
 # ---------------------------------------------------------------------------
 SCRIPT_PATH = str(
     Path(__file__).parent.parent.parent
-    / "src" / "pyadps" / "pages" / "04_Sensor_Health.py"
+    / "src" / "pyadps" / "pages" / "05_Sensor_Health.py"
 )
 assert Path(SCRIPT_PATH).exists(), (
     f"Script not found at {SCRIPT_PATH}\n"
-    f"Expected layout: pyadps/src/pyadps/pages/04_Sensor_Health.py"
+    f"Expected layout: pyadps/src/pyadps/pages/05_Sensor_Health.py"
 )
 
 

@@ -1,5 +1,5 @@
 """
-Test Suite for 06_Profile_Operations.py — Profile Operations Page (v1.0.0)
+Test Suite for 07_Profile_Operations.py — Profile Operations Page (v1.0.0)
 =====================================================================
 Uses Streamlit's AppTest framework (streamlit.testing.v1.AppTest) to run
 the *actual* Streamlit script, giving real line and branch coverage.
@@ -43,8 +43,8 @@ TestPageFunctionsDirectly    all helper function branches via importlib:
                                _trim_has_effect/_trim_to_counts/_trim_trimends
 
 Run with:
-    pytest test_06_Profile_Operations.py -v
-    pytest test_06_Profile_Operations.py -v --tb=short
+    pytest test_07_Profile_Operations.py -v
+    pytest test_07_Profile_Operations.py -v --tb=short
 """
 
 from __future__ import annotations
@@ -64,16 +64,16 @@ from streamlit.testing.v1 import AppTest
 
 # ---------------------------------------------------------------------------
 # SCRIPT PATH — standard installed layout
-#   pyadps/tests/pages/test_06_Profile_Operations.py   ← __file__
+#   pyadps/tests/pages/test_07_Profile_Operations.py   ← __file__
 #   .parent.parent.parent                         → pyadps/
-#   / src/pyadps/pages/06_Profile_Operations.py
+#   / src/pyadps/pages/07_Profile_Operations.py
 # ---------------------------------------------------------------------------
 SCRIPT_PATH = str(
-    Path(__file__).parent.parent.parent / "src" / "pyadps" / "pages" / "06_Profile_Operations.py"
+    Path(__file__).parent.parent.parent / "src" / "pyadps" / "pages" / "07_Profile_Operations.py"
 )
 assert Path(SCRIPT_PATH).exists(), (
     f"Script not found at {SCRIPT_PATH}\n"
-    f"Expected layout: pyadps/src/pyadps/pages/06_Profile_Operations.py\n"
+    f"Expected layout: pyadps/src/pyadps/pages/07_Profile_Operations.py\n"
     f"Test file is at: {__file__}"
 )
 
@@ -157,7 +157,7 @@ def _make_stat_mock(
 
 
 def _make_mock_processor(ds: xr.Dataset) -> MagicMock:
-    """MagicMock matching ProcessedDataset API used by 06_Profile_Operations.py."""
+    """MagicMock matching ProcessedDataset API used by 07_Profile_Operations.py."""
     total = (
         ds.sizes.get("beam", 4)
         * ds.sizes.get("cell", 1)
@@ -1314,7 +1314,7 @@ class TestHelperFunctionFallbacks:
 @pytest.fixture(scope="module")
 def page_module(inject_pyadps_mock):
     """
-    Load 06_Profile_Operations.py via importlib so coverage instruments the actual
+    Load 07_Profile_Operations.py via importlib so coverage instruments the actual
     source lines and functions can be called directly.
     """
     import streamlit as st

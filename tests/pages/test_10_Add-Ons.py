@@ -1,5 +1,5 @@
 """
-AppTest-based test suite for 09_Add-Ons.py
+AppTest-based test suite for 10_Add-Ons.py
 
 Three testing strategies are used:
   1. AppTest — for page-level smoke, no-file guard, and widget rendering
@@ -34,7 +34,7 @@ from streamlit.testing.v1 import AppTest
 
 # ---------------------------------------------------------------------------
 SCRIPT_PATH = str(
-    Path(__file__).parent.parent.parent / "src" / "pyadps" / "pages" / "09_Add-Ons.py"
+    Path(__file__).parent.parent.parent / "src" / "pyadps" / "pages" / "10_Add-Ons.py"
 )
 # ---------------------------------------------------------------------------
 

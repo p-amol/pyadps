@@ -20,7 +20,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import streamlit as st
-import plotly.express as px
 
 # pyadps v1.0.0 imports
 import pyadps
@@ -816,87 +815,6 @@ def display_variable_leader_summary(ds) -> None:
             st.error(f"Error reading ESW: {e}")
 
 
-# =============================================================================
-# DISPLAY FUNCTIONS - TIME AXIS DIAGNOSTICS
-# =============================================================================
-
-
-def display_time_diagnostics(ds) -> None:
-    """Display time axis diagnostic plots and correction tools."""
-    st.header("Time Axis Diagnostics", divider="blue")
-
-    st.write("""
-    Analyze and correct the time axis for irregular intervals or gaps.
-    Regular time intervals are important for subsequent processing steps.
-    """)
-
-    # Quick summary
-    is_regular = ds.variable_leader.is_time_regular()
-    interval = ds.variable_leader.get_time_interval()
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if is_regular:
-            st.success("Time is regular")
-        else:
-            st.warning("Irregular time")
-    with col2:
-        st.metric("Common Interval", str(interval) if interval else "N/A")
-    with col3:
-        st.metric("Total Ensembles", len(ds.time))
-
-    # Diagnostic plots
-    plot_tabs = st.tabs(["Interval Plot", "Time Components"])
-
-    with plot_tabs[0]:
-        st.subheader("Time Interval Between Ensembles")
-        try:
-            time_s = pd.Series(ds.time.values)
-            if len(time_s) > 1:
-                time_diff = time_s.diff().dt.total_seconds().dropna()
-
-                fig = px.line(
-                    x=range(len(time_diff)),
-                    y=time_diff,
-                    labels={"x": "Ensemble Number", "y": "Time Difference (seconds)"},
-                    title="Time Interval Between Consecutive Ensembles",
-                )
-                fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Statistics
-                st.write(f"**Mean interval:** {time_diff.mean():.2f} s")
-                st.write(f"**Std deviation:** {time_diff.std():.2f} s")
-                st.write(
-                    f"**Min/Max:** {time_diff.min():.2f} / {time_diff.max():.2f} s"
-                )
-
-        except Exception as e:
-            st.error(f"Error creating interval plot: {e}")
-
-    with plot_tabs[1]:
-        st.subheader("Time Component Frequency")
-        try:
-            component = st.selectbox(
-                "Select component to analyze", ["minute", "second", "hour"]
-            )
-
-            freq = ds.variable_leader.get_time_component_frequency(component)
-            if freq:
-                fig = px.bar(
-                    x=list(freq.keys()),
-                    y=list(freq.values()),
-                    labels={"x": component.title(), "y": "Count"},
-                    title=f"Distribution of {component.title()} Values",
-                )
-                fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Insufficient data for component analysis")
-
-        except Exception as e:
-            st.error(f"Error analyzing time components: {e}")
-
 
 # =============================================================================
 # DISPLAY FUNCTIONS - DATA OVERVIEW
@@ -1060,7 +978,6 @@ def main():
                 "File Header",
                 "Fixed Leader",
                 "Variable Leader",
-                "Time Diagnostics",
                 "Data Overview",
             ]
         )
@@ -1075,9 +992,6 @@ def main():
             display_variable_leader_summary(ds)
 
         with main_tabs[3]:
-            display_time_diagnostics(ds)
-
-        with main_tabs[4]:
             display_data_overview(ds)
 
         # Processing status

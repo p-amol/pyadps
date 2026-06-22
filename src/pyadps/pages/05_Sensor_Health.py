@@ -1,5 +1,5 @@
 """
-04_Sensor_Health.py - Sensor Health Check Page (Refactored for pyadps v1.0.0)
+05_Sensor_Health.py - Sensor Health Check Page (Refactored for pyadps v1.0.0)
 
 This page allows users to:
 1. View and replace sensor data (pressure/depth, salinity, temperature)

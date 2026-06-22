@@ -23,8 +23,8 @@ with open(_ATTR_JSON) as _f:
 # SESSION STATE CHECK
 # =============================================================================
 
-if "ds" not in st.session_state:
-    st.write(":red[Please Select Data!]")
+if "ds" not in st.session_state or st.session_state.ds is None:
+    st.error("⚠️ No data loaded! Please read a file on the **Read File** page first.")
     st.stop()
 
 # =============================================================================
@@ -90,7 +90,7 @@ def create_subset_dataset(
     include_echo: bool = False,
     include_correlation: bool = False,
     include_percent_good: bool = False,
-) -> xr.Dataset:
+) -> xr.Dataset | None:
     """
     Create a subset of the dataset based on selected components.
 
@@ -111,8 +111,8 @@ def create_subset_dataset(
 
     Returns
     -------
-    xr.Dataset
-        Subset dataset containing only selected variables
+    xr.Dataset | None
+        Subset dataset containing only selected variables, or None if nothing selected
     """
     variables_to_include = []
 
@@ -214,9 +214,6 @@ def write_netcdf(
     str
         Path to the created NetCDF file
     """
-    if dataset is None:
-        return None
-
     # Create a copy to avoid modifying the original
     ds_out = dataset.copy()
 
@@ -274,10 +271,7 @@ def download_csv_with_ensemble(data: dict, filename: str):
 
 def download_csv(data: dict, filename: str):
     """Download data as CSV."""
-    if isinstance(data, dict):
-        df = pd.DataFrame.from_dict(data, orient="index").T
-    else:
-        df = pd.DataFrame(data)
+    df = pd.DataFrame.from_dict(data, orient="index").T
     csv = df.to_csv(index=False).encode("utf-8")
     return st.download_button(
         label=f"Download {filename} as CSV",
@@ -424,11 +418,12 @@ if st.session_state.prefix_saved:
     st.success(f"Filename saved as: **{st.session_state.file_prefix}**")
 
 # Axis option
-st.session_state.axis_option_DRW = st.selectbox(
+axis_option_DRW: str = st.selectbox(  # type: ignore[assignment]
     "Select x-axis option:",
     options=["time", "ensemble"],
     index=0,
-)
+) or "time"
+st.session_state.axis_option_DRW = axis_option_DRW
 
 # =============================================================================
 # DATA SELECTION CHECKBOXES
@@ -563,7 +558,7 @@ if st.button("🔄 Generate NetCDF File", type="primary", disabled=not any_selec
 
 st.header("Download Raw Data CSV File", divider="blue")
 
-csv_option = st.selectbox(
+csv_option: str = st.selectbox(  # type: ignore[assignment]
     "Select data type to download:",
     [
         "Velocity",
@@ -573,7 +568,7 @@ csv_option = st.selectbox(
         "Variable Leader",
         "Fixed Leader",
     ],
-)
+) or "Velocity"
 
 if csv_option == "Fixed Leader":
     # Combine all Fixed Leader variables
@@ -613,11 +608,11 @@ elif csv_option == "Variable Leader":
 
 else:
     # Beam data selection
-    beam_selection = st.radio(
+    beam_selection: int = st.radio(  # type: ignore[assignment]
         "Select beam to download",
         (1, 2, 3, 4),
         horizontal=True,
-    )
+    ) or 1
 
     # Map selection to data variable
     data_map = {

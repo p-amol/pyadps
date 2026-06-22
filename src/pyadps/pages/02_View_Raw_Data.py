@@ -31,7 +31,7 @@ from plotly_resampler import FigureResampler
 # =============================================================================
 
 if "ds" not in st.session_state or st.session_state.ds is None:
-    st.write(":red[Please upload an ADCP file on the Read File page first!]")
+    st.error("⚠️ No data loaded! Please read a file on the **Read File** page first.")
     st.stop()
 
 # Get the dataset from session state

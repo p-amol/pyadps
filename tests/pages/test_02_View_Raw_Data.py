@@ -318,11 +318,11 @@ class TestNoDataState:
     """
 
     def test_guard_message_shown_when_no_ds(self):
-        """The 'please upload' red message is shown when session state has no ds."""
+        """The no-data error message is shown when session state has no ds."""
         at = AppTest.from_file(SCRIPT_PATH, default_timeout=15)
         at.run()
-        all_text = " ".join(m.value for m in at.markdown)
-        assert "read file" in all_text.lower() or "upload" in all_text.lower()
+        all_text = " ".join(e.value for e in at.error)
+        assert "no data loaded" in all_text.lower()
 
     def test_no_exception_when_no_ds(self):
         """Guard path exits cleanly — no Python exception escapes."""

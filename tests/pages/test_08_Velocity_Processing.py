@@ -1,12 +1,12 @@
 """
-AppTest-based Test Suite for 07_Velocity_Processing.py
+AppTest-based Test Suite for 08_Velocity_Processing.py
 
 Exercises the actual Streamlit page via streamlit.testing.v1.AppTest,
 covering all six tabs, session-state initialization, helper functions
 (via importlib), and the staging-processor pattern.
 
 Run with:
-    pytest test_07_Velocity_Processing_apptest.py -v
+    pytest test_08_Velocity_Processing.py -v
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ SCRIPT_PATH = str(
     / "src"
     / "pyadps"
     / "pages"
-    / "07_Velocity_Processing.py"
+    / "08_Velocity_Processing.py"
 )
 
 

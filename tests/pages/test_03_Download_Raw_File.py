@@ -505,8 +505,8 @@ class TestNoDataState:
     def test_guard_message_shown(self):
         at = AppTest.from_file(SCRIPT_PATH, default_timeout=15)
         at.run()
-        all_text = " ".join(m.value for m in at.markdown)
-        assert "please" in all_text.lower() or "select" in all_text.lower()
+        all_text = " ".join(e.value for e in at.error)
+        assert "no data loaded" in all_text.lower()
 
     def test_no_exception(self):
         at = AppTest.from_file(SCRIPT_PATH, default_timeout=15)
@@ -523,16 +523,14 @@ class TestNoDataState:
         at.run()
         assert len(at.selectbox) == 0
 
-    def test_ds_none_does_not_bypass_guard(self):
-        """
-        ds=None passes the 'not in' guard (key is present) but then the page
-        crashes on None.attrs.  AppTest captures this as at.exception.
-        Documents the known behaviour: the guard only covers a missing key.
-        """
+    def test_ds_none_also_triggers_guard(self):
+        """ds=None in session state is caught by the guard and exits cleanly."""
         at = AppTest.from_file(SCRIPT_PATH, default_timeout=15)
         at.session_state["ds"] = None
         at.run()
-        assert at.exception
+        assert not at.exception
+        all_text = " ".join(e.value for e in at.error)
+        assert "no data loaded" in all_text.lower()
 
 
 # ===========================================================================

@@ -427,3 +427,6 @@ with tab_reset:
             "axis correction is step 1 of the pipeline. Subsequent steps are built "
             "on the corrected time axis and cannot be preserved independently."
         )
+
+with st.sidebar:
+    st.caption(f"File: {st.session_state.fname}")

@@ -839,6 +839,8 @@ with tab4:
 # =============================================================================
 
 with st.sidebar:
+    st.caption(f"File: {st.session_state.fname}")
+    st.divider()
     st.header("📊 Export Summary")
 
     # Current statistics

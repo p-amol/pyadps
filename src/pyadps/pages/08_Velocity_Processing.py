@@ -1469,6 +1469,8 @@ with tab6:
 # =============================================================================
 
 with st.sidebar:
+    st.caption(f"File: {st.session_state.fname}")
+    st.divider()
     st.header("📊 Processing Status")
 
     stats = proc.get_current_stats()

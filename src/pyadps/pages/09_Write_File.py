@@ -275,6 +275,9 @@ if not st.session_state.write_initialized:
 # PAGE HEADER
 # =============================================================================
 
+_, _col_fname = st.columns([5, 1])
+with _col_fname:
+    st.caption(f"📂 {st.session_state.fname}")
 st.header("💾 Write Processed Data", divider="blue")
 
 st.write("""
@@ -839,8 +842,6 @@ with tab4:
 # =============================================================================
 
 with st.sidebar:
-    st.caption(f"File: {st.session_state.fname}")
-    st.divider()
     st.header("📊 Export Summary")
 
     # Current statistics

@@ -308,6 +308,9 @@ def download_csv_2d(data: np.ndarray, filename: str):
 # UI - NETCDF FILE DOWNLOAD
 # =============================================================================
 
+_, _col_fname = st.columns([5, 1])
+with _col_fname:
+    st.caption(f"📂 {st.session_state.fname}")
 st.header("NetCDF File", divider="blue")
 
 # Option to add attributes
@@ -651,7 +654,6 @@ else:
 
 st.sidebar.divider()
 st.sidebar.subheader("Dataset Info")
-st.sidebar.write(f"**File:** {st.session_state.fname}")
 
 n_vars = len(ds.data_vars)
 n_ens = ds.sizes.get("time", ds.sizes.get("ensemble", 0))

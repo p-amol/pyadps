@@ -402,6 +402,9 @@ def _reset_profile_preview():
 # PAGE HEADER
 # =============================================================================
 
+_, _col_fname = st.columns([5, 1])
+with _col_fname:
+    st.caption(f"📂 {st.session_state.fname}")
 st.header("📊 Profile Operations", divider="blue")
 st.write(
     """
@@ -1178,8 +1181,6 @@ with tab5:
 # =============================================================================
 
 with st.sidebar:
-    st.caption(f"File: {st.session_state.fname}")
-    st.divider()
     st.header("📊 Processing Status")
 
     stats = proc.get_current_stats()

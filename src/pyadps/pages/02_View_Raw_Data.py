@@ -312,6 +312,9 @@ def lineplot(
 # =============================================================================
 
 # Introduction
+_, _col_fname = st.columns([5, 1])
+with _col_fname:
+    st.caption(f"📂 {st.session_state.fname}")
 st.header("View Raw Data", divider="orange")
 st.write("""
 Displays all variables available in the raw file. **No processing has been applied.**

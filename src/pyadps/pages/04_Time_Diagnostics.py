@@ -80,7 +80,10 @@ prev = proc._time_axis_results
 # HEADER
 # =============================================================================
 
-st.title("Time Diagnostics")
+_, _col_fname = st.columns([5, 1])
+with _col_fname:
+    st.caption(f"📂 {st.session_state.fname}")
+st.header("Time Diagnostics", divider="blue")
 st.write(
     "Diagnose and correct time-axis irregularities **before** running any QC steps. "
     "Both operations are optional — most datasets need neither."
@@ -428,5 +431,3 @@ with tab_reset:
             "on the corrected time axis and cannot be preserved independently."
         )
 
-with st.sidebar:
-    st.caption(f"File: {st.session_state.fname}")

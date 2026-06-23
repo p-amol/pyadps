@@ -277,7 +277,7 @@ if not st.session_state.write_initialized:
 
 _, _col_fname = st.columns([5, 1])
 with _col_fname:
-    st.caption(f"📂 {st.session_state.fname}")
+    st.caption(f"📂 {st.session_state.get('fname', 'No file selected')}")
 st.header("💾 Write Processed Data", divider="blue")
 
 st.write("""

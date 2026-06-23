@@ -386,7 +386,7 @@ def _reset_qc_full():
 
 _, _col_fname = st.columns([5, 1])
 with _col_fname:
-    st.caption(f"📂 {st.session_state.fname}")
+    st.caption(f"📂 {st.session_state.get('fname', 'No file selected')}")
 st.header("🔬 Signal Quality Control Tests", divider="blue")
 st.write(
     """

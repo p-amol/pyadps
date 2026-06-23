@@ -577,8 +577,8 @@ class TestWithDataState:
             "data type" in l.lower() or "select" in l.lower() for l in selectboxes
         )
 
-    def test_sidebar_file_shown(self):
-        all_text = " ".join(m.value for m in self.at.markdown)
+    def test_filename_shown(self):
+        all_text = " ".join(c.value for c in self.at.caption)
         assert "GD10A000" in all_text
 
     def test_sidebar_ensemble_count(self):

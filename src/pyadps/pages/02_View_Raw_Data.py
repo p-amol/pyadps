@@ -314,7 +314,7 @@ def lineplot(
 # Introduction
 _, _col_fname = st.columns([5, 1])
 with _col_fname:
-    st.caption(f"📂 {st.session_state.fname}")
+    st.caption(f"📂 {st.session_state.get('fname', 'No file selected')}")
 st.header("View Raw Data", divider="orange")
 st.write("""
 Displays all variables available in the raw file. **No processing has been applied.**
@@ -784,7 +784,7 @@ with tab4:
 
 st.sidebar.divider()
 st.sidebar.subheader("Data Summary")
-st.sidebar.write(f"**File:** {st.session_state.fname}")
+st.sidebar.write(f"**File:** {st.session_state.get('fname', 'No file selected')}")
 st.sidebar.write(f"**Ensembles:** {n_ensembles:,}")
 st.sidebar.write(f"**Cells:** {n_cells}")
 st.sidebar.write(f"**Beams:** {n_beams}")

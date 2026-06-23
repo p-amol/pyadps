@@ -611,7 +611,7 @@ if "preview_velocity_proc" not in st.session_state:
 
 _, _col_fname = st.columns([5, 1])
 with _col_fname:
-    st.caption(f"📂 {st.session_state.fname}")
+    st.caption(f"📂 {st.session_state.get('fname', 'No file selected')}")
 st.header("🌊 Velocity Test", divider="orange")
 
 st.write("""

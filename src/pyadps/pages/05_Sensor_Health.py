@@ -280,7 +280,7 @@ def _reset_sensor_health_full():
 
 _, _col_fname = st.columns([5, 1])
 with _col_fname:
-    st.caption(f"📂 {st.session_state.fname}")
+    st.caption(f"📂 {st.session_state.get('fname', 'No file selected')}")
 st.header("🔧 Sensor Health Check", divider="blue")
 st.write(
     """

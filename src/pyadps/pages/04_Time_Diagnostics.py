@@ -82,7 +82,7 @@ prev = proc._time_axis_results
 
 _, _col_fname = st.columns([5, 1])
 with _col_fname:
-    st.caption(f"📂 {st.session_state.fname}")
+    st.caption(f"📂 {st.session_state.get('fname', 'No file selected')}")
 st.header("Time Diagnostics", divider="blue")
 st.write(
     "Diagnose and correct time-axis irregularities **before** running any QC steps. "

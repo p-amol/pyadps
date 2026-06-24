@@ -62,7 +62,6 @@ processing/index
 ```{toctree}
 :maxdepth: 1
 
-api/index
 reference/changelog
 ```
 

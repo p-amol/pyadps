@@ -134,4 +134,3 @@ accessors
 ## See Also
 
 - {doc}`/processing/index` — Quality control and processing pipeline
-- {doc}`/api/index` — Full API reference

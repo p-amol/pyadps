@@ -16,12 +16,9 @@ author = "p-amol"
 extensions = [
     "sphinx.ext.duration",
     "sphinx.ext.doctest",
-    "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
     "sphinx.ext.viewcode",
     "myst_nb",
     "sphinx_rtd_theme",  # ReadTheDocs theme
-    "autoapi.extension",
 ]
 
 # -- MyST configuration ------------------------------------------------------
@@ -38,19 +35,10 @@ myst_enable_extensions = [
 
 # -- MyST-NB configuration ---------------------------------------------------
 nb_execution_mode = "off"  # "auto", "force", "cache", or "off"
-execution_excludepatterns = [
-    "**.ipynb"
-]  # Prevent execution for specific files (if needed)
+nb_execution_excludepatterns = ["**.ipynb"]
 
-# -- AutoAPI configuration ---------------------------------------------------
-
-autoapi_type = "python"
-autoapi_add_toctree_entry = False
-autoapi_dirs = ["../../src"]
-autodoc_mock_imports = ["numpy", "pandas", "matplotlib", "pyadps"]
 templates_path = ["_templates"]
 exclude_patterns = []
-autoapi_keep_files = False  # set True to inspect generated .rst files
 
 
 # -- Options for HTML output -------------------------------------------------

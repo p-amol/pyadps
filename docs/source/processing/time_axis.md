@@ -1,115 +1,63 @@
-# time_axis Module
+# time_axis
 
-Time axis handling and regularization for ADCP data.
-
-## Overview
-
-The `time_axis` module provides functions for correcting and regularizing ADCP 
-time coordinates. It handles common issues like clock drift, irregular sampling, 
-and time gaps.
-
-## Quick Start
-
-```python
-from pyadps.io.binary_reader import snap_time_axis, fill_time_gaps
-import pyadps
-
-# Load data
-ds = pyadps.read('deployment.000')
-
-# Snap to regular hourly intervals
-ds_snapped, success, message = snap_time_axis(ds, freq='h', tolerance='5min')
-
-# Fill any gaps with NaN
-ds_regular = fill_time_gaps(ds_snapped, method='h')
-```
-
----
+Provides two functions for correcting irregular ADCP timestamps. These are most
+conveniently called via `ProcessedDataset.apply_time_axis()`, but can also be
+used directly.
 
 ## Functions
 
-### snap_time_axis()
+| Function | Description |
+|----------|-------------|
+| `snap_time_axis(ds, freq, tolerance, target_minute)` | Round timestamps to the nearest regular interval |
+| `fill_time_gaps(ds, method, forward_fill_fixed_leader, forward_fill_variable_leader)` | Reindex to a regular grid, inserting NaN ensembles for gaps |
 
-Snap/round time coordinates to regular intervals.
-
-```{function} snap_time_axis(ds, freq='h', tolerance='5min', target_minute=0)
-Snap time coordinates to regular intervals.
-
-:param ds: Dataset with time coordinate
-:type ds: xarray.Dataset
-:param freq: Target frequency ('h', 'min', '30min', etc.)
-:type freq: str
-:param tolerance: Maximum allowed correction
-:type tolerance: str
-:param target_minute: Target minute within hour (0-59)
-:type target_minute: int
-:returns: Tuple of (snapped_dataset, success, message)
-:rtype: tuple
-```
-
-**Example:**
-
-```python
-# Snap to hourly
-ds_snapped, success, msg = snap_time_axis(ds, freq='h', tolerance='5min')
-
-if success:
-    print("Time axis snapped successfully")
-else:
-    print(f"Snapping failed: {msg}")
-```
-
----
-
-### fill_time_gaps()
-
-Fill missing timestamps in time series with NaN data.
-
-```{function} fill_time_gaps(ds, method='h')
-Fill gaps in time series.
-
-:param ds: Dataset with time coordinate
-:type ds: xarray.Dataset
-:param method: Fill frequency ('h', 'min', '30min', etc.)
-:type method: str
-:returns: Dataset with filled gaps
-:rtype: xarray.Dataset
-```
-
-**Example:**
-
-```python
-ds_filled = fill_time_gaps(ds, method='h')
-```
-
----
-
-## Common Workflows
-
-### Regularize Time Series
+## Usage
 
 ```python
 import pyadps
-from pyadps.io.binary_reader import snap_time_axis, fill_time_gaps
+from pyadps.processing.time_axis import snap_time_axis, fill_time_gaps
 
-# Load data
 ds = pyadps.read('deployment.000')
 
-# Check time regularity
-interval = ds.variable_leader.get_time_interval()
-print(f"Modal interval: {interval}")
+# Snap drifted timestamps to the nearest hour
+ds_snapped, success, msg = snap_time_axis(ds, freq='h', tolerance='5min')
 
-# Snap and fill
-ds_snapped, success, _ = snap_time_axis(ds, freq='h', tolerance='5min')
-ds_regular = fill_time_gaps(ds_snapped, method='h')
-
-# Export
-ds_regular.to_netcdf('deployment_regular.nc')
+# Fill missing ensembles so the time axis is uniform
+ds_filled = fill_time_gaps(ds_snapped, method='auto')
 ```
 
----
+Via `ProcessedDataset`:
+
+```python
+from pyadps.processing import ProcessedDataset
+
+proc = ProcessedDataset(ds)
+proc.apply_time_axis(snap=True, snap_freq='h', snap_tolerance='5min',
+                     fill_gaps=True, fill_method='auto')
+```
+
+## Non-Obvious Behaviors
+
+**`snap_time_axis()` returns a tuple `(dataset, success, message)`.** If any
+timestamp requires a correction larger than `tolerance`, the function aborts and
+returns `(None, False, message)` rather than silently over-correcting.
+
+```python
+ds_snapped, success, msg = snap_time_axis(ds, freq='h', tolerance='5min')
+if not success:
+    print(f"Snapping aborted: {msg}")
+```
+
+**`fill_time_gaps()` forward-fills leader variables.** Fixed and variable leader
+fields (configuration metadata, sensor readings) are propagated from the last
+known ensemble into gap-filled slots. Velocity, correlation, and echo data are
+filled with RDI missing value codes.
+
+**`method='auto'`** in `fill_time_gaps()` detects the interval from the median
+spacing of existing timestamps — no need to specify frequency explicitly if the
+data has a consistent sampling rate.
 
 ## See Also
 
-- {doc}`core` — ProcessedDataset time axis step
-- {doc}`/io/binary_reader` — Time utilities in binary_reader
+- {doc}`core` — `ProcessedDataset.apply_time_axis()` for the high-level interface
+- {doc}`/io/accessors` — `ds.variable_leader.get_time_interval()` and `is_time_regular()` for diagnosing the time axis before correction

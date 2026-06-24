@@ -116,4 +116,3 @@ utility
 ## See Also
 
 - {doc}`/io/index` — Loading ADCP data
-- {doc}`/api/index` — Full API reference

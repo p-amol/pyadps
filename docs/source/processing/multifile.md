@@ -1,375 +1,99 @@
-# multifile Module
+# multifile
 
-Tools for combining multiple ADCP binary files.
+Provides tools for combining multiple ADCP binary files from a single deployment
+into one file before processing. Files are appended in the order they are found
+(alphabetical by default).
 
-## Overview
+## Functions
 
-The `multifile` module provides tools for combining multiple ADCP binary files 
-into a single file. This is essential when deployments are split across multiple 
-files due to instrument memory limitations, data retrieval schedules, or file 
-size constraints.
+| Function | Description |
+|----------|-------------|
+| `combine_adcp_files(folder_path, output_file, ...)` | Combine all ADCP files found in a folder |
+| `combine_file_list(files, output_file, ...)` | Combine a specific ordered list of files |
+| `validate_adcp_file(filepath)` | Check a single file for structural validity |
 
-**Key Features:**
-
-- Validate ADCP binary file headers and structure
-- Handle corrupted or truncated files gracefully
-- Ensure ensemble size consistency across files
-- Combine files with detailed progress reporting
-- CLI interface for batch processing
-
-## Quick Start
-
-### Python API
+## Usage
 
 ```python
-from pyadps.processing.multifile import combine_adcp_files
+from pyadps.processing.multifile import combine_adcp_files, combine_file_list
 
-# Combine all .000 files in a folder
+# Combine all *.000 files in a folder (alphabetical order)
 result = combine_adcp_files('raw_data/', 'combined.000')
 
 if result.success:
-    print(f"Combined {result.files_processed} files")
-    print(f"Total ensembles: {result.total_ensembles}")
-    print(f"Output: {result.output_path}")
+    print(f"Combined {result.files_processed} files, {result.total_ensembles} ensembles")
+else:
+    print(result.error_message)
+
+# Combine a specific ordered list
+result = combine_file_list(
+    ['data/deploy_001.000', 'data/deploy_002.000', 'data/deploy_003.000'],
+    'combined.000'
+)
 ```
 
-### Command Line
-
-```bash
-# Basic usage
-python -m pyadps.processing.multifile raw_data/ -o combined.000
-
-# With verbose output
-python -m pyadps.processing.multifile raw_data/ -o combined.000 -v
-
-# Stop on first error (strict mode)
-python -m pyadps.processing.multifile raw_data/ -o combined.000 --strict
-```
-
----
-
-## Core Concepts
-
-### ADCP Binary File Structure
-
-ADCP binary files consist of sequential **ensembles** (also called pings):
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ File Structure                                                │
-├──────────────────────────────────────────────────────────────┤
-│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐              │
-│ │ Ensemble 1  │ │ Ensemble 2  │ │ Ensemble 3  │ ...          │
-│ │             │ │             │ │             │              │
-│ │ Header:     │ │ Header:     │ │ Header:     │              │
-│ │ 0x7F 0x7F   │ │ 0x7F 0x7F   │ │ 0x7F 0x7F   │              │
-│ │ Size bytes  │ │ Size bytes  │ │ Size bytes  │              │
-│ │ Data...     │ │ Data...     │ │ Data...     │              │
-│ └─────────────┘ └─────────────┘ └─────────────┘              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-Each ensemble:
-
-- Starts with header signature `0x7F 0x7F`
-- Contains size field at byte offset 2
-- Has fixed size determined by instrument configuration
-
-### Ensemble Size Consistency
-
-Files from the same deployment **must have the same ensemble size**. Different 
-ensemble sizes indicate:
-
-- Different instrument configurations
-- Different deployments
-- File corruption
-
-By default, `multifile` validates that all files have matching ensemble sizes.
-
----
-
-## Function Reference
-
-### combine_adcp_files()
-
-Combine all ADCP files from a folder.
-
-```{function} combine_adcp_files(folder_path, output_file, config=None, skip_invalid=True, require_matching_ensemble_size=True)
-Combine ADCP files from a folder.
-
-:param folder_path: Folder containing ADCP files
-:type folder_path: str or Path
-:param output_file: Output file path
-:type output_file: str or Path
-:param config: Custom configuration
-:type config: ADCPFileConfig, optional
-:param skip_invalid: Skip invalid files instead of stopping
-:type skip_invalid: bool
-:param require_matching_ensemble_size: Validate ensemble size consistency
-:type require_matching_ensemble_size: bool
-:returns: Result object with processing details
-:rtype: CombineResult
-```
-
-**Returns CombineResult with:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `success` | bool | Whether combination succeeded |
-| `files_processed` | int | Number of files successfully processed |
-| `files_total` | int | Total number of files attempted |
-| `total_bytes` | int | Total bytes in output file |
-| `total_ensembles` | int | Total ensembles in output |
-| `output_path` | Path | Path to output file |
-| `skipped_files` | List[str] | Names of skipped files |
-| `error_message` | str | Error message if failed |
-
----
-
-### combine_file_list()
-
-Combine a specific list of files (not a folder).
-
-```{function} combine_file_list(files, output_file, config=None, skip_invalid=True, require_matching_ensemble_size=True)
-Combine a specific list of ADCP files.
-
-:param files: List of file paths to combine
-:type files: List[str or Path]
-:param output_file: Output file path
-:type output_file: str or Path
-:param config: Custom configuration
-:type config: ADCPFileConfig, optional
-:param skip_invalid: Skip invalid files instead of stopping
-:type skip_invalid: bool
-:param require_matching_ensemble_size: Validate ensemble size consistency
-:type require_matching_ensemble_size: bool
-:returns: Result object with processing details
-:rtype: CombineResult
-```
-
-**Example:**
-
-```python
-from pyadps.processing.multifile import combine_file_list
-
-# Combine specific files in order
-files = [
-    'data/deploy_001.000',
-    'data/deploy_002.000',
-    'data/deploy_003.000',
-]
-
-result = combine_file_list(files, 'combined.000')
-```
-
----
-
-### validate_adcp_file()
-
-Validate a single ADCP file without combining.
-
-```{function} validate_adcp_file(filepath, config=None)
-Validate a single ADCP file.
-
-:param filepath: Path to ADCP file
-:type filepath: str or Path
-:param config: Custom configuration
-:type config: ADCPFileConfig, optional
-:returns: Validation result
-:rtype: FileValidationResult
-```
-
-**Returns FileValidationResult with:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `is_valid` | bool | Whether file is valid |
-| `header_offset` | int | Byte offset where header was found |
-| `ensemble_size` | int | Size of each ensemble in bytes |
-| `valid_ensembles` | int | Number of complete ensembles |
-| `total_ensembles` | int | Total ensembles (including partial) |
-| `is_truncated` | bool | Whether file appears truncated |
-| `error_message` | str | Error message if invalid |
-
-**Example:**
+### Validate before combining
 
 ```python
 from pyadps.processing.multifile import validate_adcp_file
-
-result = validate_adcp_file('data.000')
-
-if result.is_valid:
-    print(f"File has {result.valid_ensembles} complete ensembles")
-    print(f"Ensemble size: {result.ensemble_size} bytes")
-    if result.is_truncated:
-        print("Warning: File is truncated")
-else:
-    print(f"Invalid file: {result.error_message}")
-```
-
----
-
-## Complete Workflow Examples
-
-### Basic Combination
-
-```python
-from pyadps.processing.multifile import combine_adcp_files
-
-# Combine all files from deployment folder
-result = combine_adcp_files('deployment_2024/', 'deployment_2024_combined.000')
-
-if result.success:
-    print(f"Successfully combined {result.files_processed} files")
-    print(f"Total ensembles: {result.total_ensembles}")
-    print(f"Output size: {result.total_bytes / 1e6:.2f} MB")
-else:
-    print(f"Combination failed: {result.error_message}")
-```
-
-### With Validation
-
-```python
-from pyadps.processing.multifile import validate_adcp_file, combine_adcp_files
 from pathlib import Path
 
-# Validate all files first
-input_dir = Path('raw_data/')
-valid_files = []
-
-for file in sorted(input_dir.glob('*.000')):
-    validation = validate_adcp_file(file)
-    if validation.is_valid:
-        valid_files.append(file)
-        print(f"✓ {file.name}: {validation.valid_ensembles} ensembles")
-    else:
-        print(f"✗ {file.name}: {validation.error_message}")
-
-print(f"\n{len(valid_files)} valid files found")
-
-# Combine valid files
-if valid_files:
-    result = combine_adcp_files(input_dir, 'combined.000')
-    print(f"Combined output: {result.output_path}")
+for f in sorted(Path('raw_data/').glob('*.000')):
+    v = validate_adcp_file(f)
+    status = 'OK' if v.is_valid else v.error_message
+    truncated = ' (truncated)' if v.is_truncated else ''
+    print(f"{f.name}: {status}{truncated}")
 ```
 
-### Handling Truncated Files
-
-```python
-from pyadps.processing.multifile import combine_adcp_files
-
-# Skip invalid/truncated files automatically
-result = combine_adcp_files(
-    'raw_data/',
-    'combined.000',
-    skip_invalid=True  # Default behavior
-)
-
-if result.skipped_files:
-    print(f"Warning: Skipped {len(result.skipped_files)} files:")
-    for f in result.skipped_files:
-        print(f"  - {f}")
-```
-
-### Strict Mode (Stop on Error)
-
-```python
-from pyadps.processing.multifile import combine_adcp_files
-
-# Stop immediately if any file is invalid
-try:
-    result = combine_adcp_files(
-        'raw_data/',
-        'combined.000',
-        skip_invalid=False  # Strict mode
-    )
-except ValueError as e:
-    print(f"Processing stopped: {e}")
-```
-
----
-
-## Command Line Interface
-
-### Basic Usage
+### Command line
 
 ```bash
-python -m pyadps.processing.multifile INPUT_DIR -o OUTPUT_FILE
-```
-
-### Options
-
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--output` | `-o` | Output file path (required) |
-| `--verbose` | `-v` | Enable verbose output |
-| `--strict` | | Stop on first error |
-| `--pattern` | `-p` | File pattern (default: *.000) |
-
-### Examples
-
-```bash
-# Basic combination
 python -m pyadps.processing.multifile raw_data/ -o combined.000
-
-# Verbose output
-python -m pyadps.processing.multifile raw_data/ -o combined.000 -v
-
-# Strict mode
-python -m pyadps.processing.multifile raw_data/ -o combined.000 --strict
-
-# Custom file pattern
-python -m pyadps.processing.multifile raw_data/ -o combined.000 -p "*.pd0"
+python -m pyadps.processing.multifile raw_data/ -o combined.000 --strict  # stop on first error
+python -m pyadps.processing.multifile raw_data/ -o combined.000 -p "*.pd0"  # custom extension
 ```
 
----
+## Return Objects
 
-## Best Practices
+**`CombineResult`** (returned by `combine_adcp_files` and `combine_file_list`):
 
-1. **Validate before combining**: Run validation on all files first to identify 
-   problems before starting the combination.
+| Field | Description |
+|-------|-------------|
+| `success` | Whether the combination completed |
+| `files_processed` | Number of files successfully included |
+| `total_ensembles` | Total ensembles in output |
+| `output_path` | Path to the output file |
+| `skipped_files` | List of filenames that were skipped |
+| `error_message` | Populated if `success` is `False` |
 
-2. **Maintain file order**: Files are combined in alphabetical order by default. 
-   Use `combine_file_list()` if you need a specific order.
+**`FileValidationResult`** (returned by `validate_adcp_file`):
 
-3. **Check for truncation**: Truncated files at the end of a deployment are 
-   common — the module handles these gracefully.
+| Field | Description |
+|-------|-------------|
+| `is_valid` | Whether the file has a valid ADCP structure |
+| `valid_ensembles` | Number of complete ensembles found |
+| `ensemble_size` | Bytes per ensemble |
+| `is_truncated` | Last ensemble is incomplete |
+| `error_message` | Populated if `is_valid` is `False` |
 
-4. **Verify ensemble consistency**: Ensure all files have the same ensemble size 
-   before combining.
+## Non-Obvious Behaviors
 
-5. **Keep originals**: Always keep the original files until you've verified the 
-   combined output.
+**Ensemble size must match across all files.** All files in a deployment should
+have the same ensemble size (bytes per ensemble). A mismatch means different
+instrument configurations or a corrupt file — combining them would produce
+unreadable output. The check is enabled by default; pass
+`require_matching_ensemble_size=False` only if you are certain the mismatch is
+benign.
 
----
+**Truncated files are skipped by default** (`skip_invalid=True`). A truncated
+file at the end of a deployment is common when the instrument was recovered
+mid-ensemble. The partial last ensemble is dropped and the rest of the file is
+included.
 
-## Troubleshooting
-
-### Ensemble size mismatch error
-
-- Files may be from different deployments
-- One file may be corrupted
-- Use `validate_adcp_file()` to check individual files
-
-### No files found
-
-- Check the file extension pattern (default: `*.000`)
-- Verify the directory path is correct
-- Use the `-p` option to specify a different pattern
-
-### Output file already exists
-
-- The module will overwrite existing files
-- Rename or move existing files before running
-
-### Memory issues with large files
-
-- Process files in smaller batches
-- Use `combine_file_list()` with subsets of files
-
----
+**File order matters.** Use `combine_file_list()` with an explicitly ordered
+list if alphabetical sorting does not match chronological order.
 
 ## See Also
 
-- {doc}`autoprocess` — Automated processing
-- {doc}`/io/pd0_parser` — Low-level binary parsing
+- {doc}`autoprocess` — Run the full pipeline on a combined file
+- {doc}`core` — `ProcessedDataset` for step-by-step processing

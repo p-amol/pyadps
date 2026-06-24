@@ -1,0 +1,88 @@
+# velocity_check
+
+Provides `VelocityCheckRunner` — the class that `ProcessedDataset.apply_velocity_check()`
+delegates to. Use it directly for finer control over individual checks or to inspect
+per-check statistics.
+
+## VelocityCheckRunner
+
+```python
+import pyadps
+from pyadps.processing.velocity_check import VelocityCheckRunner
+
+ds = pyadps.read('deployment.000')
+runner = VelocityCheckRunner(ds)
+```
+
+### QC Check Methods
+
+All methods return `self` for chaining.
+
+| Method | Default | Description |
+|--------|---------|-------------|
+| `magnetic_correction(declination, lat, lon, year, use_api)` | — | Rotate U/V to correct for magnetic declination |
+| `threshold(cutoff_u=2500, cutoff_v=2500, cutoff_w=500)` | mm/s | Flag cells exceeding per-component velocity limits |
+| `despike(kernel_size=13, cutoff=3.0)` | σ=3 | Flag transient spikes using a median-filter approach |
+| `flatline(kernel_size=4, cutoff=1.0)` | 1 mm/s | Flag constant-value segments (frozen sensor) |
+
+### Control and Output Methods
+
+| Method | Description |
+|--------|-------------|
+| `reset()` | Restore working dataset to original state |
+| `finalize()` | Return processed `xarray.Dataset` |
+| `apply_pipeline(checks, order)` | Apply multiple checks from a configuration dict |
+
+### Statistics Methods
+
+| Method | Description |
+|--------|-------------|
+| `get_statistics()` | Dict of `QCCheckStats` keyed by check name |
+| `get_modifications()` | Dict of `DataModificationStats` for data corrections |
+| `print_statistics()` | Print formatted QC summary table |
+| `get_pipeline_report()` | Return `QCPipelineReport` for `ProcessedDataset` |
+
+## Usage
+
+```python
+runner = VelocityCheckRunner(ds)
+ds_qc = (runner
+    .magnetic_correction(declination=-5.0)
+    .threshold(cutoff_u=2500, cutoff_v=2500, cutoff_w=500)
+    .despike(kernel_size=13, cutoff=3.0)
+    .flatline(kernel_size=4, cutoff=1.0)
+    .finalize())
+
+runner.print_statistics()
+```
+
+## Non-Obvious Behaviors
+
+**`magnetic_correction()` modifies data values, not the mask.** It rotates U and V
+to true geographic coordinates. Apply it before any QC checks so that thresholds
+apply to geographically-correct velocities.
+
+**Declination sources.** Provide `declination` directly, or supply `lat`, `lon`,
+and `year` to calculate it from local COF files. Set `use_api=True` for NOAA online
+lookup.
+
+```python
+# Known declination
+runner.magnetic_correction(declination=-5.0)
+
+# Calculate from position (requires pygeomag)
+runner.magnetic_correction(lat=40.0, lon=-74.0, year=2023.5)
+```
+
+**W threshold is asymmetric by design.** Vertical velocities are physically 5–10×
+smaller than horizontal, so the default `cutoff_w=500` mm/s is already more
+restrictive than the horizontal defaults of 2500 mm/s.
+
+**Beam 3 is a combined flag.** After every check, beam 3 in the mask is set to the
+OR of beams 0, 1, and 2 — a cell is flagged in beam 3 if any velocity component fails.
+
+## See Also
+
+- {doc}`core` — `ProcessedDataset.apply_velocity_check()` for the high-level interface
+- {doc}`profile_operation` — Applied before velocity check when regridding
+- {doc}`utility` — `QCCheckStats` reference

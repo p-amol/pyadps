@@ -1,140 +1,110 @@
 # pyadps
 
-`pyadps` is a Python package for processing moored Acoustic Doppler
-Current Profiler (ADCP) data. It provides various functionalities
-such as data reading, quality control tests, NetCDF file creation,
-and visualization.
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/pypi/v/pyadps.svg)](https://pypi.org/project/pyadps/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Documentation](https://img.shields.io/badge/docs-readthedocs-blue.svg)](https://pyadps.readthedocs.io)
 
-This software offers both a graphical interface (`Streamlit`) for
-those new to Python and direct Python package access for experienced
-users. Please note that `pyadps` is primarily designed for Teledyne
-RDI workhorse ADCPs. Other company's ADCP files are not compatible,
-and while some other RDI models may work, they might require additional
-considerations.
+`pyadps` is a Python package for processing moored Acoustic Doppler Current Profiler (ADCP) data. It provides data reading, quality control, NetCDF export, and an interactive web interface — designed primarily for Teledyne RDI Workhorse ADCPs (PD0 binary format).
 
-- Documentation: <https://pyadps.readthedocs.io>
-- Source code: <https://github.com/p-amol/pyadps>
-- Bug reports: <https://github.com/p-amol/pyadps/issues>
+- **Documentation:** <https://pyadps.readthedocs.io>
+- **Source code:** <https://github.com/p-amol/pyadps>
+- **Bug reports:** <https://github.com/p-amol/pyadps/issues>
 
-## Table of Contents
+## Features
 
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [License](#license)
+- Read RDI binary files (PD0 format) as `xarray.Dataset`
+- Six-step quality control pipeline (time axis, sensor health, signal quality, profile operations, velocity checks)
+- Interactive web interface (Streamlit) — no Python knowledge required
+- Batch processing and multi-file combining
+- CF Convention compliant NetCDF output
+- Reproducible processing via `config.ini` export
 
 ## Installation
 
-We recommend installing the package within a virtual environment.
-At present, the package is compatible exclusively with Python version 3.12.
-You can create a Python environment using tools like `venv` or `conda`.
-Below are instructions for both methods.
+Requires **Python 3.12**. Install in a dedicated virtual environment.
 
-### 1. Using `venv` (Built-in Python Tool)
-
-#### Step 1: Install Python version 3.12 (if not already installed)
-
-Ensure you have Python installed. You can download the latest version from [python.org](https://www.python.org/downloads/).
-
-#### Step 2: Create a Virtual Environment
-
-- Open your terminal or command prompt.
-- Navigate to your project folder:
+### Using `venv`
 
 ```bash
-cd /path/to/your/project
-```
-
-- Run the following command to create a virtual environment
-(replace adpsenv with your preferred environment name):
-
-```bash
-python -m venv adpsenv
-```
-
-#### Step 3: Activate the Environment
-
-- On Windows:
-
-```bash
-adpsenv\Scripts\activate
-```
-
-- On macOS/Linux:
-
-```bash
-source adpsenv/bin/activate
-```
-
-You’ll see the environment name in your terminal prompt
-indicating the environment is active.
-
-#### Step 4: Install Dependencies
-
-Now you can install packages like this:
-
-```bash
+python3.12 -m venv pyadps-env
+source pyadps-env/bin/activate   # Windows: pyadps-env\Scripts\activate
 pip install pyadps
 ```
 
-#### Step 5: Deactivate the Environment
-
-When you’re done working in the environment, deactivate it by running:
+### Using `conda`
 
 ```bash
-deactivate
-```
-
-### 2. Using `conda` (Anaconda/Miniconda)
-
-#### Step 1: Install Conda
-
-First, you need to have Conda installed on your system. You can either install:
-
-- [Anaconda (Full Distribution)](https://www.anaconda.com/products/individual)
-- [Miniconda (Lightweight Version)](https://docs.conda.io/en/latest/miniconda.html)
-
-#### Step 2: Create a Conda Environment with Python 3.12
-
-Once Conda is installed, open a terminal or command prompt and run
-the following to create a new environment (replace `adpsenv` with
-your preferred environment name):
-
-```bash
-conda create --name adpsenv python=3.12
-```
-
-#### Step 3: Activate the Conda Environment
-
-```bash
-conda activate adpsenv
-```
-
-#### Step 4: Install pyadps Dependencies
-
-You can install packages with pip inside Conda environments.
-
-```bash
+conda create -n pyadps-env python=3.12
+conda activate pyadps-env
+conda install pip
 pip install pyadps
 ```
 
-#### Step 5: Deactivate the Conda Environment
-
-When done working in the environment, deactivate the environment by running:
+### From Source
 
 ```bash
-conda deactivate
+git clone https://github.com/p-amol/pyadps.git
+cd pyadps
+pip install -e .
 ```
 
 ## Quick Start
 
-### Streamlit web interface
+### Web Interface
 
-Open a terminal or command prompt, activate the environment, and run the command.
+The easiest way to get started — no Python required beyond installation:
 
 ```bash
 run-pyadps
 ```
 
+This launches a Streamlit app that guides you through each processing step.
+
+### Python API
+
+```python
+import pyadps
+
+# Load an RDI binary file as an xarray.Dataset
+ds = pyadps.read('deployment.000')
+
+# Inspect system configuration
+config = ds.fixed_leader.system_configuration()
+print(f"Frequency: {config['Frequency']}")
+
+# Save raw data to NetCDF
+ds.to_netcdf('raw_output.nc')
+```
+
+### Processing Pipeline
+
+```python
+from pyadps.processing import ProcessedDataset
+
+result = (
+    ProcessedDataset(ds)
+    .apply_time_axis(snap=True, snap_freq='h')
+    .apply_sensor_health(roll=True, roll_threshold=15.0)
+    .apply_signal_quality(correlation=64, echo_intensity=40,
+                          error_velocity=2000, percent_good=25)
+    .apply_profile_operation(cut_bins_side_lobe=True, water_depth=50.0,
+                             trim_start=10, trim_end=10)
+    .apply_velocity_check(cutoff_u=2500, cutoff_v=2500, cutoff_w=500,
+                          magnetic_correction=True, declination=-1.5)
+    .finalize()
+)
+
+# Save full dataset or velocity-only output
+result.to_netcdf('processed.nc')
+proc.velocity_to_netcdf('velocity.nc', units='cm/s')
+
+# Export settings for reproducibility
+proc.export_config('config.ini')
+```
+
+For the complete guide see the [documentation](https://pyadps.readthedocs.io).
+
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

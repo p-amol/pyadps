@@ -1,458 +1,272 @@
 # Web Application
 
-Interactive Streamlit interface for ADCP data processing.
+pyadps includes an interactive web interface built with Streamlit for processing
+RDI ADCP data without writing any code.
 
-## Overview
-
-The pyadps web application provides a graphical interface for processing RDI ADCP 
-data. Built with Streamlit, it guides users through the complete processing workflow 
-from file upload to data export.
-
-```{note}
-The web application uses the same `ProcessedDataset` orchestrator as the Python API,
-ensuring consistency between interactive and programmatic processing.
-```
-
-## Quick Start
-
-### Running the Application
+## Launching the Application
 
 ```bash
-# Navigate to the pages directory
-cd pyadps/pages
-
-# Run with Streamlit
-streamlit run 01_Read_File.py
+run-pyadps
 ```
 
 The application opens in your default web browser at `http://localhost:8501`.
 
-### Processing Workflow
+---
 
-The application follows a sequential workflow through 9 pages:
+## Processing Workflow
+
+The sidebar lists all pages in order. **Processing must be carried out
+sequentially** — each page builds on the state saved by the previous one.
+Always start at Page 1 and work downward through the sidebar.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  1. Read File      →  Upload and inspect ADCP binary file       │
-│  2. View Raw Data  →  Visualize unprocessed data                │
-│  3. Download Raw   →  Export raw data (NetCDF/CSV)              │
-│  4. Sensor Health  →  Check/replace environmental sensors       │
-│  5. QC Test        →  Apply signal quality thresholds           │
-│  6. Profile Test   →  Trim ensembles, cut bins, regrid          │
-│  7. Velocity Test  →  Magnetic correction, despike, thresholds  │
-│  8. Write File     →  Export processed data                     │
-│  9. Add-Ons        →  Batch processing, file combination        │
-└─────────────────────────────────────────────────────────────────┘
+ 1. Read File            →  Upload file and inspect metadata
+ 2. View Raw Data        →  Visualize unprocessed data
+ 3. Download Raw File    →  Export raw data (optional)
+ 4. Time Diagnostics     →  Correct time axis before processing
+ 5. Sensor Health        →  Validate and correct environmental sensors
+ 6. Signal Quality       →  Apply QC thresholds
+ 7. Profile Operations   →  Trim, cut bins, and regrid
+ 8. Velocity Processing  →  Velocity checks and magnetic correction
+ 9. Write File           →  Export processed data and config
+10. Add-Ons              →  Auto processing and file combiner
 ```
 
 ---
 
 ## Page Reference
 
+### Home Page
+
+```{image} ../_static/images/webapp/home_page.png
+:alt: Home Page
+:width: 100%
+```
+
+---
+
 ### Page 1: Read File
 
-**Purpose:** Upload ADCP binary files and inspect metadata.
+Upload an ADCP binary file and inspect its metadata. This page initialises
+the `ProcessedDataset` that all subsequent pages use — **always start here**.
 
-**Features:**
-- File upload for RDI binary formats (.000, .ENS, .ENX, .LTA, .STA)
-- File health check (integrity verification)
-- Fixed Leader inspection (static configuration)
-- Variable Leader inspection (dynamic measurements)
-- Time axis diagnostics
-- Data overview with array shapes and valid data percentages
+```{image} ../_static/images/webapp/01_read_file.png
+:alt: Read File page
+:width: 100%
+```
 
-**Tabs:**
+**Tabs**
+
 | Tab | Description |
 |-----|-------------|
-| File Header | Binary file structure and health check |
+| File Header | Binary file structure and integrity check |
 | Fixed Leader | System configuration, sensors, coordinate transform |
 | Variable Leader | Time analysis, motion sensors, environmental sensors |
-| Time Diagnostics | Interval plots and time component analysis |
 | Data Overview | Available data arrays and dimensions |
-
-**Key Actions:**
-- **Check File Health** — Verify file integrity (size match, byte uniformity)
-- **Show Data Types** — List available data types in file
-- **Reset Processor** — Clear all processing and start fresh
 
 ---
 
 ### Page 2: View Raw Data
 
-**Purpose:** Visualize raw (unprocessed) ADCP data.
+Visualise the raw dataset before any processing is applied.
 
-**Features:**
-- 2D heatmaps for velocity, echo intensity, correlation, percent good
-- Time series plots for individual cells
-- Variable Leader time series (heading, pitch, roll, temperature, etc.)
-- Fixed Leader verification plots
-- Advanced diagnostics (BIT results, ADC channels, Error Status Words)
+```{image} ../_static/images/webapp/02_view_raw_data.png
+:alt: View Raw Data page
+:width: 100%
+```
 
-**Tabs:**
+**Tabs**
+
 | Tab | Description |
 |-----|-------------|
-| Primary Data | Velocity, Echo, Correlation, Percent Good heatmaps |
-| Variable Leader | Dynamic sensor measurements |
+| Primary Data | Velocity, echo intensity, correlation, percent good heatmaps |
+| Variable Leader | Dynamic sensor measurements (heading, pitch, roll, temperature) |
 | Fixed Leader | Static configuration values |
-| Advanced | BIT results, ADC channels, ESW diagnostics |
-
-**Controls:**
-- X-axis toggle: Time or Ensemble number
-- Beam selection: 1, 2, 3, or 4
-- Cell selection for time series extraction
+| Advanced | BIT results, ADC channels, Error Status Words |
 
 ---
 
 ### Page 3: Download Raw File
 
-**Purpose:** Export raw (unprocessed) data to standard formats.
+Export the raw dataset to NetCDF or CSV without any processing applied.
+This step is optional and can be skipped if you only need the processed output.
 
-**Features:**
-- NetCDF export with selectable components
-- CSV export for individual variables
-- Custom metadata attributes
-- Configurable file naming
-
-**Export Options:**
-| Component | Description |
-|-----------|-------------|
-| Fixed Leader | Static configuration variables |
-| Variable Leader | Time-varying sensor data |
-| Velocity | 4-beam velocity arrays |
-| Echo Intensity | Backscatter strength |
-| Correlation | Signal correlation |
-| Percent Good | Valid ping percentage |
-
-**Metadata Attributes:**
-- Cruise number, ship name, project number
-- Water depth, deployment depth
-- Latitude, longitude
-- Deployment and recovery dates
-- Custom user-defined attributes
+```{image} ../_static/images/webapp/03_download_raw_file.png
+:alt: Download Raw File page
+:width: 100%
+```
 
 ---
 
-### Page 4: Sensor Health
+### Page 4: Time Diagnostics
 
-**Purpose:** Validate and correct environmental sensor data.
+Diagnose and correct the time axis **before** any QC processing begins.
 
-**Features:**
-- Pressure (depth) sensor inspection and replacement
-- Salinity sensor inspection and replacement
-- Temperature sensor inspection and replacement
-- Heading, pitch, roll visualization
-- Sound speed correction using corrected T/S values
-- Roll/pitch threshold checks
+```{image} ../_static/images/webapp/04_time_diagnostics.png
+:alt: Time Diagnostics page
+:width: 100%
+```
 
-**Tabs:**
+**Tabs**
+
+| Tab | Description |
+|-----|-------------|
+| Diagnose | Time interval statistics, gap detection, and component plots |
+| Snap Time Axis | Round drifted timestamps to the intended recording interval |
+| Fill Time Gaps | Insert synthetic ensembles to make the time axis uniform |
+| Reset | Undo corrections and restore the original time axis |
+
+---
+
+### Page 5: Sensor Health
+
+Validate environmental sensors and optionally replace pressure, salinity,
+and temperature with external data (e.g. from a co-deployed CTD).
+
+```{image} ../_static/images/webapp/05_sensor_health.png
+:alt: Sensor Health page
+:width: 100%
+```
+
+**Tabs**
+
 | Tab | Description |
 |-----|-------------|
 | 🌊 Pressure | Transducer depth sensor with drift analysis |
-| 🧂 Salinity | Salinity sensor with fixed value or CSV replacement |
+| 🧂 Salinity | Salinity sensor — replace with fixed value or CSV |
 | 🌡️ Temperature | Temperature sensor with drift analysis |
-| 🧭 Heading | Heading sensor visualization |
+| 🧭 Heading | Heading sensor visualisation |
 | 📐 Pitch | Pitch sensor with threshold indicator |
 | 🔄 Roll | Roll sensor with threshold indicator |
-| ⚙️ Apply Checks | Configure and preview all checks |
-| 💾 Save/Reset | Commit or reset processing |
-
-**Correction Methods:**
-- **Fixed Value** — Apply constant value across all ensembles
-- **File Upload** — Replace with external CSV data (e.g., CTD)
-
-**Sound Speed Correction:**
-When temperature or salinity is modified, sound speed can be recalculated 
-and optionally applied to velocity data using the Urick (1983) formula.
+| ⚙️ Apply Checks | Configure roll/pitch thresholds and sound speed correction |
+| 💾 Save/Reset | Commit or undo changes |
 
 ---
 
-### Page 5: QC Test
+### Page 6: Signal Quality
 
-**Purpose:** Apply signal quality control thresholds.
+Apply signal quality thresholds to mask low-quality data.
 
-**Features:**
-- Noise floor identification from echo intensity profiles
-- Configurable QC thresholds with preview
-- Three-beam mode for problematic beams
-- Mask comparison visualization
-- Beam orientation fix
+```{image} ../_static/images/webapp/06_signal_quality.png
+:alt: Signal Quality page
+:width: 100%
+```
 
-**Tabs:**
+**Tabs**
+
 | Tab | Description |
 |-----|-------------|
-| 📊 Noise Floor | Echo profiles for deployment/recovery ensembles |
-| ⚙️ QC Tests | Configure all threshold values |
+| 📊 Noise Floor | Echo profiles for identifying the noise floor |
+| 🎯 PG Threshold Advisor | Recommend a percent-good cutoff for a target precision |
+| ⚙️ QC Tests | Configure correlation, echo, error velocity, percent good, false target |
 | 🗺️ Mask Preview | Before/after mask comparison |
 | 🔄 Fix Orientation | Correct beam direction (Up/Down) |
-| 💾 Save/Reset | Commit or reset QC processing |
-
-**Available Tests:**
-| Test | Default | Description |
-|------|---------|-------------|
-| Correlation | 64 | Minimum correlation threshold |
-| Echo Intensity | 0 | Minimum echo intensity |
-| Error Velocity | 2000 mm/s | Maximum error velocity |
-| Percent Good | 0% | Minimum percent good |
-| False Target | 50 | Maximum echo difference |
-
-**Three-Beam Mode:**
-When one beam is known to be problematic, enable three-beam mode and 
-select the beam to ignore. QC checks will use remaining beams only.
+| 💾 Save/Reset | Commit or undo changes |
 
 ---
 
-### Page 6: Profile Test
+### Page 7: Profile Operations
 
-**Purpose:** Spatial operations on the data profile.
-
-**Features:**
-- Trim deployment/recovery ensembles
-- Cut bins affected by side lobe contamination
-- Manual region cutting (cells and/or ensembles)
-- Regrid to regular depth intervals
-- Preview before committing
-
-```{warning}
-Profile operations should be applied **after** QC checks. Regridding changes 
-the dataset structure and invalidates cell-based masks.
-```
-
-**Tabs:**
-| Tab | Description |
-|-----|-------------|
-| ✂️ Trim Ends | Remove deployment/recovery ensembles |
-| 📡 Side Lobe | Physics-based side lobe removal |
-| 🔧 Manual Cut | Cut rectangular regions |
-| 📏 Regrid | Transform to regular depth grid |
-| 💾 Save/Reset | Commit or reset profile operations |
-
-**Side Lobe Parameters:**
-- **Orientation** — Up or Down (auto-detected from data)
-- **Water Depth** — Required for downward-looking ADCP
-- **Extra Cells** — Additional margin beyond calculated contamination
-
-**Regrid Options:**
-- **Method** — nearest, linear, or cubic interpolation
-- **End Cell Option** — cell (last valid), surface, or manual depth
-
----
-
-### Page 7: Velocity Test
-
-**Purpose:** Velocity-specific quality control and corrections.
-
-**Features:**
-- Magnetic declination correction (local calculation or NOAA API)
-- Component-specific velocity thresholds (U, V, W)
-- Despike filtering with visualization
-- Flatline detection
-- Preview with mask comparison
-
-**Tabs:**
-| Tab | Description |
-|-----|-------------|
-| Magnetic Declination | Apply declination correction to U/V |
-| Velocity Thresholds | Set component-specific cutoffs |
-| Despike Data | Median filter spike detection |
-| Flatline Detection | Detect frozen sensor values |
-| Preview | View mask impact before saving |
-| Save & Reset | Commit or reset velocity processing |
-
-**Magnetic Declination Methods:**
-| Method | Description |
-|--------|-------------|
-| pygeomag | Local calculation using WMM coefficients (2010-2030) |
-| API | NOAA online magnetic declination service |
-| Manual | Direct entry of known declination value |
-
-**Velocity Thresholds:**
-| Component | Default | Description |
-|-----------|---------|-------------|
-| U (East) | 2500 mm/s | Zonal velocity threshold |
-| V (North) | 2500 mm/s | Meridional velocity threshold |
-| W (Vertical) | 500 mm/s | Vertical velocity threshold |
-
-**Despike Parameters:**
-- **Kernel Size** — Window size for rolling median (default: 13)
-- **Cutoff** — Standard deviations from median (default: 3.0)
-
-**Flatline Parameters:**
-- **Kernel Size** — Minimum consecutive constant values (default: 4)
-- **Cutoff** — Maximum variation to consider "constant" (default: 1.0 mm/s)
-
----
-
-### Page 8: Write File
-
-**Purpose:** Export processed data to standard formats.
-
-**Features:**
-- Preview processed data with mask applied
-- NetCDF export (velocity-only or full dataset)
-- CSV export for velocity components
-- Custom metadata attributes
-- Configuration file generation for reproducibility
-
-**Tabs:**
-| Tab | Description |
-|-----|-------------|
-| 📊 Preview Data | Visualize processed data with mask |
-| 📝 Attributes | Add custom metadata |
-| 💾 Export Data | Generate downloadable files |
-| ⚙️ Config File | Generate processing configuration |
-
-**Export Types:**
-| Type | Description |
-|------|-------------|
-| Velocity Only | U, V, W components with QC mask applied (recommended) |
-| Full Dataset | Complete dataset including all variables |
-
-**Velocity Units:**
-- mm/s (original)
-- cm/s (default output)
-- m/s
-
-**Configuration File:**
-Generates a `config.ini` file capturing all processing settings. This file 
-can be used with `pyadps.autoprocess()` for batch processing.
-
----
-
-### Page 9: Add-Ons
-
-**Purpose:** Supplementary processing tools.
-
-**Features:**
-- Auto Processing Tool — Reprocess using config.ini files
-- Binary File Combiner — Merge multiple ADCP files
-
-**Tabs:**
-| Tab | Description |
-|-----|-------------|
-| 🔧 Auto Processing | Config-based reprocessing |
-| 🔗 File Combiner | Combine multiple binary files |
-
-**Auto Processing:**
-1. Upload ADCP binary file
-2. Upload config.ini from previous processing
-3. Optionally adjust velocity units
-4. Process and download results
-
-**File Combiner:**
-1. Upload multiple binary files
-2. Validate file compatibility
-3. Combine into single file
-4. Download merged binary
+Modify the profile structure — trim deployment/recovery periods, remove
+side-lobe contaminated bins, and optionally regrid to a regular depth grid.
 
 ```{note}
-When combining files, ensure they are named sequentially 
-(e.g., `KKS_000.000`, `KKS_001.000`) for correct ordering.
+Apply profile operations **after** signal quality checks. Regridding changes
+the dataset structure and invalidates cell-based masks from earlier steps.
 ```
 
----
-
-## Session State Architecture
-
-The application uses Streamlit's session state to maintain data between pages:
-
-```python
-# Core state variables
-st.session_state.processor    # ProcessedDataset orchestrator
-st.session_state.ds           # xarray Dataset (raw data)
-st.session_state.ds_header    # Header dataset for file checks
-st.session_state.fname        # Current filename
-st.session_state.fpath        # Path to temporary file
-
-# Processing step tracking
-st.session_state.processing_step  # Current step (0-5)
-
-# Page-specific state (examples)
-st.session_state.sensor_health_applied
-st.session_state.qc_applied
-st.session_state.profile_applied
-st.session_state.velocity_applied
+```{image} ../_static/images/webapp/07_profile_operations.png
+:alt: Profile Operations page
+:width: 100%
 ```
 
-**Staging Processor Pattern:**
+**Tabs**
 
-Processing pages use a "staging processor" for safe preview:
+| Tab | Description |
+|-----|-------------|
+| ✂️ Trim Ends | Remove ensembles from deployment/recovery periods |
+| 📡 Side Lobe | Physics-based side lobe contamination removal |
+| 🔧 Manual Cut | Cut arbitrary rectangular regions of cells and ensembles |
+| 📐 Regrid | Interpolate to a regular depth grid |
+| 💾 Save/Reset | Commit or undo changes |
 
-```python
-# Main processor (committed changes)
-proc = st.session_state.processor
+---
 
-# Staging processor (preview changes)
-preview_proc = st.session_state.preview_qc_proc
+### Page 8: Velocity Processing
 
-# Preview without affecting main processor
-runner = preview_proc.get_signal_quality_runner()
-runner.correlation(cutoff=64)
-preview_proc.commit_runner(runner)  # Only affects staging
+Apply velocity-specific quality control and magnetic declination correction.
 
-# When satisfied, apply to main processor
-runner = proc.get_signal_quality_runner()
-runner.correlation(cutoff=64)
-proc.commit_runner(runner)  # Commits to main processor
+```{image} ../_static/images/webapp/08_velocity_processing.png
+:alt: Velocity Processing page
+:width: 100%
 ```
 
----
+**Tabs**
 
-## Sidebar Information
-
-Each processing page displays real-time statistics in the sidebar:
-
-- **Total Cells** — Total data cells in dataset
-- **Valid Cells** — Cells passing all QC checks
-- **Masked Cells** — Cells flagged by QC checks
-- **Processing Log** — Recent processing steps applied
-
----
-
-## Best Practices
-
-### Recommended Workflow Order
-
-1. **Read File** — Always start here to load data
-2. **View Raw Data** — Inspect data quality before processing
-3. **Sensor Health** — Fix environmental sensor issues first
-4. **QC Test** — Apply signal quality thresholds
-5. **Profile Test** — Trim and cut bins (regrid last if needed)
-6. **Velocity Test** — Apply velocity-specific checks
-7. **Write File** — Export processed data
-
-### Tips
-
-- **Preview before saving** — Use preview features to check impact
-- **Check the sidebar** — Monitor valid/masked percentages
-- **Reset if needed** — Each page has reset functionality
-- **Export config** — Generate config.ini for reproducibility
-- **Velocity-only export** — Recommended for most use cases
+| Tab | Description |
+|-----|-------------|
+| Magnetic Declination | Apply declination correction to U/V components |
+| Velocity Thresholds | Set per-component cutoffs (U, V, W) |
+| Despike Data | Median-filter spike detection |
+| Flatline Detection | Detect frozen/stuck sensor values |
+| Preview | View mask impact before committing |
+| Save & Reset | Commit or undo changes |
 
 ---
 
-## Troubleshooting
+### Page 9: Write File
 
-### Common Issues
+Export the processed dataset and save the processing configuration.
 
-**"No data loaded" error:**
-- Navigate to Page 1 (Read File) and upload a file first
+```{image} ../_static/images/webapp/09_write_file.png
+:alt: Write File page
+:width: 100%
+```
 
-**Processing seems slow:**
-- Large files (>100MB) may take time to process
-- Regridding is computationally intensive
+**Tabs**
 
-**Mask preview doesn't update:**
-- Click "Preview" button after changing settings
-- Check that the staging processor was updated
+| Tab | Description |
+|-----|-------------|
+| 📊 Preview Data | Visualise processed data with QC mask applied |
+| 📝 Attributes | Add custom metadata (cruise number, location, etc.) |
+| 💾 Export Data | Download NetCDF or CSV output |
+| ⚙️ Config File | Download `config.ini` capturing all processing settings |
 
-**Export file is empty:**
-- Verify that not all data is masked
-- Check the "Valid Cells" count in sidebar
+The exported `config.ini` can be used with the Auto Processing tool (Page 10)
+to reprocess data with adjusted parameters without repeating the full workflow.
+
+---
+
+### Page 10: Add-Ons
+
+Supplementary tools for batch reprocessing and combining multi-segment files.
+
+**Auto Processing**
+
+Reprocess an ADCP file using a previously saved `config.ini`.
+
+```{image} ../_static/images/webapp/10_addons_autoprocess.png
+:alt: Add-Ons — Auto Processing tab
+:width: 100%
+```
+
+**File Combiner**
+
+Merge multiple sequential ADCP binary files into a single file.
+
+```{image} ../_static/images/webapp/10_addons_file_combiner.png
+:alt: Add-Ons — File Combiner tab
+:width: 100%
+```
+
+```{note}
+When combining files, rename them with sequential numbering before uploading
+(e.g. `KKS_000.000`, `KKS_001.000`, `KKS_002.000`) to ensure correct ordering.
+```
 
 ---
 
 ## See Also
 
-- {doc}`/processing/core` — ProcessedDataset Python API
-- {doc}`/processing/autoprocess` — Automated batch processing
-- {doc}`/quickstart` — Getting started guide
+- {doc}`/quickstart` — Python API quick start
+- {doc}`/processing/index` — Processing module reference

@@ -1,175 +1,168 @@
 # Quick Start
 
-Get started with pyadps in 5 minutes.
+Get up and running with pyadps in minutes.
 
 ## Loading Data
 
-The simplest way to load an ADCP file:
+### Default Read
+
+The simplest way to load an ADCP binary file. The result is an
+[xarray.Dataset](https://docs.xarray.dev/en/stable/generated/xarray.Dataset.html)
+containing all variables (velocity, correlation, echo intensity, percent good,
+fixed leader, and variable leader data).
 
 ```python
 import pyadps
-import pyadps.accessors
 
-# Load complete dataset
 ds = pyadps.read('deployment.000')
-
-# What did we get?
 print(ds)
 ```
 
-## Inspecting the Data
-
-### File Structure
+### Plot and Save Raw Data
 
 ```python
-# Check file integrity
-ds.header.check_file()
+# Plot eastward velocity as a depth–time section
+ds['velocity'].sel(beam=0).plot()
 
-# View header summary
-ds.header.summary()
+# Save the raw dataset to NetCDF
+ds.to_netcdf('raw_output.nc')
 ```
 
-### System Configuration
+---
+
+## Processing Data
+
+Processing is done through the `ProcessedDataset` class, which runs a
+six-step quality control pipeline. Steps can be chained and any step can
+be omitted. The original dataset is never modified.
 
 ```python
-# Get configuration
-config = ds.fixed_leader.system_configuration()
-print(f"Frequency: {config['Frequency']}")
-print(f"Beam Direction: {config['Beam Direction']}")
+from pyadps.processing import ProcessedDataset
 
-# Full configuration summary
-ds.fixed_leader.summary()
+proc = ProcessedDataset(ds)
 ```
 
-### Sensor Data
+### Step 1 — Time Axis Correction
+
+Snap irregular timestamps to a regular grid and fill any time gaps.
 
 ```python
-# Check sensor readings
-ds.variable_leader.summary()
-
-# Time interval
-interval = ds.variable_leader.get_time_interval()
-print(f"Sampling interval: {interval}")
+proc.apply_time_axis(snap=True, snap_freq='h')
 ```
 
-## Accessing Measurements
+### Step 2 — Sensor Health
 
-### Velocity Data
+Flag ensembles where the instrument tilt exceeds acceptable limits.
 
 ```python
-# Get velocity array
-velocity = ds['velocity']
-print(f"Shape: {velocity.shape}")  # (beam, cell, time)
-
-# Plot a time series
-velocity.sel(beam=0, cell=10).plot()
+proc.apply_sensor_health(roll=True, roll_threshold=15.0,
+                         pitch=True, pitch_threshold=15.0)
 ```
 
-### Quality Metrics
+### Step 3 — Signal Quality
+
+Mask low-quality data using correlation, echo intensity, error velocity,
+and percent-good thresholds.
 
 ```python
-# Correlation (data quality indicator)
-correlation = ds['correlation']
-
-# Echo intensity
-echo = ds['echo_intensity']
-
-# Percent good
-percent_good = ds['percent_good']
+proc.apply_signal_quality(correlation=64, echo_intensity=40,
+                          error_velocity=2000, percent_good=25)
 ```
 
-## Quality Control
+### Step 4 — Profile Operation
 
-### Built-in Test Results
+Remove side-lobe contaminated bins near the sea surface and trim
+deployment/recovery periods.
 
 ```python
-# Check BIT results
-bit_summary = ds.variable_leader.bit_result_summary()
-
-if not bit_summary['all_passed']:
-    print(f"BIT errors: {bit_summary['error_count']} ensembles")
+proc.apply_profile_operation(cut_bins_side_lobe=True, water_depth=50.0,
+                             trim_start=10, trim_end=10)
 ```
 
-### Data Continuity
+### Step 5 — Velocity Check
+
+Remove physically unrealistic velocities and apply magnetic declination
+correction.
 
 ```python
-# Check for gaps
-continuity = ds.variable_leader.ensemble_continuity_check()
-
-if not continuity['is_continuous']:
-    print(f"Found {continuity['gap_count']} gaps")
+proc.apply_velocity_check(cutoff_u=2500, cutoff_v=2500, cutoff_w=500,
+                          magnetic_correction=True, declination=-1.5)
 ```
 
-## Exporting Data
+### Step 6 — Finalize and Save
 
-### To NetCDF
+`finalize()` returns a standard `xarray.Dataset` with processing metadata
+embedded in the global attributes.
 
 ```python
-ds.to_netcdf('processed.nc')
+result = proc.finalize()
+
+# Save full processed dataset
+result.to_netcdf('processed.nc')
+
+# Save only velocity components (u, v, w) in cm/s
+proc.velocity_to_netcdf('velocity.nc', units='cm/s')
+
+# Export the processing configuration for reproducibility
+proc.export_config('config.ini')
 ```
 
-### Selective Export
+### Method Chaining
+
+All steps support fluent chaining for a compact workflow:
 
 ```python
-# Export only velocity
-ds[['velocity']].to_netcdf('velocity_only.nc')
+result = (
+    ProcessedDataset(ds)
+    .apply_time_axis(snap=True, snap_freq='h')
+    .apply_sensor_health(roll=True, roll_threshold=15.0)
+    .apply_signal_quality(correlation=64, echo_intensity=40)
+    .apply_profile_operation(cut_bins_side_lobe=True, water_depth=50.0)
+    .apply_velocity_check(cutoff_u=2500, cutoff_v=2500, cutoff_w=500)
+    .finalize()
+)
+
+result.to_netcdf('processed.nc')
 ```
 
-## Using the Web Interface
+---
 
-Launch the interactive interface:
+## Add-On Modules
 
-```bash
-pyadps
-```
+### Auto Processing
 
-Or with streamlit directly:
-
-```bash
-streamlit run src/pyadps/pages/Home_Page.py
-```
-
-## Complete Example
+Re-run a processing workflow from a saved `config.ini` file — useful for
+batch reprocessing with adjusted thresholds.
 
 ```python
-"""Complete pyadps workflow example."""
-import pyadps
-import pyadps.accessors
+from pyadps.processing.autoprocess import autoprocess
 
-# Load data
-ds = pyadps.read('deployment.000')
-
-# Check file integrity
-check = ds.header.check_file()
-if check['File Size Match']:
-    print("✓ File structure valid")
-
-# Get configuration
-config = ds.fixed_leader.system_configuration()
-print(f"Frequency: {config['Frequency']}")
-print(f"Direction: {config['Beam Direction']}")
-
-# Check data quality
-bit_summary = ds.variable_leader.bit_result_summary()
-if bit_summary['all_passed']:
-    print("✓ All BIT tests passed")
-
-# Check timestamps
-ts_valid = ds.variable_leader.validate_timestamps()
-print(f"Time range: {ts_valid['time_range'][0]} to {ts_valid['time_range'][1]}")
-
-# Access velocity data
-velocity = ds['velocity']
-print(f"Velocity shape: {velocity.shape}")
-
-# Export to NetCDF
-ds.to_netcdf('processed.nc')
-print("✓ Exported to NetCDF")
+result = autoprocess(
+    config_file_or_object='config.ini',
+    binary_file_path='deployment.000',
+    save_netcdf=True,
+)
 ```
+
+### Binary File Combiner
+
+Combine multiple sequential ADCP binary files into a single file.
+
+```python
+from pathlib import Path
+from pyadps.processing.multifile import combine_file_list
+
+files = [Path('deploy_000.000'), Path('deploy_001.000'), Path('deploy_002.000')]
+
+result = combine_file_list(files, output_file=Path('merged.000'))
+print(f"Combined {result.total_ensembles} ensembles from {result.files_processed} files")
+```
+
+---
 
 ## Next Steps
 
-- {doc}`io/index` — Learn more about data loading
-- {doc}`io/accessors` — Explore accessor methods
-- {doc}`processing/index` — Apply quality control
-- {doc}`tutorials/index` — Follow detailed tutorials
+- {doc}`webapp/index` — Interactive processing via the web interface
+- {doc}`io/index` — Full I/O module reference
+- {doc}`processing/index` — Detailed processing pipeline documentation
+- {doc}`tutorials/index` — Step-by-step tutorials

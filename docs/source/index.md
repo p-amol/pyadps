@@ -19,7 +19,6 @@ Acoustic Doppler Current Profiler (ADCP) data from RDI instruments.
 
 ```python
 import pyadps
-import pyadps.accessors  # Register domain-specific methods
 
 # Read an RDI file
 ds = pyadps.read("deployment.000")
@@ -40,34 +39,22 @@ ds.to_netcdf('output.nc')
 
 pyadps is organized into three main components:
 
-### I/O Module
+```{toctree}
+:maxdepth: 1
 
-Read and parse RDI ADCP binary files:
+installation
+quickstart
+webapp/index
+tutorials/index
+```
+
+### Module Reference
 
 ```{toctree}
 :maxdepth: 2
 
 io/index
-```
-
-### Processing Module
-
-Quality control and data processing tools:
-
-```{toctree}
-:maxdepth: 2
-
 processing/index
-```
-
-### Web Application
-
-Interactive Streamlit interface:
-
-```{toctree}
-:maxdepth: 1
-
-webapp/index
 ```
 
 ## Additional Resources
@@ -75,9 +62,6 @@ webapp/index
 ```{toctree}
 :maxdepth: 1
 
-installation
-quickstart
-tutorials/index
 api/index
 reference/changelog
 ```
@@ -86,8 +70,8 @@ reference/changelog
 
 1. **Install pyadps**: See {doc}`installation` for instructions
 2. **Read the Quick Start**: {doc}`quickstart` provides a 5-minute introduction
-3. **Explore the I/O module**: {doc}`io/index` covers data loading
-4. **Learn quality control**: {doc}`processing/index` covers QC workflows
+3. **Try the Web App**: {doc}`webapp/index` covers the interactive interface
+4. **Go deeper**: {doc}`io/index` and {doc}`processing/index` cover the module details
 
 ## Module Quick Reference
 

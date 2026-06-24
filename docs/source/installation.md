@@ -4,11 +4,30 @@ This guide covers how to install pyadps and its dependencies.
 
 ## Requirements
 
-- Python 3.9 or higher
+- Python 3.12
 - NumPy
 - xarray
 - pandas
 - Streamlit (for web interface)
+
+## Setting Up a Virtual Environment
+
+It is strongly recommended to install pyadps in a dedicated virtual environment to avoid dependency conflicts.
+
+### Using `venv`
+
+```bash
+python3.12 -m venv pyadps-env
+source pyadps-env/bin/activate  # On Windows: pyadps-env\Scripts\activate
+```
+
+### Using `conda`
+
+```bash
+conda create -n pyadps-env python=3.12
+conda activate pyadps-env
+conda install pip
+```
 
 ## Installation Methods
 
@@ -65,14 +84,13 @@ pip install numpy xarray pandas
 
 ### Accessor Registration
 
-Remember to import accessors before using domain-specific methods:
+Accessor methods are registered automatically when you import pyadps — no additional import is needed:
 
 ```python
 import pyadps
-import pyadps.accessors  # Required!
 
 ds = pyadps.read('file.000')
-ds.header.summary()  # Now this works
+ds.header.summary()  # Works out of the box
 ```
 
 ## Next Steps

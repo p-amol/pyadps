@@ -1,101 +1,119 @@
 # Processing Module
 
-The `pyadps.processing` module provides quality control and data processing tools.
-
-## Overview
-
-The processing module contains specialized "runner" classes that perform 
-quality control tests and data operations on ADCP data. Each runner is designed 
-to handle a specific aspect of ADCP data validation and processing.
+The `pyadps.processing` module provides a six-step quality control pipeline
+for ADCP data. The primary interface is the `ProcessedDataset` class, which
+orchestrates the full pipeline while keeping the original dataset untouched.
 
 ## Processing Workflow
 
-A typical ADCP processing workflow:
+Steps should be applied in this order. Any step can be skipped.
 
-1. **Read data** → `pyadps.read()`
-2. **Check sensor health** → `SensorHealthRunner`
-3. **Assess signal quality** → `SignalQualityRunner`
-4. **Validate velocities** → `VelocityCheckRunner`
-5. **Apply profile operations** → `ProfileOperationRunner`
-6. **Export results** → `ProcessedDataset`
+| Step | Method | Purpose |
+|------|--------|---------|
+| 1 | `apply_time_axis()` | Snap drifted timestamps; fill time gaps |
+| 2 | `apply_sensor_health()` | Check tilt, correct sound speed |
+| 3 | `apply_signal_quality()` | Correlation, echo, error velocity, percent good |
+| 4 | `apply_profile_operation()` | Trim ends, cut bins, regrid |
+| 5 | `apply_velocity_check()` | Thresholds, magnetic correction, despike |
+| 6 | `finalize()` | Return processed `xarray.Dataset` with metadata |
 
-## Module Overview
-
-### Quality Control Runners
-
-| Module | Description |
-|--------|-------------|
-| {doc}`sensor_health` | Tilt, temperature, voltage checks |
-| {doc}`signal_quality` | Correlation, echo intensity, percent good |
-| {doc}`velocity_check` | Error velocity, threshold tests |
-
-### Data Operations
-
-| Module | Description |
-|--------|-------------|
-| {doc}`core` | Central processing functions and ProcessedDataset |
-| {doc}`profile_operation` | Bin operations, trimming, masking |
-| {doc}`time_axis` | Time regularization, gap handling |
-
-### Automation
-
-| Module | Description |
-|--------|-------------|
-| {doc}`autoprocess` | Automated processing pipeline |
-| {doc}`multifile` | Batch processing multiple files |
-| {doc}`config` | Processing configuration |
-
-### Utilities
-
-| Module | Description |
-|--------|-------------|
-| {doc}`plotgen` | Diagnostic plots |
-| {doc}`utility` | Helper functions |
+```{note}
+Profile operations (Step 4) must come **after** signal quality checks (Step 3).
+Regridding changes the cell structure and invalidates cell-based masks from
+earlier steps.
+```
 
 ## Quick Example
 
 ```python
 import pyadps
-import pyadps.accessors
-from pyadps.processing import SensorHealthRunner, SignalQualityRunner
+from pyadps.processing import ProcessedDataset
 
-# Load data
 ds = pyadps.read('deployment.000')
 
-# Run sensor health checks
-sensor_runner = SensorHealthRunner(ds)
-sensor_runner.run_all_tests()
-sensor_results = sensor_runner.get_results()
+result = (
+    ProcessedDataset(ds)
+    .apply_time_axis(snap=True, snap_freq='h')
+    .apply_sensor_health(roll=True, roll_threshold=15.0)
+    .apply_signal_quality(correlation=64, echo_intensity=40)
+    .apply_profile_operation(cut_bins_side_lobe=True, water_depth=50.0)
+    .apply_velocity_check(cutoff_u=2500, cutoff_v=2500, cutoff_w=500)
+    .finalize()
+)
 
-# Run signal quality checks
-signal_runner = SignalQualityRunner(ds)
-signal_runner.run_all_tests()
-signal_results = signal_runner.get_results()
+result.to_netcdf('processed.nc')
+```
 
-# Combine results
-from pyadps.processing import ProcessedDataset
-processed = ProcessedDataset(ds, [sensor_results, signal_results])
-processed.to_netcdf('qc_processed.nc')
+## Module Overview
+
+### Core
+
+| Module | Description |
+|--------|-------------|
+| `core` | `ProcessedDataset` — orchestrates the full pipeline |
+| `config` | `ProcessingConfig` — load/save processing settings as `config.ini` |
+
+### Runner Classes
+
+Each processing step delegates to a dedicated Runner class. You can access
+them directly via `ProcessedDataset` for advanced control, or use them
+standalone.
+
+| Module | Runner Class | Handles |
+|--------|-------------|---------|
+| `sensor_health` | `SensorHealthRunner` | Roll, pitch, sound speed correction |
+| `signal_quality` | `SignalQualityRunner` | Correlation, echo, error velocity, percent good, false target |
+| `profile_operation` | `ProfileOperationRunner` | Trim, side-lobe cut, manual cut, regrid |
+| `velocity_check` | `VelocityCheckRunner` | Thresholds, magnetic declination, despike, flatline |
+| `time_axis` | — | Time snapping and gap filling utilities |
+
+### Automation and Batch Processing
+
+| Module | Key Function | Description |
+|--------|-------------|-------------|
+| `autoprocess` | `autoprocess()` | Reprocess a file using a saved `config.ini` |
+| `multifile` | `combine_file_list()` | Merge multiple binary files into one |
+
+### Utilities
+
+| Module | Description |
+|--------|-------------|
+| `utility` | `QCCheckStats`, `DataModificationStats`, `QCPipelineReport` — statistics dataclasses |
+
+## Config-Based Processing
+
+Processing settings can be saved and replayed via `config.ini`:
+
+```python
+proc = ProcessedDataset(ds)
+proc.apply_signal_quality(correlation=64, echo_intensity=40)
+
+# Export settings after processing
+proc.export_config('config.ini')
+
+# Replay later
+from pyadps.processing.autoprocess import autoprocess
+result = autoprocess('config.ini', binary_file_path='deployment.000')
 ```
 
 ## Contents
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 
 core
 sensor_health
 signal_quality
-velocity_check
 profile_operation
+velocity_check
 time_axis
 autoprocess
 multifile
-utility
 config
+utility
 ```
 
 ## See Also
 
-- {doc}`/io/index` — Data loading functions
-- {doc}`/tutorials/index` — Step-by-step tutorials
+- {doc}`/io/index` — Loading ADCP data
+- {doc}`/api/index` — Full API reference

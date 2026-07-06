@@ -757,7 +757,7 @@
           "7": 0
         },
         "bit_width": 16,
-        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N -> string index [16-1-N:16-N].",
         "implementation_method": "Convert system_configuration_code to 16-bit binary string, extract indices [13:16], convert to integer, map to frequency value.",
         "flag_values": [
           0
@@ -797,8 +797,8 @@
           "1": 2
         },
         "bit_width": 16,
-        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
-        "implementation_method": "Convert system_configuration_code to 16-bit binary string, extract index [12:13], map: 0\u21921 (concave), 1\u21922 (convex).",
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N -> string index [16-1-N:16-N].",
+        "implementation_method": "Convert system_configuration_code to 16-bit binary string, extract index [12:13], map: 0->1 (concave), 1->2 (convex).",
         "flag_values": [
           1,
           2
@@ -842,7 +842,7 @@
           "3": 0
         },
         "bit_width": 16,
-        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N -> string index [16-1-N:16-N].",
         "implementation_method": "Convert system_configuration_code to 16-bit binary string, extract indices [4:8], convert to integer, map to beam angle value.",
         "flag_values": [
           0
@@ -860,7 +860,7 @@
       "name": "transducer_attached",
       "long_name": "Transducer Head Attached",
       "derived_from": "system_configuration_code (bit 9)",
-      "description": "Indicates whether transducer head is physically attached.",
+      "description": "Indicates whether transducer head is physically attached. 0 = Not attached, 1 = Attached",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -881,7 +881,7 @@
           "1": 1
         },
         "bit_width": 16,
-        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N -> string index [16-1-N:16-N].",
         "implementation_method": "Convert system_configuration_code to 16-bit binary string, extract indices [0:4], convert to integer, map to configuration code.",
         "flag_values": [
           0,
@@ -896,7 +896,7 @@
       "name": "beam_direction",
       "long_name": "Beam Direction",
       "derived_from": "system_configuration_code (bit 8)",
-      "description": "Direction beams are oriented (upward or downward looking).",
+      "description": "Direction beams are oriented (upward or downward looking). 0 = Down, 1 = Up",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -917,7 +917,7 @@
           "1": 1
         },
         "bit_width": 16,
-        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N -> string index [16-1-N:16-N].",
         "flag_values": [
           0,
           1
@@ -960,7 +960,7 @@
           "7": 0
         },
         "bit_width": 16,
-        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N -> string index [16-1-N:16-N].",
         "flag_values": [
           0
         ],
@@ -997,7 +997,7 @@
           "15": 15
         },
         "bit_width": 16,
-        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N \u2192 string index [16-1-N:16-N].",
+        "bit_indexing_method": "Traditional MSB=15 to LSB=0. For 16-bit values, bit positions map to string indices: bit N -> string index [16-1-N:16-N].",
         "flag_values": [
           4,
           5,
@@ -1051,7 +1051,7 @@
       "name": "use_tilt_correction",
       "long_name": "Tilt Correction Applied",
       "derived_from": "coordinate_transformation_code (bit 5)",
-      "description": "Flag indicating whether tilt correction is applied.",
+      "description": "Flag indicating whether tilt correction is applied. 0 = Not applied, 1 = Applied",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1084,7 +1084,7 @@
       "name": "three_beam_solution",
       "long_name": "Three-Beam Solution Mode",
       "derived_from": "coordinate_transformation_code (bit 4)",
-      "description": "Flag for three-beam solution mode.",
+      "description": "Flag for three-beam solution mode. 0 = Disabled, 1 = Enabled",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1117,7 +1117,7 @@
       "name": "bin_mapping_applied",
       "long_name": "Bin Mapping Applied",
       "derived_from": "coordinate_transformation_code (bit 3)",
-      "description": "Flag indicating whether bin mapping/remapping is applied.",
+      "description": "Flag indicating whether bin mapping/remapping is applied. 0 = Not applied, 1 = Applied",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1150,7 +1150,7 @@
       "name": "sensor_source_sound_speed",
       "long_name": "Sound Speed Sensor Source",
       "derived_from": "sensor_source_code (bit 1)",
-      "description": "Source of sound speed data.",
+      "description": "Source of sound speed data. 0 = Manual/internal, 1 = Sensor/external",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1171,8 +1171,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 0, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 0, map: 0->0 (manual/internal), 1->1 (sensor/external).",
         "flag_values": [
           0,
           1
@@ -1191,7 +1191,7 @@
       "name": "sensor_source_depth",
       "long_name": "Depth Sensor Source",
       "derived_from": "sensor_source_code (bit 2)",
-      "description": "Source of depth/pressure data.",
+      "description": "Source of depth/pressure data. 0 = Manual/internal, 1 = Sensor/external",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1212,8 +1212,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 1, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 1, map: 0->0 (manual/internal), 1->1 (sensor/external).",
         "flag_values": [
           0,
           1
@@ -1232,7 +1232,7 @@
       "name": "sensor_source_heading",
       "long_name": "Heading Sensor Source",
       "derived_from": "sensor_source_code (bit 3)",
-      "description": "Source of heading data.",
+      "description": "Source of heading data. 0 = Manual/internal, 1 = Sensor/external",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1253,8 +1253,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 2, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 2, map: 0->0 (manual/internal), 1->1 (sensor/external).",
         "flag_values": [
           0,
           1
@@ -1273,7 +1273,7 @@
       "name": "sensor_source_pitch",
       "long_name": "Pitch Sensor Source",
       "derived_from": "sensor_source_code (bit 4)",
-      "description": "Source of pitch data.",
+      "description": "Source of pitch data. 0 = Manual/internal, 1 = Sensor/external",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1294,8 +1294,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 3, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 3, map: 0->0 (manual/internal), 1->1 (sensor/external).",
         "flag_values": [
           0,
           1
@@ -1314,7 +1314,7 @@
       "name": "sensor_source_roll",
       "long_name": "Roll Sensor Source",
       "derived_from": "sensor_source_code (bit 5)",
-      "description": "Source of roll data.",
+      "description": "Source of roll data. 0 = Manual/internal, 1 = Sensor/external",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1335,8 +1335,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 4, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 4, map: 0->0 (manual/internal), 1->1 (sensor/external).",
         "flag_values": [
           0,
           1
@@ -1355,7 +1355,7 @@
       "name": "sensor_source_conductivity",
       "long_name": "Conductivity Sensor Source",
       "derived_from": "sensor_source_code (bit 6)",
-      "description": "Source of conductivity/salinity data.",
+      "description": "Source of conductivity/salinity data. 0 = Manual/internal, 1 = Sensor/external",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1376,8 +1376,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 5, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 5, map: 0->0 (manual/internal), 1->1 (sensor/external).",
         "flag_values": [
           0,
           1
@@ -1396,7 +1396,7 @@
       "name": "sensor_source_temperature",
       "long_name": "Temperature Sensor Source",
       "derived_from": "sensor_source_code (bit 7)",
-      "description": "Source of temperature data.",
+      "description": "Source of temperature data. 0 = Manual/internal, 1 = Sensor/external",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1417,8 +1417,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 7, map: 0\u21920 (manual/internal), 1\u21921 (sensor/external).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_source_code to 8-bit binary string, extract bit 7, map: 0->0 (manual/internal), 1->1 (sensor/external).",
         "flag_values": [
           0,
           1
@@ -1437,7 +1437,7 @@
       "name": "sensor_available_sound_speed",
       "long_name": "Sound Speed Sensor Available",
       "derived_from": "sensor_available_code (bit 1)",
-      "description": "Flag indicating sound speed sensor availability.",
+      "description": "Flag indicating sound speed sensor availability. 0 = Not available, 1 = Available",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1458,8 +1458,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 1, map: 0\u21920 (not available), 1\u21921 (available).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 1, map: 0->0 (not available), 1->1 (available).",
         "flag_values": [
           0,
           1
@@ -1478,7 +1478,7 @@
       "name": "sensor_available_depth",
       "long_name": "Depth Sensor Available",
       "derived_from": "sensor_available_code (bit 2)",
-      "description": "Flag indicating depth/pressure sensor availability.",
+      "description": "Flag indicating depth/pressure sensor availability. 0 = Not available, 1 = Available",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1499,8 +1499,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 2, map: 0\u21920 (not available), 1\u21921 (available).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 2, map: 0->0 (not available), 1->1 (available).",
         "flag_values": [
           0,
           1
@@ -1519,7 +1519,7 @@
       "name": "sensor_available_heading",
       "long_name": "Heading Sensor Available",
       "derived_from": "sensor_available_code (bit 3)",
-      "description": "Flag indicating heading (compass) sensor availability.",
+      "description": "Flag indicating heading (compass) sensor availability. 0 = Not available, 1 = Available",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1540,8 +1540,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 3, map: 0\u21920 (not available), 1\u21921 (available).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 3, map: 0->0 (not available), 1->1 (available).",
         "flag_values": [
           0,
           1
@@ -1560,7 +1560,7 @@
       "name": "sensor_available_pitch",
       "long_name": "Pitch Sensor Available",
       "derived_from": "sensor_available_code (bit 4)",
-      "description": "Flag indicating pitch (tilt) sensor availability.",
+      "description": "Flag indicating pitch (tilt) sensor availability. 0 = Not available, 1 = Available",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1581,8 +1581,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 4, map: 0\u21920 (not available), 1\u21921 (available).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 4, map: 0->0 (not available), 1->1 (available).",
         "flag_values": [
           0,
           1
@@ -1601,7 +1601,7 @@
       "name": "sensor_available_roll",
       "long_name": "Roll Sensor Available",
       "derived_from": "sensor_available_code (bit 5)",
-      "description": "Flag indicating roll (tilt) sensor availability.",
+      "description": "Flag indicating roll (tilt) sensor availability. 0 = Not available, 1 = Available",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1622,8 +1622,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 5, map: 0\u21920 (not available), 1\u21921 (available).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 5, map: 0->0 (not available), 1->1 (available).",
         "flag_values": [
           0,
           1
@@ -1642,7 +1642,7 @@
       "name": "sensor_available_conductivity",
       "long_name": "Conductivity Sensor Available",
       "derived_from": "sensor_available_code (bit 6)",
-      "description": "Flag indicating conductivity/salinity sensor availability.",
+      "description": "Flag indicating conductivity/salinity sensor availability. 0 = Not available, 1 = Available",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1663,8 +1663,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 6, map: 0\u21920 (not available), 1\u21921 (available).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 6, map: 0->0 (not available), 1->1 (available).",
         "flag_values": [
           0,
           1
@@ -1683,7 +1683,7 @@
       "name": "sensor_available_temperature",
       "long_name": "Temperature Sensor Available",
       "derived_from": "sensor_available_code (bit 7)",
-      "description": "Flag indicating temperature sensor availability.",
+      "description": "Flag indicating temperature sensor availability. 0 = Not available, 1 = Available",
       "dtype": "int64",
       "unit": "1",
       "scale_factor": 1.0,
@@ -1704,8 +1704,8 @@
           "1": 1
         },
         "bit_width": 8,
-        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N \u2192 string index [8-1-N:8-N].",
-        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 7, map: 0\u21920 (not available), 1\u21921 (available).",
+        "bit_indexing_method": "Traditional MSB=7 to LSB=0. For 8-bit values, bit positions map to string indices: bit N -> string index [8-1-N:8-N].",
+        "implementation_method": "Convert sensor_available_code to 8-bit binary string, extract bit 7, map: 0->0 (not available), 1->1 (available).",
         "flag_values": [
           0,
           1

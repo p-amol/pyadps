@@ -98,6 +98,30 @@ def get_time_interval_str() -> str:
     return "N/A"
 
 
+def _get_dataset_lat_lon() -> tuple[float | None, float | None]:
+    """Look up latitude/longitude from dataset attributes, if already present.
+
+    Checks a few common key variants since attributes may have been added
+    via different pages (e.g. 'Latitude'/'Longitude' from the standard
+    attribute form, or lowercase 'latitude'/'longitude'/'lat'/'lon').
+    """
+    lat_keys = ("Latitude", "latitude", "lat")
+    lon_keys = ("Longitude", "longitude", "lon")
+
+    def _find(keys: tuple[str, ...]) -> float | None:
+        for key in keys:
+            value = proc.dataset.attrs.get(key)
+            if value in (None, ""):
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    return _find(lat_keys), _find(lon_keys)
+
+
 def is_earth_coordinates() -> bool:
     """
     Check if data is in Earth coordinates.
@@ -576,8 +600,11 @@ if not st.session_state.velocity_initialized:
     # Magnetic correction settings
     st.session_state.apply_magnetic = False
     st.session_state.magnetic_method = "pygeomag"
-    st.session_state.magnetic_lat = 0.0
-    st.session_state.magnetic_lon = 0.0
+    # Auto-fill from dataset attributes if latitude/longitude were already
+    # recorded (e.g. from a previously written file read back in).
+    _attr_lat, _attr_lon = _get_dataset_lat_lon()
+    st.session_state.magnetic_lat = _attr_lat if _attr_lat is not None else 0.0
+    st.session_state.magnetic_lon = _attr_lon if _attr_lon is not None else 0.0
     st.session_state.magnetic_year = 2025
     st.session_state.magnetic_depth = 0
     st.session_state.magnetic_declination = None
@@ -1354,6 +1381,9 @@ with tab6:
                 proc.apply_velocity_check(
                     magnetic_correction=st.session_state.apply_magnetic,
                     declination=st.session_state.magnetic_declination if st.session_state.apply_magnetic else None,
+                    lat=st.session_state.magnetic_lat if st.session_state.apply_magnetic else None,
+                    lon=st.session_state.magnetic_lon if st.session_state.apply_magnetic else None,
+                    year=float(st.session_state.magnetic_year) if st.session_state.apply_magnetic else None,
                     cutoff_u=float(st.session_state.cutoff_u) if st.session_state.apply_threshold else None,
                     cutoff_v=float(st.session_state.cutoff_v) if st.session_state.apply_threshold else None,
                     cutoff_w=float(st.session_state.cutoff_w) if st.session_state.apply_threshold else None,

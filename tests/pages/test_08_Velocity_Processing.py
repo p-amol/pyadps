@@ -476,6 +476,46 @@ class TestSessionStateInitialization:
         assert not at.exception
         assert "preview_velocity_proc" in at.session_state
 
+    def test_autofills_lat_lon_from_dataset_attrs(self):
+        """If Latitude/Longitude are already dataset attributes (e.g. from a
+        previously written file read back in), session state should be
+        pre-filled with them instead of defaulting to 0.0."""
+        ds = _make_ds()
+        ds.attrs["Latitude"] = "12.5"
+        ds.attrs["Longitude"] = "77.25"
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        assert at.session_state["magnetic_lat"] == pytest.approx(12.5)
+        assert at.session_state["magnetic_lon"] == pytest.approx(77.25)
+
+    def test_autofills_lat_lon_from_lowercase_attrs(self):
+        """Lowercase 'latitude'/'longitude' attrs are also recognized."""
+        ds = _make_ds()
+        ds.attrs["latitude"] = -33.8
+        ds.attrs["longitude"] = 151.2
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        assert at.session_state["magnetic_lat"] == pytest.approx(-33.8)
+        assert at.session_state["magnetic_lon"] == pytest.approx(151.2)
+
+    def test_lat_lon_default_zero_without_attrs(self, proc):
+        """Without lat/lon attrs present, defaults remain 0.0 (no regression)."""
+        at = _run({"processor": proc})
+        assert not at.exception
+        assert at.session_state["magnetic_lat"] == 0.0
+        assert at.session_state["magnetic_lon"] == 0.0
+
+    def test_autofill_ignores_invalid_attr_values(self):
+        """Non-numeric Latitude attrs must not crash init; falls back to 0.0."""
+        ds = _make_ds()
+        ds.attrs["Latitude"] = "not-a-number"
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        assert at.session_state["magnetic_lat"] == 0.0
+
 
 # ===========================================================================
 # CLASS 2 — Tab 1: Magnetic Declination
@@ -943,6 +983,51 @@ class TestTab6SaveReset:
         )
         at = _run(ss)
         assert not at.exception
+
+    def test_save_button_forwards_lat_lon_year_for_magnetic(self, proc):
+        """Regression: lat/lon/year must be forwarded to apply_velocity_check
+        so they end up in the exported config instead of always being 0.0.
+        """
+        ds = _make_ds()
+        fresh_proc = _make_mock_processor(ds)
+        ss = _full_ss(
+            fresh_proc,
+            apply_magnetic=True,
+            magnetic_declination=-7.0,
+            magnetic_lat=12.5,
+            magnetic_lon=77.25,
+            magnetic_year=2023,
+            apply_threshold=False,
+        )
+        at = _run(ss)
+        btn = next(b for b in at.button if b.key == "save_velocity")
+        btn.click().run()
+        assert not at.exception
+        _, kwargs = fresh_proc.apply_velocity_check.call_args
+        assert kwargs["lat"] == 12.5
+        assert kwargs["lon"] == 77.25
+        assert kwargs["year"] == 2023.0
+
+    def test_save_button_lat_lon_none_when_magnetic_disabled(self, proc):
+        """When magnetic correction isn't enabled, lat/lon/year passed to
+        apply_velocity_check should be None rather than stale coordinates."""
+        ds = _make_ds()
+        fresh_proc = _make_mock_processor(ds)
+        ss = _full_ss(
+            fresh_proc,
+            apply_magnetic=False,
+            magnetic_lat=12.5,
+            magnetic_lon=77.25,
+            apply_threshold=True,
+        )
+        at = _run(ss)
+        btn = next(b for b in at.button if b.key == "save_velocity")
+        btn.click().run()
+        assert not at.exception
+        _, kwargs = fresh_proc.apply_velocity_check.call_args
+        assert kwargs["lat"] is None
+        assert kwargs["lon"] is None
+        assert kwargs["year"] is None
 
     def test_runner_statistics_shown_after_save(self, proc):
         """Statistics section appears after save when runner.statistics is non-empty."""

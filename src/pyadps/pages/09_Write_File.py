@@ -191,8 +191,80 @@ def plot_data_heatmap(
     st.plotly_chart(fig, use_container_width=True)
 
 
+# Curated diverging colorscales — velocity is centered on zero flow, so only
+# scales with a meaningful midpoint are offered (unlike the sequential
+# palettes used for Echo/Correlation/Percent Good elsewhere).
+DIVERGING_COLORSCALE_OPTIONS = [
+    "RdBu_r",
+    "RdBu",
+    "balance",
+    "delta",
+    "curl",
+    "spectral",
+    "picnic",
+    "portland",
+    "tropic",
+    "temps",
+    "puor",
+    "prgn",
+]
+
+
+def render_diverging_color_scale_options(
+    data: np.ndarray, key_suffix: str
+) -> tuple[str, float, float]:
+    """Render a palette selectbox + symmetric range input for a zero-centered
+    diverging heatmap (velocity).
+
+    Unlike a plain min/max range, this uses a single "clamp magnitude" so the
+    scale stays properly centered on zero (zmin=-N, zmax=+N) — Plotly ignores
+    zmid once zmin/zmax are set explicitly, so symmetry has to be enforced
+    here rather than relying on zmid.
+
+    Returns
+    -------
+    tuple of (colorscale, zmin, zmax)
+    """
+    data_masked = np.where(data == -32768, np.nan, data)
+    if np.all(np.isnan(data_masked)):
+        default_range = 1.0
+    else:
+        default_range = float(
+            max(abs(np.nanmin(data_masked)), abs(np.nanmax(data_masked)))
+        )
+
+    with st.expander("🎨 Color Scale Options", expanded=False):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            colorscale = st.selectbox(
+                "Color palette",
+                DIVERGING_COLORSCALE_OPTIONS,
+                index=0,
+                help="Diverging colorscale centered on zero flow.",
+                key=f"colorscale_select_{key_suffix}",
+            )
+        with col_b:
+            clamp_range = st.number_input(
+                "Clamp range (± mm/s)",
+                min_value=0.0,
+                value=default_range,
+                help="Values beyond ±this are shown with the colorscale's "
+                "end colors, so out-of-range data still gets a color. "
+                "Kept symmetric around zero to preserve the diverging scale.",
+                key=f"clamp_range_input_{key_suffix}",
+            )
+
+    colorscale = colorscale or DIVERGING_COLORSCALE_OPTIONS[0]
+    return colorscale, -clamp_range, clamp_range
+
+
 def plot_velocity_component(
-    beam_idx: int, title: str, apply_mask: bool = False
+    beam_idx: int,
+    title: str,
+    apply_mask: bool = False,
+    colorscale: str = "RdBu_r",
+    zmin: float = None,
+    zmax: float = None,
 ) -> None:
     """Plot velocity component as a heatmap."""
     if "velocity" not in ds.data_vars:
@@ -220,8 +292,13 @@ def plot_velocity_component(
             z=vel_data,
             x=time_axis,
             y=depth_axis,
-            colorscale="RdBu_r",
-            zmid=0,
+            colorscale=colorscale,
+            # zmid only takes effect when zauto is True (i.e. zmin/zmax are
+            # None) — once an explicit symmetric range is passed, that
+            # already centers the scale on zero without zmid.
+            zmid=0 if zmin is None and zmax is None else None,
+            zmin=zmin,
+            zmax=zmax,
             colorbar=dict(title="mm/s"),
             hoverongaps=False,
         )
@@ -360,8 +437,20 @@ with tab1:
     # Plot button
     if st.button("📈 Plot Data", key="plot_preview"):
         if var_selection == "Velocity":
+            if "velocity" in ds.data_vars:
+                vel_data = ds["velocity"].values[beam_idx, :, :]
+                colorscale, zmin, zmax = render_diverging_color_scale_options(
+                    vel_data, key_suffix=f"write_velocity_{beam_idx}_{apply_mask}"
+                )
+            else:
+                colorscale, zmin, zmax = "RdBu_r", None, None
             plot_velocity_component(
-                beam_idx, f"{var_selection} - {beam_selection}", apply_mask
+                beam_idx,
+                f"{var_selection} - {beam_selection}",
+                apply_mask,
+                colorscale=colorscale,
+                zmin=zmin,
+                zmax=zmax,
             )
         else:
             # Get the appropriate data variable

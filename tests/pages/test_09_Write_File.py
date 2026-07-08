@@ -531,6 +531,88 @@ class TestTab1PreviewData:
 
 
 # ===========================================================================
+# CLASS 3b — Tab 1: Velocity Color Scale Options (diverging palette + range)
+# ===========================================================================
+
+
+class TestVelocityColorScaleOptions:
+    """Tests for render_diverging_color_scale_options(), used only by the
+    Velocity branch of the Preview tab (Echo/Correlation/Percent Good are
+    out of scope — they use the plain, non-diverging plot_data_heatmap).
+    """
+
+    def test_not_shown_before_plotting(self, proc):
+        """The color-options expander lives inside the button-gated block,
+        so it shouldn't render until 'Plot Data' is clicked."""
+        at = _run(_full_ss(proc))
+        keys = {s.key for s in at.selectbox}
+        assert not any(k.startswith("colorscale_select_write_velocity_") for k in keys)
+
+    def test_palette_shown_after_plotting_velocity(self, proc):
+        at = _run(_full_ss(proc))
+        next(b for b in at.button if b.key == "plot_preview").click().run()
+        keys = {s.key for s in at.selectbox}
+        assert any(k.startswith("colorscale_select_write_velocity_") for k in keys)
+
+    def test_default_palette_is_rdbu_r(self, proc):
+        at = _run(_full_ss(proc))
+        at = next(b for b in at.button if b.key == "plot_preview").click().run()
+        sb = next(
+            s for s in at.selectbox if s.key.startswith("colorscale_select_write_velocity_")
+        )
+        assert sb.value == "RdBu_r"
+
+    def test_clamp_range_defaults_to_symmetric_abs_max(self, proc):
+        """Default clamp should be the max absolute value of beam 0's data
+        (~996 for the seeded _make_ds() fixture), keeping the scale
+        symmetric around zero."""
+        ds = proc.dataset
+        beam0 = ds["velocity"].values[0, :, :]
+        expected = float(max(abs(beam0.min()), abs(beam0.max())))
+
+        at = _run(_full_ss(proc))
+        at = next(b for b in at.button if b.key == "plot_preview").click().run()
+        clamp = next(
+            n for n in at.number_input if n.key.startswith("clamp_range_input_")
+        )
+        assert clamp.value == pytest.approx(expected)
+
+    def test_switching_palette_rerenders_without_error(self, proc):
+        at = _run(_full_ss(proc))
+        at = next(b for b in at.button if b.key == "plot_preview").click().run()
+        sb = next(
+            s for s in at.selectbox if s.key.startswith("colorscale_select_write_velocity_")
+        )
+        at = sb.select("balance").run()
+        assert not at.exception
+
+    def test_narrowing_clamp_range_does_not_raise(self, proc):
+        """The whole preview block (including this widget) lives inside
+        `if st.button("Plot Data"):`, so — consistent with every other
+        preview control on this page (variable/beam/mask) — changing it
+        without re-clicking the button hides the block on the next rerun
+        rather than persisting a new plot. We only assert no exception."""
+        at = _run(_full_ss(proc))
+        at = next(b for b in at.button if b.key == "plot_preview").click().run()
+        clamp = next(
+            n for n in at.number_input if n.key.startswith("clamp_range_input_")
+        )
+        at = clamp.set_value(100.0).run()
+        assert not at.exception
+
+    def test_non_velocity_variable_has_no_diverging_color_options(self, proc):
+        """Echo/Correlation/Percent Good use plot_data_heatmap directly with
+        no color-scale UI — confirms the diverging picker is Velocity-only."""
+        at = _run(_full_ss(proc))
+        at.selectbox[0].set_value("Echo Intensity").run()
+        at = next(b for b in at.button if b.key == "plot_preview").click().run()
+        assert not at.exception
+        keys = {s.key for s in at.selectbox}
+        assert not any(k.startswith("colorscale_select_write_velocity_") for k in keys)
+        assert not any(k.startswith("clamp_range_input_") for k in keys)
+
+
+# ===========================================================================
 # CLASS 4 — Tab 2: Custom Attributes
 # ===========================================================================
 

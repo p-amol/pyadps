@@ -931,6 +931,97 @@ class TestTab4Regrid:
 
 
 # ===========================================================================
+# 9b. Color Scale Options (palette + min/max range) — Tabs 2, 3, 4
+# ===========================================================================
+
+
+class TestColorScaleOptions:
+    """Tests for the shared render_color_scale_options() helper, exercised
+    across its three call sites: Tab2 (side lobe echo preview), Tab3
+    (manual cut variable preview), Tab4 (regrid velocity preview).
+    """
+
+    def test_palette_present_at_all_three_sites(self, loaded_at):
+        keys = {s.key for s in loaded_at.selectbox}
+        assert "colorscale_select_cutbins_side_echo_0" in keys
+        assert "colorscale_select_manual_cut_Velocity_0" in keys
+        assert "colorscale_select_regrid_0_False" in keys
+
+    def test_tab2_echo_defaults_to_viridis_and_actual_range(self, loaded_at):
+        sb = next(
+            s
+            for s in loaded_at.selectbox
+            if s.key == "colorscale_select_cutbins_side_echo_0"
+        )
+        assert sb.value == "viridis"
+        zmin = next(
+            n for n in loaded_at.number_input if n.key == "zmin_input_cutbins_side_echo_0"
+        )
+        zmax = next(
+            n for n in loaded_at.number_input if n.key == "zmax_input_cutbins_side_echo_0"
+        )
+        assert zmin.value == pytest.approx(30.0)
+        assert zmax.value == pytest.approx(149.0)
+
+    def test_tab3_manual_cut_defaults_to_balance_for_velocity(self, loaded_at):
+        sb = next(
+            s
+            for s in loaded_at.selectbox
+            if s.key == "colorscale_select_manual_cut_Velocity_0"
+        )
+        assert sb.value == "balance"
+
+    def test_tab3_manual_cut_range_updates_on_variable_switch(self, proc):
+        """Switching the variable selector to Echo Intensity should render a
+        fresh palette/range widget (correlation's range differs from
+        velocity's all-zero data), keyed per-variable so it doesn't collide
+        with the Velocity widgets."""
+        at = _make_loaded_at(proc)
+        var_sb = next(s for s in at.selectbox if s.key == "manual_variable")
+        at = var_sb.select("Echo Intensity").run()
+        zmin = next(
+            n
+            for n in at.number_input
+            if n.key == "zmin_input_manual_cut_Echo Intensity_0"
+        )
+        zmax = next(
+            n
+            for n in at.number_input
+            if n.key == "zmax_input_manual_cut_Echo Intensity_0"
+        )
+        assert zmin.value == pytest.approx(30.0)
+        assert zmax.value == pytest.approx(149.0)
+
+    def test_tab4_regrid_velocity_defaults_to_balance(self, loaded_at):
+        sb = next(
+            s for s in loaded_at.selectbox if s.key == "colorscale_select_regrid_0_False"
+        )
+        assert sb.value == "balance"
+
+    def test_switching_palette_at_any_site_rerenders_without_error(self, proc):
+        at = _make_loaded_at(proc)
+        sb = next(
+            s
+            for s in at.selectbox
+            if s.key == "colorscale_select_cutbins_side_echo_0"
+        )
+        at = sb.select("turbo").run()
+        assert not at.exception
+
+    def test_narrowing_range_does_not_raise(self, proc):
+        at = _make_loaded_at(proc)
+        zmax = next(
+            n for n in at.number_input if n.key == "zmax_input_cutbins_side_echo_0"
+        )
+        at = zmax.set_value(100.0).run()
+        assert not at.exception
+        zmax_after = next(
+            n for n in at.number_input if n.key == "zmax_input_cutbins_side_echo_0"
+        )
+        assert zmax_after.value == pytest.approx(100.0)
+
+
+# ===========================================================================
 # 10. Tab 5 — Apply Profile Operations
 # ===========================================================================
 

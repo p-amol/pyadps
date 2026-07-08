@@ -175,11 +175,100 @@ def _trim_trimends():
 # =============================================================================
 
 
+# Curated subset of Plotly's built-in named colorscales for continuous data.
+COLORSCALE_OPTIONS = [
+    "balance",
+    "viridis",
+    "plasma",
+    "greens",
+    "turbo",
+    "jet",
+    "rdbu",
+    "cividis",
+    "inferno",
+    "magma",
+    "hot",
+    "ylorrd",
+    "blues",
+    "reds",
+    "picnic",
+    "portland",
+    "rainbow",
+    "spectral",
+    "haline",
+    "thermal",
+    "delta",
+    "curl",
+]
+
+
+def render_color_scale_options(
+    data: np.ndarray, default_colorscale: str, key_suffix: str
+) -> tuple[str, float, float]:
+    """Render a palette selectbox + min/max range inputs for a heatmap.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        The (already beam-sliced) 2D array that will be plotted — used to
+        compute the default (full-range) min/max.
+    default_colorscale : str
+        Preselected palette, matching the caller's current hardcoded default.
+    key_suffix : str
+        Distinguishes widget state per call site/variable so switching
+        variable or beam recomputes fresh min/max defaults.
+
+    Returns
+    -------
+    tuple of (colorscale, zmin, zmax)
+    """
+    data_masked = np.where(data == -32768, np.nan, data)
+    if np.all(np.isnan(data_masked)):
+        data_min, data_max = 0.0, 1.0
+    else:
+        data_min = float(np.nanmin(data_masked))
+        data_max = float(np.nanmax(data_masked))
+
+    with st.expander("🎨 Color Scale Options", expanded=False):
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            colorscale = st.selectbox(
+                "Color palette",
+                COLORSCALE_OPTIONS,
+                index=COLORSCALE_OPTIONS.index(default_colorscale)
+                if default_colorscale in COLORSCALE_OPTIONS
+                else 0,
+                format_func=str.title,
+                help="Plotly colorscale used for the heatmap below.",
+                key=f"colorscale_select_{key_suffix}",
+            )
+        with col_b:
+            zmin = st.number_input(
+                "Min value",
+                value=data_min,
+                help="Values below this are shown with the colorscale's "
+                "lowest color, so out-of-range data still gets a color.",
+                key=f"zmin_input_{key_suffix}",
+            )
+        with col_c:
+            zmax = st.number_input(
+                "Max value",
+                value=data_max,
+                help="Values above this are shown with the colorscale's "
+                "highest color, so out-of-range data still gets a color.",
+                key=f"zmax_input_{key_suffix}",
+            )
+
+    return colorscale or default_colorscale, zmin, zmax
+
+
 def plot_heatmap(
     data: np.ndarray,
     title: str,
     mask_data: np.ndarray = None,
     colorscale="balance",
+    zmin: float = None,
+    zmax: float = None,
 ) -> None:
     """Create a heatmap plot for 2D data (cell x ensemble)."""
     n_ensembles = get_total_ensembles()
@@ -201,6 +290,8 @@ def plot_heatmap(
             x=np.arange(n_ensembles),
             y=np.arange(n_cells),
             colorscale=colorscale,
+            zmin=zmin,
+            zmax=zmax,
             hoverongaps=False,
         )
     )
@@ -626,11 +717,18 @@ with tab2:
             else:
                 preview_mask = None
 
+            colorscale, zmin, zmax = render_color_scale_options(
+                echo[beam_idx, :, :],
+                "viridis",
+                key_suffix=f"cutbins_side_echo_{beam_idx}",
+            )
             plot_heatmap(
                 echo[beam_idx, :, :],
                 title=f"Echo Intensity (Beam {beam_idx + 1})",
                 mask_data=preview_mask,
-                colorscale="viridis",
+                colorscale=colorscale,
+                zmin=zmin,
+                zmax=zmax,
             )
 
 
@@ -844,11 +942,18 @@ with tab3:
             else:
                 preview_mask = None
 
+            colorscale, zmin, zmax = render_color_scale_options(
+                plot_data,
+                "balance" if variable == "Velocity" else "viridis",
+                key_suffix=f"manual_cut_{variable}_{beam_idx}",
+            )
             plot_heatmap(
                 plot_data,
                 title=f"{variable} (Beam {beam_idx + 1})",
                 mask_data=preview_mask,
-                colorscale="balance" if variable == "Velocity" else "viridis",
+                colorscale=colorscale,
+                zmin=zmin,
+                zmax=zmax,
             )
         else:
             st.warning(f"{variable} data not available.")
@@ -1025,11 +1130,18 @@ with tab4:
                 if st.session_state.apply_regrid
                 else "Velocity (Original)"
             )
+            colorscale, zmin, zmax = render_color_scale_options(
+                plot_data,
+                "balance",
+                key_suffix=f"regrid_{beam_idx}_{st.session_state.apply_regrid}",
+            )
             plot_heatmap(
                 plot_data,
                 title=title,
                 mask_data=preview_mask,
-                colorscale="balance",
+                colorscale=colorscale,
+                zmin=zmin,
+                zmax=zmax,
             )
 
 

@@ -60,12 +60,6 @@
     "column": 2
   },
   {
-    "key": "Participants",
-    "label": "Participants",
-    "widget": "text_area",
-    "column": 2
-  },
-  {
     "key": "File_Created_By",
     "label": "File Created By",
     "widget": "text_input",

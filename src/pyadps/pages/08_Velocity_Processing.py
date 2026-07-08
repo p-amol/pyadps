@@ -122,6 +122,68 @@ def _get_dataset_lat_lon() -> tuple[float | None, float | None]:
     return _find(lat_keys), _find(lon_keys)
 
 
+# Valid "Year" ranges for each declination method's number_input widget.
+PYGEOMAG_YEAR_RANGE = (2010, 2030)
+API_YEAR_RANGE = (1950, 2030)
+
+
+def _get_dataset_raw_year() -> int | None:
+    """Return the (unclamped) year at the center of the dataset's time range.
+
+    ds['time'] is built from the Variable Leader RTC/Y2K fields at read
+    time (see binary_reader.py), so this is equivalent to reading the year
+    directly from Variable Leader data — but more robust, since 'time' is
+    guaranteed to survive downstream processing (trim/cut/regrid) while the
+    raw rtc_year/y2k_year fields are not.
+    """
+    try:
+        if "time" in proc.dataset.coords:
+            times = pd.to_datetime(proc.dataset["time"].values)
+            if len(times) > 0:
+                return int(times[len(times) // 2].year)
+    except Exception:
+        pass
+    return None
+
+
+def _get_dataset_center_year(default: int = 2025) -> int:
+    """Default year for the Year widgets.
+
+    Clamped only to API_YEAR_RANGE (the wider of the two method ranges) as
+    a sanity bound against absurd values — not to PYGEOMAG_YEAR_RANGE,
+    which would permanently discard the true year (e.g. a 1995 dataset
+    would get stuck at 2010 even after switching to the API method, which
+    could otherwise show 1995 correctly).
+    """
+    raw_year = _get_dataset_raw_year()
+    if raw_year is None:
+        return default
+    lo, hi = API_YEAR_RANGE
+    return min(max(raw_year, lo), hi)
+
+
+def _available_declination_methods() -> tuple[tuple[str, ...], int | None]:
+    """Determine which declination methods are usable for this dataset's year.
+
+    pygeomag/API are excluded when the dataset's year falls outside their
+    supported range, so the user can't pick a method that can't work.
+    Manual is always available since it doesn't depend on year at all.
+    Returns (options, dataset_year).
+    """
+    dataset_year = _get_dataset_raw_year()
+    options = []
+    if dataset_year is None or (
+        PYGEOMAG_YEAR_RANGE[0] <= dataset_year <= PYGEOMAG_YEAR_RANGE[1]
+    ):
+        options.append("pygeomag")
+    if dataset_year is None or (
+        API_YEAR_RANGE[0] <= dataset_year <= API_YEAR_RANGE[1]
+    ):
+        options.append("API")
+    options.append("Manual")
+    return tuple(options), dataset_year
+
+
 def is_earth_coordinates() -> bool:
     """
     Check if data is in Earth coordinates.
@@ -605,8 +667,7 @@ if not st.session_state.velocity_initialized:
     _attr_lat, _attr_lon = _get_dataset_lat_lon()
     st.session_state.magnetic_lat = _attr_lat if _attr_lat is not None else 0.0
     st.session_state.magnetic_lon = _attr_lon if _attr_lon is not None else 0.0
-    st.session_state.magnetic_year = 2025
-    st.session_state.magnetic_depth = 0
+    st.session_state.magnetic_year = _get_dataset_center_year()
     st.session_state.magnetic_declination = None
 
     # Threshold settings (in mm/s)
@@ -706,9 +767,26 @@ with tab1:
     **Note:** If magnetic declination is changed, other velocity tests should be re-run.
     """)
 
+    _method_options, _dataset_year = _available_declination_methods()
+
+    if "pygeomag" not in _method_options:
+        st.info(
+            f"ℹ️ **pygeomag** is unavailable for this dataset — its year "
+            f"({_dataset_year}) is outside the pygeomag coefficient range "
+            f"({PYGEOMAG_YEAR_RANGE[0]}–{PYGEOMAG_YEAR_RANGE[1]}). "
+            "Use **API** or **Manual** instead."
+        )
+    if "API" not in _method_options:
+        st.info(
+            f"ℹ️ The **API** method is unavailable for this dataset — its "
+            f"year ({_dataset_year}) is outside the supported range "
+            f"({API_YEAR_RANGE[0]}–{API_YEAR_RANGE[1]}). Use **Manual** "
+            "instead."
+        )
+
     method = st.radio(
         "Select calculation method",
-        ("pygeomag", "API", "Manual"),
+        _method_options,
         horizontal=True,
         key="magnetic_method_radio",
     )
@@ -729,11 +807,15 @@ with tab1:
                     step=0.1,
                 )
             with col2:
-                depth = st.number_input(
-                    "Depth (m)", 0, 10000, st.session_state.magnetic_depth, step=1
-                )
                 year = st.number_input(
-                    "Year", 2010, 2030, st.session_state.magnetic_year, step=1
+                    "Year",
+                    PYGEOMAG_YEAR_RANGE[0],
+                    PYGEOMAG_YEAR_RANGE[1],
+                    min(
+                        max(st.session_state.magnetic_year, PYGEOMAG_YEAR_RANGE[0]),
+                        PYGEOMAG_YEAR_RANGE[1],
+                    ),
+                    step=1,
                 )
 
         elif method == "API":
@@ -751,15 +833,21 @@ with tab1:
                 )
             with col2:
                 year = st.number_input(
-                    "Year", 1950, 2030, st.session_state.magnetic_year, step=1
+                    "Year",
+                    API_YEAR_RANGE[0],
+                    API_YEAR_RANGE[1],
+                    min(
+                        max(st.session_state.magnetic_year, API_YEAR_RANGE[0]),
+                        API_YEAR_RANGE[1],
+                    ),
+                    step=1,
                 )
-            depth = 0
 
         else:  # Manual
             declination_input = st.number_input(
                 "Declination (°)", -180.0, 180.0, 0.0, step=0.1
             )
-            lat, lon, year, depth = 0.0, 0.0, 2025, 0
+            lat, lon, year = 0.0, 0.0, 2025
 
         button_label = "Accept" if method == "Manual" else "Compute"
         submitted = st.form_submit_button(button_label)
@@ -768,7 +856,6 @@ with tab1:
             st.session_state.magnetic_lat = lat
             st.session_state.magnetic_lon = lon
             st.session_state.magnetic_year = year
-            st.session_state.magnetic_depth = depth
 
             if method == "Manual":
                 st.session_state.magnetic_declination = declination_input

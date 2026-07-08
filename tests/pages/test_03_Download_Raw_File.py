@@ -722,6 +722,107 @@ class TestAttributeYesSection:
 
 
 # ===========================================================================
+# 4b.  COPY ATTRIBUTES TO WORKING DATASET (processor sync)
+# ===========================================================================
+
+
+class TestCopyAttributesToProcessor:
+    """Tests for the 'Also copy these attributes to the working dataset'
+    checkbox, which writes entered attributes into processor.dataset.attrs
+    so later pages (e.g. Velocity Processing lat/lon auto-fill) can see them.
+    """
+
+    def _run_attr_yes(
+        self, mock_ds, proc=None, custom_attributes=None, attributes=None
+    ) -> AppTest:
+        at = AppTest.from_file(SCRIPT_PATH, default_timeout=20)
+        at.session_state["ds"] = mock_ds
+        at.session_state["fname"] = "adcp.000"
+        at.session_state["attributes"] = attributes or {}
+        at.session_state["raw_custom_attributes"] = custom_attributes or {}
+        at.session_state["raw_custom_attr_count"] = 0
+        if proc is not None:
+            at.session_state["processor"] = proc
+        at.run()
+        return _switch_radio(at, "attribute", "Yes")
+
+    def test_checkbox_rendered(self, mock_ds):
+        at = self._run_attr_yes(mock_ds)
+        assert not at.exception
+        labels = [c.label for c in at.checkbox]
+        assert any("copy these attributes" in l.lower() for l in labels)
+
+    def test_unchecked_by_default_no_sync(self, mock_ds):
+        """Checkbox defaults to False — apply_attributes must not be called."""
+        proc = MagicMock()
+        at = self._run_attr_yes(
+            mock_ds, proc=proc, attributes={"Latitude": "12.5"}
+        )
+        assert not at.exception
+        proc.apply_attributes.assert_not_called()
+
+    def test_checked_syncs_attrs_to_processor(self, mock_ds):
+        """Checking the box applies non-empty attributes to proc.dataset."""
+        proc = MagicMock()
+        at = self._run_attr_yes(
+            mock_ds,
+            proc=proc,
+            attributes={"Latitude": "12.5", "Longitude": "77.25", "Cruise_No.": ""},
+        )
+        cb = next(
+            c for c in at.checkbox if "copy these attributes" in c.label.lower()
+        )
+        cb.set_value(True).run()
+        assert not at.exception
+        proc.apply_attributes.assert_called_once()
+        (applied,), _ = proc.apply_attributes.call_args
+        assert applied == {"Latitude": "12.5", "Longitude": "77.25"}
+
+    def test_checked_includes_custom_attributes(self, mock_ds):
+        proc = MagicMock()
+        at = self._run_attr_yes(
+            mock_ds,
+            proc=proc,
+            attributes={},
+            custom_attributes={"Instrument_Model": "Workhorse Sentinel 300"},
+        )
+        cb = next(
+            c for c in at.checkbox if "copy these attributes" in c.label.lower()
+        )
+        cb.set_value(True).run()
+        assert not at.exception
+        (applied,), _ = proc.apply_attributes.call_args
+        assert applied == {"Instrument_Model": "Workhorse Sentinel 300"}
+
+    def test_no_processor_shows_warning_when_checked(self, mock_ds):
+        """If processor isn't available yet, checking the box warns instead
+        of raising."""
+        at = self._run_attr_yes(mock_ds, proc=None, attributes={"Latitude": "1.0"})
+        cb = next(
+            c for c in at.checkbox if "copy these attributes" in c.label.lower()
+        )
+        cb.set_value(True).run()
+        assert not at.exception
+        assert len(at.warning) >= 1
+
+    def test_rerun_does_not_reapply_unchanged_attrs(self, mock_ds):
+        """Repeated reruns with the same attrs shouldn't call apply_attributes
+        again (avoids spamming processing_log/config)."""
+        proc = MagicMock()
+        at = self._run_attr_yes(
+            mock_ds, proc=proc, attributes={"Latitude": "12.5"}
+        )
+        cb = next(
+            c for c in at.checkbox if "copy these attributes" in c.label.lower()
+        )
+        cb.set_value(True).run()
+        assert proc.apply_attributes.call_count == 1
+        # Trigger another rerun without changing attribute values
+        at.run()
+        assert proc.apply_attributes.call_count == 1
+
+
+# ===========================================================================
 # 5.  FILE PREFIX SECTION
 # ===========================================================================
 

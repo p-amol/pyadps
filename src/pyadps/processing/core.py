@@ -1072,8 +1072,10 @@ class ProcessedDataset:
         self.config.magnet_lat_VT = lat if lat is not None else 0.0
         self.config.magnet_lon_VT = lon if lon is not None else 0.0
         self.config.magnet_year_VT = int(year) if year is not None else 2025
-        # magnet_depth_VT is used by the Streamlit UI but the runner does not
-        # accept a depth parameter; always write 0.0 from the programmatic path.
+        # magnet_depth_VT is a legacy field retained only for backward
+        # compatibility with older exported config (.ini) files; it has no
+        # effect on the declination calculation (altitude is hardcoded to 0
+        # in correct_magnetic_declination) and is not exposed in the UI.
         self.config.magnet_depth_VT = 0.0
         # Despike
         self.config.isDespikeCheck_VT = despike

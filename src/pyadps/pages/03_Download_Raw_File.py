@@ -66,6 +66,7 @@ if "axis_option_DRW" not in st.session_state:
 # =============================================================================
 
 ds = st.session_state.ds
+proc = st.session_state.get("processor")
 
 # Get field lists from dataset attributes
 fl_fields = ds.attrs.get("fixed_leader_variables", [])
@@ -393,6 +394,43 @@ if st.session_state.add_attributes_DRW == "Yes":
                 st.session_state.raw_custom_attributes[attr_key] = attr_value
 
     st.info("Attributes will be added to the NetCDF file once you generate it.")
+
+    # Optionally also copy these attributes onto the working dataset so that
+    # later processing pages (e.g. Velocity Processing's magnetic declination
+    # lat/lon auto-fill) and the final Write File page can see them.
+    st.session_state.copy_attrs_to_processor = st.checkbox(
+        "Also copy these attributes to the working dataset "
+        "(makes them available on later processing pages, e.g. auto-filling "
+        "Latitude/Longitude on the Velocity Processing page)",
+        value=st.session_state.get("copy_attrs_to_processor", False),
+        key="copy_attrs_to_processor_checkbox",
+    )
+
+    if st.session_state.copy_attrs_to_processor:
+        if proc is None:
+            st.warning(
+                "No working dataset available yet — attributes were not copied."
+            )
+        else:
+            merged_attrs = {
+                **{k: v for k, v in st.session_state.attributes.items() if v},
+                **{
+                    k: v
+                    for k, v in st.session_state.raw_custom_attributes.items()
+                    if v
+                },
+            }
+            # Only re-apply (and log) when the set actually changed, so we
+            # don't spam processing_log/config on every rerun.
+            if merged_attrs and merged_attrs != st.session_state.get(
+                "_synced_raw_attrs"
+            ):
+                proc.apply_attributes(merged_attrs)
+                st.session_state._synced_raw_attrs = dict(merged_attrs)
+            if merged_attrs:
+                st.caption(
+                    f"✓ {len(merged_attrs)} attribute(s) copied to the working dataset."
+                )
 
 # File prefix section
 st.divider()

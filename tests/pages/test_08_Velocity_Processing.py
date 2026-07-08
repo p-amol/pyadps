@@ -240,6 +240,13 @@ def _make_ds(
     return ds
 
 
+def _make_ds_with_year(year: int, n_time: int = 20) -> xr.Dataset:
+    """Build a dataset like _make_ds() but centered on a specific year."""
+    ds = _make_ds(n_time=n_time)
+    new_times = pd.date_range(f"{year}-01-01", periods=n_time, freq="h")
+    return ds.assign_coords(time=new_times)
+
+
 def _make_mock_processor(ds: xr.Dataset) -> MagicMock:
     """Build a MagicMock that satisfies proc.*  calls made by the page."""
     proc = MagicMock()
@@ -285,7 +292,6 @@ def _full_ss(proc: MagicMock, **overrides) -> Dict[str, Any]:
         "magnetic_lat": 0.0,
         "magnetic_lon": 0.0,
         "magnetic_year": 2025,
-        "magnetic_depth": 0,
         "magnetic_declination": None,
         # Threshold
         "apply_threshold": True,
@@ -516,6 +522,43 @@ class TestSessionStateInitialization:
         assert not at.exception
         assert at.session_state["magnetic_lat"] == 0.0
 
+    def test_year_autofilled_from_dataset_time(self):
+        """Year defaults to the center of the dataset's time range (2024
+        for the default _make_ds() fixture), not a hardcoded 2025."""
+        ds = _make_ds()
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        assert at.session_state["magnetic_year"] == 2024
+
+    def test_year_not_clamped_to_pygeomag_range_when_dataset_older(self):
+        """A dataset from 1995 keeps its true year (1995) rather than being
+        clamped to pygeomag's 2010 floor — pygeomag itself is hidden as an
+        option for this dataset, but the API method (range 1950-2030) can
+        still show the correct year."""
+        ds = _make_ds_with_year(1995)
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        assert at.session_state["magnetic_year"] == 1995
+
+    def test_year_clamped_to_api_range_when_dataset_far_older(self):
+        """A dataset older than even the API's floor (1950) is clamped down
+        to 1950 as a sanity bound — no method could use the raw value anyway."""
+        ds = _make_ds_with_year(1900)
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        assert at.session_state["magnetic_year"] == 1950
+
+    def test_year_clamped_to_api_range_when_dataset_newer(self):
+        """A dataset from 2099 is clamped down to 2030 (API's ceiling)."""
+        ds = _make_ds_with_year(2099)
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        assert at.session_state["magnetic_year"] == 2030
+
 
 # ===========================================================================
 # CLASS 2 — Tab 1: Magnetic Declination
@@ -570,6 +613,55 @@ class TestTab1MagneticDeclination:
         radios = at.radio
         # At least one radio (magnetic method) should be present
         assert len(radios) >= 1
+
+    def test_all_methods_available_when_dataset_year_in_range(self, proc):
+        """Default fixture (2024) is within both pygeomag's and API's
+        ranges, so all three methods should be offered and no 'unavailable'
+        info message shown."""
+        at = _run(_full_ss(proc))
+        assert not at.exception
+        radio = at.radio[0]
+        assert set(radio.options) == {"pygeomag", "API", "Manual"}
+        info_text = " ".join(i.value for i in at.info)
+        assert "unavailable" not in info_text
+
+    def test_pygeomag_hidden_when_dataset_year_out_of_its_range(self):
+        """Dataset from 1995 is outside pygeomag's 2010-2030 coefficient
+        range, so pygeomag must not be offered as a method — only API and
+        Manual remain (1995 is within API's 1950-2030 range)."""
+        ds = _make_ds_with_year(1995)
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        radio = at.radio[0]
+        assert set(radio.options) == {"API", "Manual"}
+        info_text = " ".join(i.value for i in at.info)
+        assert "1995" in info_text
+        assert "pygeomag" in info_text.lower()
+
+    def test_only_manual_available_when_dataset_year_out_of_both_ranges(self):
+        """Dataset from 1900 is outside both pygeomag's and API's ranges,
+        so only Manual should remain — the user can't pick a method that
+        can't work."""
+        ds = _make_ds_with_year(1900)
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        radio = at.radio[0]
+        assert set(radio.options) == {"Manual"}
+        info_text = " ".join(i.value for i in at.info)
+        assert "1900" in info_text
+        assert "pygeomag" in info_text.lower()
+        assert "api" in info_text.lower()
+
+    def test_manual_still_usable_when_only_option(self):
+        """When pygeomag/API are both hidden, Manual (the sole remaining
+        option) must still render and accept a submission."""
+        ds = _make_ds_with_year(1900)
+        fresh_proc = _make_mock_processor(ds)
+        at = _run({"processor": fresh_proc})
+        assert not at.exception
+        assert at.radio[0].value == "Manual"
 
 
 # ===========================================================================
@@ -1165,7 +1257,6 @@ class TestPageFunctionsDirectly:
                     "magnetic_lat": 0.0,
                     "magnetic_lon": 0.0,
                     "magnetic_year": 2025,
-                    "magnetic_depth": 0,
                 },
                 clear=False,
             ),
@@ -1506,7 +1597,6 @@ class TestPlottingFunctions:
                     "magnetic_lat": 0.0,
                     "magnetic_lon": 0.0,
                     "magnetic_year": 2025,
-                    "magnetic_depth": 0,
                 },
                 clear=False,
             ),
@@ -1863,7 +1953,6 @@ class TestCoverageGaps:
                     "magnetic_lat": 0.0,
                     "magnetic_lon": 0.0,
                     "magnetic_year": 2025,
-                    "magnetic_depth": 0,
                 },
                 clear=False,
             ),
@@ -2538,7 +2627,6 @@ class TestDefinitiveCoverage:
             "magnetic_lat": 0.0,
             "magnetic_lon": 0.0,
             "magnetic_year": 2025,
-            "magnetic_depth": 0,
             "apply_threshold": True,
             "cutoff_u": 2500,
             "cutoff_v": 2500,

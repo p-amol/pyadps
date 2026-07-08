@@ -177,6 +177,34 @@ def format_display_name(var_name: str) -> str:
 # PLOTTING FUNCTIONS
 # =============================================================================
 
+# Curated subset of Plotly's built-in named colorscales (see
+# plotly.express.colors.named_colorscales() for the full list), covering the
+# per-variable defaults used below plus common sequential/diverging options.
+COLORSCALE_OPTIONS = [
+    "balance",
+    "viridis",
+    "plasma",
+    "greens",
+    "turbo",
+    "jet",
+    "rdbu",
+    "cividis",
+    "inferno",
+    "magma",
+    "hot",
+    "ylorrd",
+    "blues",
+    "reds",
+    "picnic",
+    "portland",
+    "rainbow",
+    "spectral",
+    "haline",
+    "thermal",
+    "delta",
+    "curl",
+]
+
 
 @st.cache_data
 def fillplot_plotly(
@@ -185,6 +213,8 @@ def fillplot_plotly(
     title: str = "Data",
     xaxis: str = "time",
     units: str = "",
+    zmin: Optional[float] = None,
+    zmax: Optional[float] = None,
     _time_data: Optional[pd.DatetimeIndex] = None,
     _y_cells: Optional[np.ndarray] = None,
 ) -> None:
@@ -203,6 +233,11 @@ def fillplot_plotly(
         Either 'time' or 'ensemble'
     units : str
         Units for the colorbar
+    zmin, zmax : float, optional
+        Color scale range. Values outside [zmin, zmax] are clamped to the
+        colorscale's end colors (Plotly's default behavior when these are
+        set), so out-of-range data still gets a color instead of being
+        blank. If None, Plotly auto-scales to the data's full range.
     _time_data : pd.DatetimeIndex, optional
         Time data for x-axis (passed with underscore to help caching)
     _y_cells : np.ndarray, optional
@@ -237,6 +272,8 @@ def fillplot_plotly(
             x=xdata,
             y=ydata,
             colorscale=colorscale,
+            zmin=zmin,
+            zmax=zmax,
             hoverongaps=False,
             colorbar=dict(title=colorbar_title),
         )
@@ -408,13 +445,52 @@ with tab1:
         data_array = ds[var_name].values if var_name in ds.data_vars else None
 
         if data_array is not None and xbutton is not None:
-            # Select appropriate colorscale
+            # Default colorscale per variable
             colorscales: dict[str, str] = {
                 "Velocity": "balance",
                 "Echo Intensity": "viridis",
                 "Correlation": "plasma",
                 "Percent Good": "greens",
             }
+            default_colorscale = colorscales.get(var_option, "viridis")
+
+            # Actual data range for this variable+beam, used as the default
+            # (auto/full-range) color scale bounds
+            beam_data = data_array[beam - 1, :, :]
+            beam_data_masked = np.where(beam_data == -32768, np.nan, beam_data)
+            if np.all(np.isnan(beam_data_masked)):
+                data_min, data_max = 0.0, 1.0
+            else:
+                data_min = float(np.nanmin(beam_data_masked))
+                data_max = float(np.nanmax(beam_data_masked))
+
+            with st.expander("🎨 Color Scale Options", expanded=False):
+                col_a, col_b, col_c = st.columns(3)
+                with col_a:
+                    selected_colorscale = st.selectbox(
+                        "Color palette",
+                        COLORSCALE_OPTIONS,
+                        index=COLORSCALE_OPTIONS.index(default_colorscale),
+                        format_func=str.title,
+                        help="Plotly colorscale used for the heatmap below.",
+                        key=f"colorscale_select_{var_option}",
+                    )
+                with col_b:
+                    zmin_input = st.number_input(
+                        "Min value",
+                        value=data_min,
+                        help="Values below this are shown with the colorscale's "
+                        "lowest color, so out-of-range data still gets a color.",
+                        key=f"zmin_input_{var_option}_{beam}",
+                    )
+                with col_c:
+                    zmax_input = st.number_input(
+                        "Max value",
+                        value=data_max,
+                        help="Values above this are shown with the colorscale's "
+                        "highest color, so out-of-range data still gets a color.",
+                        key=f"zmax_input_{var_option}_{beam}",
+                    )
 
             coord = ds.fixed_leader.coordinate_transformation(ens=0).get(
                 "Coordinates", "N/A"
@@ -428,10 +504,12 @@ with tab1:
 
             fillplot_plotly(
                 data_array[beam - 1, :, :],
-                colorscale=colorscales.get(var_option, "viridis"),
+                colorscale=selected_colorscale or default_colorscale,
                 title=fill_title,
                 xaxis=xbutton,
                 units=units,
+                zmin=zmin_input,
+                zmax=zmax_input,
                 _time_data=time_data,
                 _y_cells=y_cells,
             )

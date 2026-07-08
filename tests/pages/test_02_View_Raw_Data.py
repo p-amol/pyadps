@@ -249,6 +249,27 @@ def _make_mock_ds(
 # ===========================================================================
 
 
+def _memoize_getitem(mock_ds: MagicMock) -> MagicMock:
+    """Make ds[key] return the same array on every call.
+
+    _make_mock_ds's __getitem__ side_effect generates fresh unseeded random
+    data on every access, unlike a real xr.Dataset (indexing the same
+    variable is idempotent). Tests that need to compare a value read
+    directly from mock_ds against what the running app rendered must
+    memoize first, otherwise the two calls see different random arrays.
+    """
+    original_side_effect = mock_ds.__getitem__.side_effect
+    cache: dict = {}
+
+    def _cached(key):
+        if key not in cache:
+            cache[key] = original_side_effect(key)
+        return cache[key]
+
+    mock_ds.__getitem__ = MagicMock(side_effect=_cached)
+    return mock_ds
+
+
 def _make_loaded_at(mock_ds: MagicMock) -> AppTest:
     """Return an AppTest with ds pre-loaded in session state."""
     at = AppTest.from_file(SCRIPT_PATH, default_timeout=15)
@@ -587,6 +608,111 @@ class TestTab1PrimaryData:
         beam_radio = [r for r in at.radio if "beam" in r.label.lower()]
         beam_radio[0].set_value(4).run()
         assert not at.exception
+
+
+# ===========================================================================
+# 4b. TAB 1: COLOR SCALE OPTIONS (palette + min/max range)
+# ===========================================================================
+
+
+class TestColorScaleOptions:
+    """Tests for the color palette selectbox and min/max range inputs."""
+
+    def test_color_palette_selectbox_present(self, mock_ds):
+        at = _make_loaded_at(mock_ds)
+        assert not at.exception
+        sb = [s for s in at.selectbox if "color palette" in s.label.lower()]
+        assert len(sb) == 1
+
+    def test_color_palette_defaults_to_balance_for_velocity(self, mock_ds):
+        """Velocity's per-variable default colorscale is 'balance'."""
+        at = _make_loaded_at(mock_ds)
+        sb = next(s for s in at.selectbox if "color palette" in s.label.lower())
+        assert sb.value == "balance"
+
+    def test_color_palette_defaults_to_viridis_for_echo(self, mock_ds):
+        at = _make_loaded_at(mock_ds)
+        data_sb = next(s for s in at.selectbox if "data type" in s.label.lower())
+        at = data_sb.set_value("Echo Intensity").run()
+        palette_sb = next(s for s in at.selectbox if "color palette" in s.label.lower())
+        assert palette_sb.value == "viridis"
+
+    def test_color_palette_options_include_curated_scales(self, mock_ds):
+        at = _make_loaded_at(mock_ds)
+        sb = next(s for s in at.selectbox if "color palette" in s.label.lower())
+        # .options reflects the display labels (format_func=str.title applied)
+        options_lower = [o.lower() for o in sb.options]
+        assert "balance" in options_lower
+        assert "turbo" in options_lower
+        assert "rdbu" in options_lower
+
+    def test_switching_palette_rerenders_without_error(self, mock_ds):
+        at = _make_loaded_at(mock_ds)
+        sb = next(s for s in at.selectbox if "color palette" in s.label.lower())
+        at = sb.set_value("turbo").run()
+        assert not at.exception
+
+    def test_min_max_inputs_present(self, mock_ds):
+        at = _make_loaded_at(mock_ds)
+        assert not at.exception
+        mins = [n for n in at.number_input if n.label == "Min value"]
+        maxs = [n for n in at.number_input if n.label == "Max value"]
+        assert len(mins) == 1
+        assert len(maxs) == 1
+
+    def test_min_max_default_to_actual_data_range(self, mock_ds):
+        """Defaults should be the actual min/max of the selected beam's data
+        (beam 1 of velocity, the initial selection), not a fixed constant."""
+        mock_ds = _memoize_getitem(mock_ds)
+        at = _make_loaded_at(mock_ds)
+        beam_data = mock_ds["velocity"].values[0, :, :]
+        expected_min = float(np.nanmin(beam_data))
+        expected_max = float(np.nanmax(beam_data))
+        zmin = next(n for n in at.number_input if n.label == "Min value")
+        zmax = next(n for n in at.number_input if n.label == "Max value")
+        assert zmin.value == pytest.approx(expected_min)
+        assert zmax.value == pytest.approx(expected_max)
+
+    def test_min_max_recompute_when_switching_variable(self, mock_ds):
+        """Percent Good's range (roughly 40-200) differs from Velocity's
+        (roughly -1000 to 1000), so switching variables must refresh the
+        default min/max rather than keep Velocity's stale values."""
+        mock_ds = _memoize_getitem(mock_ds)
+        at = _make_loaded_at(mock_ds)
+        data_sb = next(s for s in at.selectbox if "data type" in s.label.lower())
+        at = data_sb.set_value("Percent Good").run()
+        beam_data = mock_ds["percent_good"].values[0, :, :]
+        expected_min = float(np.nanmin(beam_data))
+        expected_max = float(np.nanmax(beam_data))
+        zmin = next(n for n in at.number_input if n.label == "Min value")
+        zmax = next(n for n in at.number_input if n.label == "Max value")
+        assert zmin.value == pytest.approx(expected_min)
+        assert zmax.value == pytest.approx(expected_max)
+
+    def test_min_max_recompute_when_switching_beam(self, mock_ds):
+        mock_ds = _memoize_getitem(mock_ds)
+        at = _make_loaded_at(mock_ds)
+        beam_radio = next(r for r in at.radio if "beam" in r.label.lower())
+        at = beam_radio.set_value(2).run()
+        beam_data = mock_ds["velocity"].values[1, :, :]
+        expected_min = float(np.nanmin(beam_data))
+        expected_max = float(np.nanmax(beam_data))
+        zmin = next(n for n in at.number_input if n.label == "Min value")
+        zmax = next(n for n in at.number_input if n.label == "Max value")
+        assert zmin.value == pytest.approx(expected_min)
+        assert zmax.value == pytest.approx(expected_max)
+
+    def test_narrowing_range_rerenders_without_error(self, mock_ds):
+        """User clipping the range to something narrower than the data
+        should not raise (Plotly clamps out-of-range values to the
+        colorscale's end colors natively)."""
+        mock_ds = _memoize_getitem(mock_ds)
+        at = _make_loaded_at(mock_ds)
+        zmax = next(n for n in at.number_input if n.label == "Max value")
+        at = zmax.set_value(1.0).run()
+        assert not at.exception
+        zmax_after = next(n for n in at.number_input if n.label == "Max value")
+        assert zmax_after.value == pytest.approx(1.0)
 
 
 # ===========================================================================

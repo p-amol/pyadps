@@ -434,50 +434,50 @@ with tab1:
         )
         apply_mask = apply_mask_preview == "Yes"
 
-    # Plot button
-    if st.button("📈 Plot Data", key="plot_preview"):
-        if var_selection == "Velocity":
-            if "velocity" in ds.data_vars:
-                vel_data = ds["velocity"].values[beam_idx, :, :]
-                colorscale, zmin, zmax = render_diverging_color_scale_options(
-                    vel_data, key_suffix=f"write_velocity_{beam_idx}_{apply_mask}"
-                )
-            else:
-                colorscale, zmin, zmax = "RdBu_r", None, None
-            plot_velocity_component(
-                beam_idx,
-                f"{var_selection} - {beam_selection}",
-                apply_mask,
-                colorscale=colorscale,
-                zmin=zmin,
-                zmax=zmax,
+    # Plot preview — renders live (no button needed) so color-scale option
+    # changes update the plot immediately instead of requiring a re-click.
+    if var_selection == "Velocity":
+        if "velocity" in ds.data_vars:
+            vel_data = ds["velocity"].values[beam_idx, :, :]
+            colorscale, zmin, zmax = render_diverging_color_scale_options(
+                vel_data, key_suffix=f"write_velocity_{beam_idx}_{apply_mask}"
             )
         else:
-            # Get the appropriate data variable
-            var_mapping = {
-                "Echo Intensity": "echo_intensity",
-                "Correlation": "correlation",
-                "Percent Good": "percent_good",
-            }
-            var_name = var_mapping.get(var_selection, "echo_intensity")
+            colorscale, zmin, zmax = "RdBu_r", None, None
+        plot_velocity_component(
+            beam_idx,
+            f"{var_selection} - {beam_selection}",
+            apply_mask,
+            colorscale=colorscale,
+            zmin=zmin,
+            zmax=zmax,
+        )
+    else:
+        # Get the appropriate data variable
+        var_mapping = {
+            "Echo Intensity": "echo_intensity",
+            "Correlation": "correlation",
+            "Percent Good": "percent_good",
+        }
+        var_name = var_mapping.get(var_selection, "echo_intensity")
 
-            if var_name in ds.data_vars:
-                data = ds[var_name].values
-                if data.ndim == 3:  # (beam, cell, time)
-                    data_2d = data[beam_idx, :, :]
-                else:
-                    data_2d = data
-
-                colorscale = "Viridis" if var_selection != "Correlation" else "Plasma"
-                plot_data_heatmap(
-                    data_2d,
-                    f"{var_selection} - Beam {beam_idx + 1}",
-                    apply_mask=apply_mask,
-                    colorscale=colorscale,
-                    missing_value=0,
-                )
+        if var_name in ds.data_vars:
+            data = ds[var_name].values
+            if data.ndim == 3:  # (beam, cell, time)
+                data_2d = data[beam_idx, :, :]
             else:
-                st.warning(f"Variable '{var_name}' not found in dataset.")
+                data_2d = data
+
+            colorscale = "Viridis" if var_selection != "Correlation" else "Plasma"
+            plot_data_heatmap(
+                data_2d,
+                f"{var_selection} - Beam {beam_idx + 1}",
+                apply_mask=apply_mask,
+                colorscale=colorscale,
+                missing_value=0,
+            )
+        else:
+            st.warning(f"Variable '{var_name}' not found in dataset.")
 
     # Show processing summary
     with st.expander("📊 Processing Summary", expanded=True):

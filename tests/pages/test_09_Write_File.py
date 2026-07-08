@@ -439,17 +439,20 @@ class TestTab1PreviewData:
         at = _run(_full_ss(proc))
         assert not at.exception
 
-    def test_plot_button_present(self, proc):
+    def test_plot_button_removed(self, proc):
+        """The Plot Data button was removed — the preview now renders live
+        so color-scale changes update it immediately without a re-click."""
         at = _run(_full_ss(proc))
-        assert any(b.key == "plot_preview" for b in at.button)
+        assert not any(b.key == "plot_preview" for b in at.button)
 
     def test_selectbox_variable_options_present(self, proc):
         at = _run(_full_ss(proc))
         assert any(s.key == "preview_var" for s in at.selectbox)
 
-    def test_plot_velocity_component_u(self, proc):
+    def test_velocity_plotted_by_default(self, proc):
+        """No button click needed — Velocity (the default selection) plots
+        immediately on load."""
         at = _run(_full_ss(proc))
-        next(b for b in at.button if b.key == "plot_preview").click().run()
         assert not at.exception
 
     def test_plot_nonvelocity_echo_intensity(self, proc):
@@ -457,46 +460,35 @@ class TestTab1PreviewData:
         # Switch to Echo Intensity
         at.selectbox[0].set_value("Echo Intensity").run()
         assert not at.exception
-        next(b for b in at.button if b.key == "plot_preview").click().run()
-        assert not at.exception
 
     def test_plot_correlation(self, proc):
         at = _run(_full_ss(proc))
         at.selectbox[0].set_value("Correlation").run()
-        assert not at.exception
-        next(b for b in at.button if b.key == "plot_preview").click().run()
         assert not at.exception
 
     def test_plot_percent_good(self, proc):
         at = _run(_full_ss(proc))
         at.selectbox[0].set_value("Percent Good").run()
         assert not at.exception
-        next(b for b in at.button if b.key == "plot_preview").click().run()
-        assert not at.exception
 
     def test_plot_with_mask_applied(self, proc):
         at = _run(_full_ss(proc))
         # Default radio is "Yes" (apply mask)
-        next(b for b in at.button if b.key == "plot_preview").click().run()
         assert not at.exception
 
     def test_plot_mask_not_applied(self, proc):
         at = _run(_full_ss(proc))
         # Switch mask radio to No
         mask_radio = next(r for r in at.radio if r.key == "preview_mask")
-        mask_radio.set_value("No").run()
-        assert not at.exception
-        next(b for b in at.button if b.key == "plot_preview").click().run()
+        at = mask_radio.set_value("No").run()
         assert not at.exception
 
     def test_missing_variable_shows_warning(self):
-        """Plot button with variable not in dataset shows st.warning."""
+        """Variable not in dataset shows st.warning immediately (no button)."""
         ds = _make_ds(include_extra_vars=False)  # no echo_intensity etc
         proc = _make_proc(ds)
         at = _run(_full_ss(proc))
-        at.selectbox[0].set_value("Echo Intensity").run()
-        assert not at.exception
-        next(b for b in at.button if b.key == "plot_preview").click().run()
+        at = at.selectbox[0].set_value("Echo Intensity").run()
         assert not at.exception
         assert any("not found" in (w.value or "").lower() for w in at.warning)
 
@@ -523,9 +515,8 @@ class TestTab1PreviewData:
             attrs={"coordinate_system": "earth"},
         )
         proc = _make_proc(ds)
+        # Default var_selection is Velocity; renders immediately (no button)
         at = _run(_full_ss(proc))
-        # Default var_selection is Velocity; click plot
-        next(b for b in at.button if b.key == "plot_preview").click().run()
         assert not at.exception
         assert any("velocity" in (w.value or "").lower() for w in at.warning)
 
@@ -541,22 +532,15 @@ class TestVelocityColorScaleOptions:
     out of scope — they use the plain, non-diverging plot_data_heatmap).
     """
 
-    def test_not_shown_before_plotting(self, proc):
-        """The color-options expander lives inside the button-gated block,
-        so it shouldn't render until 'Plot Data' is clicked."""
+    def test_palette_shown_by_default(self, proc):
+        """Velocity is the default selection and now plots live (no button),
+        so the color-options widget appears immediately on load."""
         at = _run(_full_ss(proc))
-        keys = {s.key for s in at.selectbox}
-        assert not any(k.startswith("colorscale_select_write_velocity_") for k in keys)
-
-    def test_palette_shown_after_plotting_velocity(self, proc):
-        at = _run(_full_ss(proc))
-        next(b for b in at.button if b.key == "plot_preview").click().run()
         keys = {s.key for s in at.selectbox}
         assert any(k.startswith("colorscale_select_write_velocity_") for k in keys)
 
     def test_default_palette_is_rdbu_r(self, proc):
         at = _run(_full_ss(proc))
-        at = next(b for b in at.button if b.key == "plot_preview").click().run()
         sb = next(
             s for s in at.selectbox if s.key.startswith("colorscale_select_write_velocity_")
         )
@@ -571,7 +555,6 @@ class TestVelocityColorScaleOptions:
         expected = float(max(abs(beam0.min()), abs(beam0.max())))
 
         at = _run(_full_ss(proc))
-        at = next(b for b in at.button if b.key == "plot_preview").click().run()
         clamp = next(
             n for n in at.number_input if n.key.startswith("clamp_range_input_")
         )
@@ -579,33 +562,32 @@ class TestVelocityColorScaleOptions:
 
     def test_switching_palette_rerenders_without_error(self, proc):
         at = _run(_full_ss(proc))
-        at = next(b for b in at.button if b.key == "plot_preview").click().run()
         sb = next(
             s for s in at.selectbox if s.key.startswith("colorscale_select_write_velocity_")
         )
         at = sb.select("balance").run()
         assert not at.exception
 
-    def test_narrowing_clamp_range_does_not_raise(self, proc):
-        """The whole preview block (including this widget) lives inside
-        `if st.button("Plot Data"):`, so — consistent with every other
-        preview control on this page (variable/beam/mask) — changing it
-        without re-clicking the button hides the block on the next rerun
-        rather than persisting a new plot. We only assert no exception."""
+    def test_narrowing_clamp_range_persists_live(self, proc):
+        """With the button removed, the plot now renders live — narrowing
+        the range should update and persist across the rerun instead of
+        the whole block disappearing."""
         at = _run(_full_ss(proc))
-        at = next(b for b in at.button if b.key == "plot_preview").click().run()
         clamp = next(
             n for n in at.number_input if n.key.startswith("clamp_range_input_")
         )
         at = clamp.set_value(100.0).run()
         assert not at.exception
+        clamp_after = next(
+            n for n in at.number_input if n.key.startswith("clamp_range_input_")
+        )
+        assert clamp_after.value == pytest.approx(100.0)
 
     def test_non_velocity_variable_has_no_diverging_color_options(self, proc):
         """Echo/Correlation/Percent Good use plot_data_heatmap directly with
         no color-scale UI — confirms the diverging picker is Velocity-only."""
         at = _run(_full_ss(proc))
-        at.selectbox[0].set_value("Echo Intensity").run()
-        at = next(b for b in at.button if b.key == "plot_preview").click().run()
+        at = at.selectbox[0].set_value("Echo Intensity").run()
         assert not at.exception
         keys = {s.key for s in at.selectbox}
         assert not any(k.startswith("colorscale_select_write_velocity_") for k in keys)
@@ -1853,9 +1835,7 @@ class TestCoverageGaps:
         )
         proc = _make_proc(ds)
         at = _run(_full_ss(proc))
-        at.selectbox[0].set_value("Echo Intensity").run()
-        assert not at.exception
-        next(b for b in at.button if b.key == "plot_preview").click().run()
+        at = at.selectbox[0].set_value("Echo Intensity").run()
         assert not at.exception
 
     # ------------------------------------------------------------------ #

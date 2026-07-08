@@ -671,7 +671,7 @@ if not st.session_state.velocity_initialized:
     st.session_state.magnetic_declination = None
 
     # Threshold settings (in mm/s)
-    st.session_state.apply_threshold = True
+    st.session_state.apply_threshold = False
     st.session_state.cutoff_u = 2500
     st.session_state.cutoff_v = 2500
     st.session_state.cutoff_w = 500
@@ -885,13 +885,26 @@ with tab1:
                     if method == "API":
                         st.info("Try using the 'Manual' method if API is unavailable.")
 
-    if (
-        st.session_state.apply_magnetic
-        and st.session_state.magnetic_declination is not None
-    ):
-        st.info(
-            f"✓ Magnetic declination: **{st.session_state.magnetic_declination:.3f}°**"
+    # A checkbox only makes sense once a declination value exists — unlike
+    # threshold/despike/flatline, there's no meaningful default declination
+    # to toggle on/off. apply_magnetic is already set True the moment a
+    # value is computed/accepted above, so the checkbox defaults to ON;
+    # unchecking it disables the correction without discarding the value.
+    if st.session_state.magnetic_declination is not None:
+        st.session_state.apply_magnetic = st.checkbox(
+            "Apply magnetic declination correction",
+            value=st.session_state.apply_magnetic,
+            key="apply_magnetic_checkbox",
         )
+        if st.session_state.apply_magnetic:
+            st.info(
+                f"✓ Magnetic declination: **{st.session_state.magnetic_declination:.3f}°**"
+            )
+        else:
+            st.info(
+                f"Magnetic declination computed "
+                f"(**{st.session_state.magnetic_declination:.3f}°**) but not applied."
+            )
 
     st.button(
         "Reset Magnetic Declination",

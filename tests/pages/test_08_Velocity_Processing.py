@@ -459,7 +459,7 @@ class TestSessionStateInitialization:
     def test_defaults_after_init(self, proc):
         ss = {"processor": proc}
         at = _run(ss)
-        assert at.session_state["apply_threshold"] is True
+        assert at.session_state["apply_threshold"] is False
         assert at.session_state["cutoff_u"] == 2500
         assert at.session_state["cutoff_v"] == 2500
         assert at.session_state["cutoff_w"] == 500
@@ -587,6 +587,55 @@ class TestTab1MagneticDeclination:
         assert not at.exception
         # st.info should appear
         assert len(at.info) >= 1 or not at.exception
+
+    def test_apply_magnetic_checkbox_hidden_without_declination(self, proc):
+        """No 'Apply magnetic declination correction' checkbox until a
+        declination value actually exists — there's no meaningful default
+        to toggle."""
+        ss = _full_ss(proc, apply_magnetic=False, magnetic_declination=None)
+        at = _run(ss)
+        assert not at.exception
+        labels = [c.label for c in at.checkbox]
+        assert not any("apply magnetic declination" in l.lower() for l in labels)
+
+    def test_apply_magnetic_checkbox_shown_and_checked_when_computed(self, proc):
+        """Once a declination is computed, the checkbox appears and — since
+        apply_magnetic is set True at computation time — defaults to checked."""
+        ss = _full_ss(proc, apply_magnetic=True, magnetic_declination=-7.5)
+        at = _run(ss)
+        assert not at.exception
+        cb = next(
+            c for c in at.checkbox if "apply magnetic declination" in c.label.lower()
+        )
+        assert cb.value is True
+
+    def test_unchecking_apply_magnetic_disables_without_losing_value(self, proc):
+        """Unchecking the box disables the correction but keeps the computed
+        declination value, so it can be re-enabled without recomputing."""
+        ss = _full_ss(proc, apply_magnetic=True, magnetic_declination=-7.5)
+        at = _run(ss)
+        cb = next(
+            c for c in at.checkbox if "apply magnetic declination" in c.label.lower()
+        )
+        at = cb.uncheck().run()
+        assert not at.exception
+        assert at.session_state["apply_magnetic"] is False
+        assert at.session_state["magnetic_declination"] == -7.5
+        info_text = " ".join(i.value for i in at.info)
+        assert "not applied" in info_text.lower()
+
+    def test_rechecking_apply_magnetic_reenables_correction(self, proc):
+        """Re-checking after an uncheck restores apply_magnetic=True using
+        the already-computed value (no recompute needed)."""
+        ss = _full_ss(proc, apply_magnetic=False, magnetic_declination=-7.5)
+        at = _run(ss)
+        cb = next(
+            c for c in at.checkbox if "apply magnetic declination" in c.label.lower()
+        )
+        at = cb.check().run()
+        assert not at.exception
+        assert at.session_state["apply_magnetic"] is True
+        assert at.session_state["magnetic_declination"] == -7.5
 
     def test_reset_magnetic_button_present(self, proc):
         at = _run(_full_ss(proc))

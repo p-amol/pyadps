@@ -952,6 +952,20 @@ def regrid(
         )
 
     # ========================================================================
+    # STEP 4.5: Preserve non-cell-dependent variables (e.g. Fixed/Variable
+    # Leader fields such as coordinate_transformation_code, heading, etc.)
+    # ========================================================================
+    # These variables don't vary over 'cell', so they aren't touched by the
+    # depth regridding and can be carried over unchanged. Without this, any
+    # variable not indexed by 'cell' (like coordinate_transformation_code)
+    # would silently disappear from the regridded dataset.
+    for var_name in ds.data_vars:
+        if var_name in regridded_vars or var_name == "mask":
+            continue
+        if "cell" not in ds[var_name].dims:
+            regridded_vars[var_name] = ds[var_name].copy()
+
+    # ========================================================================
     # STEP 5: Create output dataset
     # ========================================================================
     ds_regridded = xr.Dataset(

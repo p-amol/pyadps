@@ -494,6 +494,57 @@ class TestRegridDataVars:
 
 
 # ============================================================================
+# TESTS: Non-Cell-Dependent Variable Preservation
+# ============================================================================
+
+
+class TestRegridPreservesNonCellVariables:
+    """Regression tests: variables that don't depend on the 'cell' dimension
+    (e.g. Fixed Leader fields like coordinate_transformation_code, which are
+    indexed only by 'time') must survive regridding unchanged instead of
+    being silently dropped.
+    """
+
+    def test_coordinate_transformation_code_preserved(self, upward_dataset):
+        """coordinate_transformation_code (dims=('time',)) must not be
+        dropped by regrid, otherwise ds.fixed_leader.coordinate_transformation()
+        raises ValueError after regridding.
+        """
+        n_time = upward_dataset.sizes["time"]
+        # Bit pattern 11xxxxxx -> "Earth Coordinates" (see accessors.py)
+        code = np.full(n_time, 0b11011000, dtype=np.uint8)
+        upward_dataset["coordinate_transformation_code"] = (("time",), code)
+
+        result = regrid(upward_dataset)
+
+        assert "coordinate_transformation_code" in result.data_vars
+        np.testing.assert_array_equal(
+            result["coordinate_transformation_code"].values, code
+        )
+
+    def test_other_time_only_variables_preserved(self, upward_dataset):
+        """Any other non-cell variable (e.g. heading) should also survive."""
+        n_time = upward_dataset.sizes["time"]
+        heading = np.linspace(0, 359, n_time)
+        upward_dataset["heading"] = (("time",), heading)
+
+        result = regrid(upward_dataset)
+
+        assert "heading" in result.data_vars
+        np.testing.assert_array_equal(result["heading"].values, heading)
+
+    def test_transducer_depth_preserved(self, upward_dataset):
+        """transducer_depth (dims=('time',)) should be preserved too."""
+        result = regrid(upward_dataset)
+
+        assert "transducer_depth" in result.data_vars
+        np.testing.assert_array_equal(
+            result["transducer_depth"].values,
+            upward_dataset["transducer_depth"].values,
+        )
+
+
+# ============================================================================
 # TESTS: Fill Value
 # ============================================================================
 

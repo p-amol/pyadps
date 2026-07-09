@@ -566,7 +566,7 @@ with tab1:
         trim_start_ens = st.number_input(
             "First valid ensemble",
             min_value=0,
-            max_value=n_ensembles - 1,
+            max_value=max(n_ensembles - 1, 0),
             value=int(st.session_state.trim_start_ens),
             key="trim_start_ens_input",
             help="First ensemble index to keep (0-based). Ensembles before this are trimmed.",
@@ -577,7 +577,7 @@ with tab1:
         trim_end_ens = st.number_input(
             "Last valid ensemble",
             min_value=0,
-            max_value=n_ensembles - 1,
+            max_value=max(n_ensembles - 1, 0),
             value=int(st.session_state.trim_end_ens),
             key="trim_end_ens_input",
             help="Last ensemble index to keep (0-based, inclusive). Ensembles after this are trimmed.",
@@ -629,6 +629,7 @@ with tab2:
     )
 
     orientation = st.session_state.beam_direction
+    _cell_dim_present = "cell" in ds.dims
 
     col_left, col_right = st.columns([1, 2])
 
@@ -638,11 +639,28 @@ with tab2:
 
         st.write("---")
 
+        if not _cell_dim_present:
+            st.info(
+                "ℹ️ This dataset has already been regridded to a regular "
+                "depth grid, so side-lobe cutting (which operates on the "
+                "cell-indexed dimension) no longer applies. Side-lobe "
+                "cutting must happen *before* regridding — use **Reset "
+                "Profile Operations** on the **Save/Reset** tab if you "
+                "need to start over."
+            )
+            st.session_state.apply_side_lobe = False
+            # Reset the widget's own key too — once populated, session
+            # state for a keyed widget takes precedence over `value=` on
+            # later reruns, so a stale True from before regridding would
+            # otherwise stay checked even while disabled.
+            st.session_state.apply_side_lobe_cb = False
+
         # Enable side lobe cutting
         apply_side_lobe = st.checkbox(
             "Enable Side Lobe Cutting",
             value=st.session_state.apply_side_lobe,
             key="apply_side_lobe_cb",
+            disabled=not _cell_dim_present,
         )
         st.session_state.apply_side_lobe = apply_side_lobe
 
@@ -684,27 +702,30 @@ with tab2:
 
         # Preview button
         if st.button("👁️ Preview Side Lobe", key="preview_sidelobe"):
-            # st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
-            # preview_profile_proc = st.session_state.preview_profile_proc
+            try:
+                # st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
+                # preview_profile_proc = st.session_state.preview_profile_proc
 
-            runner = preview_profile_proc.get_profile_operation_runner()
+                runner = preview_profile_proc.get_profile_operation_runner()
 
-            # Apply trim first if set
-            start_count, end_count = _trim_to_counts()
-            if start_count is not None or end_count is not None:
-                runner.trim_ensembles(start=start_count, end=end_count)
+                # Apply trim first if set
+                start_count, end_count = _trim_to_counts()
+                if start_count is not None or end_count is not None:
+                    runner.trim_ensembles(start=start_count, end=end_count)
 
-            # Apply side lobe cutting
-            if apply_side_lobe:
-                runner.cut_bins_side_lobe(
-                    orientation=orientation.lower(),
-                    water_depth=st.session_state.water_depth,
-                    extra_cells=extra_cells,
-                )
+                # Apply side lobe cutting
+                if apply_side_lobe:
+                    runner.cut_bins_side_lobe(
+                        orientation=orientation.lower(),
+                        water_depth=st.session_state.water_depth,
+                        extra_cells=extra_cells,
+                    )
 
-            preview_profile_proc.commit_runner(runner)
-            st.session_state.profile_preview_run = True
-            st.success("Preview updated!")
+                preview_profile_proc.commit_runner(runner)
+                st.session_state.profile_preview_run = True
+                st.success("Preview updated!")
+            except Exception as e:
+                st.error(f"❌ Error generating preview: {e}")
 
     with col_right:
         # Get data for visualization
@@ -750,6 +771,15 @@ with tab3:
     n_cells = get_total_cells()
     n_ensembles = get_total_ensembles()
 
+    if "cell" not in ds.dims:
+        st.info(
+            "ℹ️ This dataset has already been regridded to a regular depth "
+            "grid, so it no longer has a cell-indexed dimension to cut "
+            "manual regions from. Manual cell-based cutting must happen "
+            "*before* regridding — use **Reset Profile Operations** on the "
+            "**Save/Reset** tab if you need to start over."
+        )
+
     col_left, col_right = st.columns([1, 2])
 
     with col_left:
@@ -761,9 +791,10 @@ with tab3:
             min_cell = st.number_input(
                 "Min Cell",
                 min_value=0,
-                max_value=n_cells - 1,
+                max_value=max(n_cells - 1, 0),
                 value=0,
                 key="manual_min_cell",
+                disabled=n_cells == 0,
             )
         with col_c2:
             max_cell = st.number_input(
@@ -772,6 +803,7 @@ with tab3:
                 max_value=n_cells,
                 value=n_cells,
                 key="manual_max_cell",
+                disabled=n_cells == 0,
             )
 
         # Ensemble range
@@ -780,7 +812,7 @@ with tab3:
             min_ensemble = st.number_input(
                 "Min Ensemble",
                 min_value=0,
-                max_value=n_ensembles - 1,
+                max_value=max(n_ensembles - 1, 0),
                 value=0,
                 key="manual_min_ens",
             )
@@ -794,7 +826,7 @@ with tab3:
             )
 
         # Add region button
-        if st.button("➕ Add Region", key="add_region"):
+        if st.button("➕ Add Region", key="add_region", disabled=n_cells == 0):
             region = {
                 "min_cell": min_cell,
                 "max_cell": max_cell,
@@ -816,11 +848,12 @@ with tab3:
             delete_cell = st.number_input(
                 "Delete entire cell",
                 min_value=0,
-                max_value=n_cells - 1,
+                max_value=max(n_cells - 1, 0),
                 value=0,
                 key="delete_cell",
+                disabled=n_cells == 0,
             )
-            if st.button("🗑️ Delete Cell", key="delete_cell_btn"):
+            if st.button("🗑️ Delete Cell", key="delete_cell_btn", disabled=n_cells == 0):
                 region = {
                     "min_cell": delete_cell,
                     "max_cell": delete_cell + 1,
@@ -834,7 +867,7 @@ with tab3:
             delete_ens = st.number_input(
                 "Delete entire ensemble",
                 min_value=0,
-                max_value=n_ensembles - 1,
+                max_value=max(n_ensembles - 1, 0),
                 value=0,
                 key="delete_ens",
             )
@@ -880,36 +913,39 @@ with tab3:
 
         # Preview button
         if st.button("👁️ Preview Manual Cuts", key="preview_manual"):
-            # st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
-            # preview_profile_proc = st.session_state.preview_profile_proc
+            try:
+                # st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
+                # preview_profile_proc = st.session_state.preview_profile_proc
 
-            runner = preview_profile_proc.get_profile_operation_runner()
+                runner = preview_profile_proc.get_profile_operation_runner()
 
-            # Apply trim first if set
-            start_count, end_count = _trim_to_counts()
-            if start_count is not None or end_count is not None:
-                runner.trim_ensembles(start=start_count, end=end_count)
+                # Apply trim first if set
+                start_count, end_count = _trim_to_counts()
+                if start_count is not None or end_count is not None:
+                    runner.trim_ensembles(start=start_count, end=end_count)
 
-            # Apply side lobe if enabled
-            if st.session_state.apply_side_lobe:
-                runner.cut_bins_side_lobe(
-                    orientation=st.session_state.beam_direction.lower(),
-                    water_depth=st.session_state.water_depth,
-                    extra_cells=st.session_state.extra_cells,
-                )
+                # Apply side lobe if enabled
+                if st.session_state.apply_side_lobe:
+                    runner.cut_bins_side_lobe(
+                        orientation=st.session_state.beam_direction.lower(),
+                        water_depth=st.session_state.water_depth,
+                        extra_cells=st.session_state.extra_cells,
+                    )
 
-            # Apply manual cuts
-            for region in st.session_state.cut_regions:
-                runner.cut_bins_manual(
-                    min_cell=region["min_cell"],
-                    max_cell=region["max_cell"],
-                    min_ensemble=region["min_ensemble"],
-                    max_ensemble=region["max_ensemble"],
-                )
+                # Apply manual cuts
+                for region in st.session_state.cut_regions:
+                    runner.cut_bins_manual(
+                        min_cell=region["min_cell"],
+                        max_cell=region["max_cell"],
+                        min_ensemble=region["min_ensemble"],
+                        max_ensemble=region["max_ensemble"],
+                    )
 
-            preview_profile_proc.commit_runner(runner)
-            st.session_state.profile_preview_run = True
-            st.success("Preview updated!")
+                preview_profile_proc.commit_runner(runner)
+                st.session_state.profile_preview_run = True
+                st.success("Preview updated!")
+            except Exception as e:
+                st.error(f"❌ Error generating preview: {e}")
 
     with col_right:
         # Get data for visualization
@@ -1056,57 +1092,60 @@ with tab4:
             if not apply_regrid:
                 st.warning("Enable regridding first!")
             else:
-                # st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
-                # preview_profile_proc = st.session_state.preview_profile_proc
+                try:
+                    # st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
+                    # preview_profile_proc = st.session_state.preview_profile_proc
 
-                runner = preview_profile_proc.get_profile_operation_runner()
+                    runner = preview_profile_proc.get_profile_operation_runner()
 
-                # Apply trim first if set
-                start_count, end_count = _trim_to_counts()
-                trimends = _trim_trimends()
-                if start_count is not None or end_count is not None:
-                    runner.trim_ensembles(start=start_count, end=end_count)
+                    # Apply trim first if set
+                    start_count, end_count = _trim_to_counts()
+                    trimends = _trim_trimends()
+                    if start_count is not None or end_count is not None:
+                        runner.trim_ensembles(start=start_count, end=end_count)
 
-                # Apply side lobe if enabled
-                if st.session_state.apply_side_lobe:
-                    runner.cut_bins_side_lobe(
-                        orientation=st.session_state.beam_direction.lower(),
-                        water_depth=st.session_state.water_depth,
-                        extra_cells=st.session_state.extra_cells,
+                    # Apply side lobe if enabled
+                    if st.session_state.apply_side_lobe:
+                        runner.cut_bins_side_lobe(
+                            orientation=st.session_state.beam_direction.lower(),
+                            water_depth=st.session_state.water_depth,
+                            extra_cells=st.session_state.extra_cells,
+                        )
+
+                    # Apply manual cuts
+                    for region in st.session_state.cut_regions:
+                        runner.cut_bins_manual(
+                            min_cell=region["min_cell"],
+                            max_cell=region["max_cell"],
+                            min_ensemble=region["min_ensemble"],
+                            max_ensemble=region["max_ensemble"],
+                        )
+
+                    # Apply regrid
+                    runner.regrid(
+                        method=regrid_method,
+                        end_cell_option=end_cell_option,
+                        trimends=trimends,
+                        orientation=orientation.lower(),
+                        boundary_limit=st.session_state.boundary_limit
+                        if end_cell_option == "manual"
+                        else 0.0,
                     )
 
-                # Apply manual cuts
-                for region in st.session_state.cut_regions:
-                    runner.cut_bins_manual(
-                        min_cell=region["min_cell"],
-                        max_cell=region["max_cell"],
-                        min_ensemble=region["min_ensemble"],
-                        max_ensemble=region["max_ensemble"],
-                    )
+                    preview_profile_proc.commit_runner(runner)
+                    st.session_state.profile_preview_run = True
+                    st.success("Preview updated with regridding!")
 
-                # Apply regrid
-                runner.regrid(
-                    method=regrid_method,
-                    end_cell_option=end_cell_option,
-                    trimends=trimends,
-                    orientation=orientation.lower(),
-                    boundary_limit=st.session_state.boundary_limit
-                    if end_cell_option == "manual"
-                    else 0.0,
-                )
-
-                preview_profile_proc.commit_runner(runner)
-                st.session_state.profile_preview_run = True
-                st.success("Preview updated with regridding!")
-
-                # Show dimension changes
-                original_cells = get_total_cells()
-                new_ds = preview_profile_proc.dataset
-                if "depth" in new_ds.dims:
-                    new_depths = new_ds.sizes["depth"]
-                    st.write(
-                        f"**Structure Change:** `{original_cells}` cells → `{new_depths}` depth levels"
-                    )
+                    # Show dimension changes
+                    original_cells = get_total_cells()
+                    new_ds = preview_profile_proc.dataset
+                    if "depth" in new_ds.dims:
+                        new_depths = new_ds.sizes["depth"]
+                        st.write(
+                            f"**Structure Change:** `{original_cells}` cells → `{new_depths}` depth levels"
+                        )
+                except Exception as e:
+                    st.error(f"❌ Error generating preview: {e}")
 
     with col_right:
         # Show preview

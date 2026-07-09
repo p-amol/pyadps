@@ -140,6 +140,16 @@ def _make_ds(
     )
 
 
+def _make_regridded_ds(n_beams: int = 4, n_depth: int = 20, n_ens: int = 100) -> xr.Dataset:
+    """Build a dataset shaped like the output of regrid(): 'cell' replaced
+    by 'depth'. Used to reproduce the crash from revisiting this page after
+    Apply Profile Operations committed a regrid to proc.dataset."""
+    ds = _make_ds(n_beams=n_beams, n_cells=n_depth, n_ens=n_ens)
+    ds = ds.rename({"cell": "depth"})
+    ds.coords["depth"] = np.arange(n_depth) * 1.0
+    return ds
+
+
 def _make_stat_mock(
     check_name: str = "Trim",
     threshold: str = "(0, 0)",
@@ -897,6 +907,178 @@ class TestTab3ManualCut:
         })
         [b for b in at.button if "Preview Manual" in b.label][0].click().run()
         assert not at.exception
+
+
+# ===========================================================================
+# 8b. Regression: revisiting the page after a regrid was already applied
+# ===========================================================================
+
+
+class TestPostRegridRevisit:
+    """Regression tests for revisiting Profile Operations after Apply
+    Profile Operations (with regrid=True) already committed a regridded
+    dataset (no 'cell' dim) to proc.dataset.
+
+    Previously get_total_cells() returned 0 in this state, so Tab 3's
+    number_input(max_value=n_cells - 1) became max_value=-1 < min_value=0,
+    raising StreamlitAPIException and crashing the whole page before it
+    could even render Tab 5's Reset button.
+    """
+
+    def test_page_loads_without_exception(self):
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        at = _make_loaded_at(proc)
+        assert not at.exception
+
+    def test_info_message_shown_in_manual_cut_tab(self):
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        at = _make_loaded_at(proc)
+        info_text = " ".join(i.value for i in at.info)
+        assert "already been regridded" in info_text
+
+    def test_cell_inputs_disabled_and_bounded_safely(self):
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        at = _make_loaded_at(proc)
+        min_cell = next(n for n in at.number_input if n.key == "manual_min_cell")
+        delete_cell = next(n for n in at.number_input if n.key == "delete_cell")
+        assert min_cell.disabled is True
+        assert min_cell.value == 0
+        assert delete_cell.disabled is True
+        assert delete_cell.value == 0
+
+    def test_add_region_and_delete_cell_buttons_disabled(self):
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        at = _make_loaded_at(proc)
+        add_region = next(b for b in at.button if b.key == "add_region")
+        delete_cell_btn = next(b for b in at.button if b.key == "delete_cell_btn")
+        assert add_region.disabled is True
+        assert delete_cell_btn.disabled is True
+
+    def test_ensemble_based_controls_still_usable(self):
+        """Ensemble/time-based controls remain meaningful post-regrid since
+        only the cell dimension is replaced, not time."""
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        at = _make_loaded_at(proc)
+        min_ens = next(n for n in at.number_input if n.key == "manual_min_ens")
+        delete_ens = next(n for n in at.number_input if n.key == "delete_ens")
+        assert min_ens.disabled is False
+        assert delete_ens.disabled is False
+
+    def test_reset_button_still_reachable(self):
+        """The whole point of the fix: the user must be able to reach
+        Reset Profile Operations to recover, instead of the page crashing
+        before Tab 5 ever renders."""
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        at = _make_loaded_at(proc)
+        assert any(b.key == "reset_profile" for b in at.button)
+
+    def test_side_lobe_info_message_shown(self):
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        at = _make_loaded_at(proc)
+        info_text = " ".join(i.value for i in at.info)
+        assert "side-lobe cutting" in info_text.lower()
+
+    def test_side_lobe_checkbox_disabled_and_forced_unchecked(self):
+        """Even if apply_side_lobe was left True from before the regrid was
+        applied, the checkbox's own widget state must be reset too —
+        otherwise a stale True would stay checked despite disabled=True."""
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        at = _make_loaded_at(proc, extra_ss={
+            "profile_initialized": True,
+            "profile_applied": True,
+            "profile_preview_run": False,
+            "trim_start_ens": 0, "trim_end_ens": 99,
+            "apply_side_lobe": True,
+            "apply_side_lobe_cb": True,
+            "water_depth": None,
+            "extra_cells": 0,
+            "cut_regions": [],
+            "apply_regrid": True,
+            "regrid_method": "nearest",
+            "end_cell_option": "cell",
+            "boundary_limit": 0.0,
+            "beam_direction": "Up",
+            "profile_beam": 0,
+            "profile_preview_stats": None,
+        })
+        assert not at.exception
+        cb = next(c for c in at.checkbox if c.key == "apply_side_lobe_cb")
+        assert cb.disabled is True
+        assert cb.value is False
+        assert at.session_state["apply_side_lobe"] is False
+
+    def test_preview_side_lobe_click_does_not_crash_with_stale_state(self):
+        """Regression: clicking Preview Side Lobe with side-lobe cutting
+        left enabled from before the regrid must not raise an uncaught
+        ValueError from cut_bins_side_lobe (which requires a 'cell' dim) —
+        it should be caught and shown as st.error instead."""
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        proc.get_profile_operation_runner = MagicMock(
+            side_effect=lambda: (_ for _ in ()).throw(
+                ValueError("Dataset must have 'cell' and 'time' dimensions")
+            )
+        )
+        at = _make_loaded_at(proc, extra_ss={
+            "profile_initialized": True,
+            "profile_applied": True,
+            "profile_preview_run": False,
+            "trim_start_ens": 0, "trim_end_ens": 99,
+            "apply_side_lobe": True,
+            "apply_side_lobe_cb": True,
+            "water_depth": None,
+            "extra_cells": 0,
+            "cut_regions": [],
+            "apply_regrid": True,
+            "regrid_method": "nearest",
+            "end_cell_option": "cell",
+            "boundary_limit": 0.0,
+            "beam_direction": "Up",
+            "profile_beam": 0,
+            "profile_preview_stats": None,
+        })
+        at = next(b for b in at.button if b.key == "preview_sidelobe").click().run()
+        assert not at.exception
+        assert any("error generating preview" in e.value.lower() for e in at.error)
+
+    def test_preview_manual_click_does_not_crash_with_stale_state(self):
+        """Same guard for the Manual Cut tab's Preview button."""
+        ds = _make_regridded_ds()
+        proc = _make_mock_processor(ds)
+        proc.get_profile_operation_runner = MagicMock(
+            side_effect=lambda: (_ for _ in ()).throw(
+                ValueError("Dataset must have 'cell' and 'time' dimensions")
+            )
+        )
+        at = _make_loaded_at(proc, extra_ss={
+            "profile_initialized": True,
+            "profile_applied": True,
+            "profile_preview_run": False,
+            "trim_start_ens": 0, "trim_end_ens": 99,
+            "apply_side_lobe": False,
+            "water_depth": None,
+            "extra_cells": 0,
+            "cut_regions": [{"min_cell": 0, "max_cell": 5,
+                             "min_ensemble": 0, "max_ensemble": 10}],
+            "apply_regrid": True,
+            "regrid_method": "nearest",
+            "end_cell_option": "cell",
+            "boundary_limit": 0.0,
+            "beam_direction": "Up",
+            "profile_beam": 0,
+            "profile_preview_stats": None,
+        })
+        at = next(b for b in at.button if b.key == "preview_manual").click().run()
+        assert not at.exception
+        assert any("error generating preview" in e.value.lower() for e in at.error)
 
 
 # ===========================================================================

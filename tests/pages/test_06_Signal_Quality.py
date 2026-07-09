@@ -1375,13 +1375,23 @@ class TestNoiseFloorSendSection:
         labels = [b.label for b in at.button]
         assert any("Send to Echo Intensity Threshold" in l for l in labels)
 
+    def test_threshold_mode_defaults_to_per_beam(self, proc):
+        """Default landing state should be Per-beam threshold, not Single."""
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss())
+        radio = next(r for r in at.radio if r.key == "noise_send_option")
+        assert radio.value == "Per-beam threshold (4 values)"
+        assert any(b.key == "noise_send_per_beam" for b in at.button)
+        assert not any(b.key == "noise_send_single" for b in at.button)
+
     def test_send_section_absent_with_no_active_ensemble(self, loaded_at):
         """Without noise_dep_compute or noise_rec_compute, send section is hidden."""
         labels = [b.label for b in loaded_at.button]
         assert not any("Send to Echo Intensity Threshold" in l for l in labels)
 
     def test_send_single_sets_echo_intensity_threshold(self, proc):
-        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss())
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss(
+            noise_send_option="Single threshold"
+        ))
         btn = [b for b in at.button if "Send to Echo Intensity Threshold" in b.label
                and b.key == "noise_send_single"][0]
         btn.click().run()
@@ -1390,13 +1400,16 @@ class TestNoiseFloorSendSection:
         assert at.session_state["echo_intensity_threshold"] is not None
 
     def test_send_single_sets_ei_mode_radio_to_single(self, proc):
-        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss())
+        at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss(
+            noise_send_option="Single threshold"
+        ))
         btn = [b for b in at.button if b.key == "noise_send_single"][0]
         btn.click().run()
         assert at.session_state["ei_mode_radio"] == "Single threshold"
 
     def test_send_single_clears_per_beam_threshold(self, proc):
         at = _make_loaded_at(proc, extra_ss=_make_noise_active_ss(
+            noise_send_option="Single threshold",
             echo_intensity_per_beam_threshold=[50.0, 55.0, 48.0, 52.0]
         ))
         btn = [b for b in at.button if b.key == "noise_send_single"][0]

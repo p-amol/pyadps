@@ -448,8 +448,8 @@ class TestSessionStateInit:
     def test_regrid_method_nearest(self, loaded_at):
         assert loaded_at.session_state["regrid_method"] == "nearest"
 
-    def test_extra_cells_one(self, loaded_at):
-        assert loaded_at.session_state["extra_cells"] == 1
+    def test_extra_cells_default_zero(self, loaded_at):
+        assert loaded_at.session_state["extra_cells"] == 0
 
     def test_beam_direction_set(self, loaded_at):
         assert loaded_at.session_state["beam_direction"] in ("Up", "Down", "Unknown")
@@ -721,6 +721,49 @@ class TestTab2SideLobe:
     def test_beam_radio_in_tab2(self, loaded_at):
         labels = [r.label for r in loaded_at.radio]
         assert any("beam" in l.lower() for l in labels)
+
+    def test_extra_cells_input_defaults_to_zero(self, loaded_at):
+        widget = next(
+            n for n in loaded_at.number_input if n.key == "extra_cells_input"
+        )
+        assert widget.value == 0
+
+    def test_extra_cells_input_allows_negative_value(self, proc):
+        """Negative extra_cells shifts the side-lobe boundary inward
+        (masks fewer cells than calculated) and must be accepted."""
+        at = _make_loaded_at(proc)
+        widget = next(n for n in at.number_input if n.key == "extra_cells_input")
+        at = widget.set_value(-5).run()
+        assert not at.exception
+        assert at.session_state["extra_cells"] == -5
+
+    def test_extra_cells_input_negative_lower_bound(self, loaded_at):
+        widget = next(
+            n for n in loaded_at.number_input if n.key == "extra_cells_input"
+        )
+        assert widget.min == -10
+
+    def test_preview_side_lobe_with_negative_extra_cells(self, proc):
+        """Negative extra_cells must not crash the side-lobe calculation."""
+        at = _make_loaded_at(proc, extra_ss={
+            "profile_initialized": True,
+            "profile_applied": False,
+            "profile_preview_run": False,
+            "trim_start_ens": 0, "trim_end_ens": 99,
+            "apply_side_lobe": True,
+            "water_depth": None,
+            "extra_cells": -5,
+            "cut_regions": [],
+            "apply_regrid": False,
+            "regrid_method": "nearest",
+            "end_cell_option": "cell",
+            "boundary_limit": 0.0,
+            "beam_direction": "Up",
+            "profile_beam": 0,
+            "profile_preview_stats": None,
+        })
+        [b for b in at.button if "Preview Side Lobe" in b.label][0].click().run()
+        assert not at.exception
 
 
 # ===========================================================================

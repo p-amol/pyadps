@@ -671,6 +671,7 @@ when all beams are consistent.
         send_option = st.radio(
             "Threshold mode",
             options=["Single threshold", "Per-beam threshold (4 values)"],
+            index=1,
             horizontal=True,
             key="noise_send_option",
             label_visibility="collapsed",

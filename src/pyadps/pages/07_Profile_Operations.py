@@ -421,7 +421,7 @@ if "profile_initialized" not in st.session_state:
     # Side lobe settings
     st.session_state.apply_side_lobe = False
     st.session_state.water_depth = 0.0
-    st.session_state.extra_cells = 1
+    st.session_state.extra_cells = 0
 
     # Manual cut regions (list of dicts)
     st.session_state.cut_regions = []
@@ -649,10 +649,12 @@ with tab2:
         # Extra cells
         extra_cells = st.number_input(
             "Additional cells to mask",
-            min_value=0,
+            min_value=-10,
             max_value=10,
             value=int(st.session_state.extra_cells),
             key="extra_cells_input",
+            help="Positive values mask more cells beyond the calculated "
+            "side-lobe boundary; negative values include cells within it.",
         )
         st.session_state.extra_cells = extra_cells
 

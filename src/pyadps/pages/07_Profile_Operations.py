@@ -469,6 +469,11 @@ preview_profile_proc = st.session_state.preview_profile_proc
 
 def _clear_all_regions():
     st.session_state.cut_regions = []
+    # Without this, the preview mask from the last "Preview Manual Cuts"
+    # click (which baked in the now-cleared regions) would keep showing
+    # those regions as masked until the user clicked Preview again.
+    st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
+    st.session_state.profile_preview_run = False
 
 
 def _reset_profile_operations():

@@ -885,6 +885,44 @@ class TestTab3ManualCut:
         assert not at.exception
         assert at.session_state["cut_regions"] == []
 
+    def test_clear_all_regions_resets_stale_preview(self, proc):
+        """Regression: clicking Clear All Regions must reset the staging
+        preview processor too, not just the region list. col_right's
+        heatmap reads preview_profile_proc.dataset['mask'] unconditionally
+        (no gating on profile_preview_run), so without this reset the
+        heatmap kept showing the mask from the last 'Preview Manual Cuts'
+        click even after its regions were cleared."""
+        region = {"min_cell": 0, "max_cell": 5, "min_ensemble": 0, "max_ensemble": 10}
+        # Simulate a stale preview left over from a completed
+        # "Preview Manual Cuts" run that masked the region above.
+        stale_preview = MagicMock()
+        stale_preview.dataset = proc.dataset
+
+        at = _make_loaded_at(proc, extra_ss={
+            "profile_initialized": True,
+            "profile_applied": False,
+            "profile_preview_run": True,
+            "preview_profile_proc": stale_preview,
+            "trim_start_ens": 0, "trim_end_ens": 99,
+            "apply_side_lobe": False,
+            "water_depth": None,
+            "extra_cells": 0,
+            "cut_regions": [region],
+            "apply_regrid": False,
+            "regrid_method": "nearest",
+            "end_cell_option": "cell",
+            "boundary_limit": 0.0,
+            "beam_direction": "Up",
+            "profile_beam": 0,
+            "profile_preview_stats": None,
+        })
+        [b for b in at.button if "Clear All Regions" in b.label][0].click().run()
+        assert not at.exception
+        assert at.session_state["cut_regions"] == []
+        assert at.session_state["profile_preview_run"] is False
+        # The stale, still-masked preview must have been replaced.
+        assert at.session_state["preview_profile_proc"] is not stale_preview
+
     def test_preview_with_existing_regions(self, proc):
         """Lines 803-813: cut_regions non-empty → runner.cut_bins_manual called."""
         region = {"min_cell": 2, "max_cell": 5, "min_ensemble": 0, "max_ensemble": 10}

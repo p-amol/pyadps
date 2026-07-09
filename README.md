@@ -103,6 +103,21 @@ proc.velocity_to_netcdf('velocity.nc', units='cm/s')
 proc.export_config('config.ini')
 ```
 
+### Auto Processing
+
+Re-run a processing workflow from a saved `config.ini` file — useful for
+batch reprocessing with adjusted thresholds.
+
+```python
+from pyadps.processing.autoprocess import autoprocess
+
+result = autoprocess(
+    config_file_or_object='config.ini',
+    binary_file_path='deployment.000',
+    save_netcdf=True,
+)
+```
+
 For the complete guide see the [documentation](https://pyadps.readthedocs.io).
 
 ## License

@@ -117,7 +117,7 @@ result = (
     .apply_time_axis(snap=True, snap_freq='h')
     .apply_sensor_health(roll=True, roll_threshold=15.0)
     .apply_signal_quality(correlation=64, echo_intensity=40)
-    .apply_profile_operation(cut_bins_side_lobe=True, water_depth=50.0)
+    .apply_profile_operation(cut_bins_side_lobe=True, regrid=True)
     .apply_velocity_check(cutoff_u=2500, cutoff_v=2500, cutoff_w=500)
     .finalize()
 )

@@ -47,16 +47,15 @@ if "raw_custom_attr_count" not in st.session_state:
 if "add_attributes_DRW" not in st.session_state:
     st.session_state.add_attributes_DRW = "No"
 
-if "file_prefix" not in st.session_state:
+if "filename" not in st.session_state or not st.session_state.filename:
     raw_basename = os.path.basename(st.session_state.fname)
     st.session_state.filename = os.path.splitext(raw_basename)[0]
+
+if "file_prefix" not in st.session_state:
     st.session_state.file_prefix = st.session_state.filename
 
 if "prefix_saved" not in st.session_state:
     st.session_state.prefix_saved = False
-
-if "filename" not in st.session_state:
-    st.session_state.filename = ""
 
 if "axis_option_DRW" not in st.session_state:
     st.session_state.axis_option_DRW = "time"

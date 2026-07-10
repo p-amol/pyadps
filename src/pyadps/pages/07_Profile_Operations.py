@@ -1097,6 +1097,11 @@ with tab4:
             if not apply_regrid:
                 st.warning("Enable regridding first!")
             else:
+                st.info(
+                    "⏳ Regridding loops over every ensemble and may take a "
+                    "while for large datasets. Please wait — do not refresh "
+                    "the page."
+                )
                 try:
                     # st.session_state.preview_profile_proc = ProcessedDataset(proc.dataset)
                     # preview_profile_proc = st.session_state.preview_profile_proc
@@ -1229,6 +1234,12 @@ with tab5:
         st.divider()
 
         if st.button("📊 Apply Profile Operations", type="primary", key="save_profile"):
+            if st.session_state.apply_regrid:
+                st.info(
+                    "⏳ Regridding loops over every ensemble and may take a "
+                    "while for large datasets. Please wait — do not refresh "
+                    "the page."
+                )
             try:
                 start_count, end_count = _trim_to_counts()
                 proc.apply_profile_operation(

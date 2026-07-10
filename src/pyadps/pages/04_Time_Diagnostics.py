@@ -16,9 +16,81 @@ Both operations call proc.apply_time_axis() and are tracked in ProcessedDataset.
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
+from plotly_resampler import FigureResampler
 
 st.set_page_config(page_title="Time Diagnostics", page_icon="🕐", layout="wide")
+
+# =============================================================================
+# COLOR SCALE OPTIONS (Velocity View tab)
+# Mirrors the diverging color-scale picker on the Write Processed Data page,
+# so users get the same palette/range controls when inspecting velocity here.
+# =============================================================================
+
+DIVERGING_COLORSCALE_OPTIONS = [
+    "RdBu_r",
+    "RdBu",
+    "balance",
+    "delta",
+    "curl",
+    "spectral",
+    "picnic",
+    "portland",
+    "tropic",
+    "temps",
+    "puor",
+    "prgn",
+]
+
+
+def render_diverging_color_scale_options(
+    data: np.ndarray, key_suffix: str
+) -> tuple[str, float, float]:
+    """Render a palette selectbox + symmetric range input for a zero-centered
+    diverging heatmap (velocity).
+
+    Unlike a plain min/max range, this uses a single "clamp magnitude" so the
+    scale stays properly centered on zero (zmin=-N, zmax=+N) — Plotly ignores
+    zmid once zmin/zmax are set explicitly, so symmetry has to be enforced
+    here rather than relying on zmid.
+
+    Returns
+    -------
+    tuple of (colorscale, zmin, zmax)
+    """
+    data_masked = np.where(data == -32768, np.nan, data)
+    if np.all(np.isnan(data_masked)):
+        default_range = 1.0
+    else:
+        default_range = float(
+            max(abs(np.nanmin(data_masked)), abs(np.nanmax(data_masked)))
+        )
+
+    with st.expander("🎨 Color Scale Options", expanded=False):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            colorscale = st.selectbox(
+                "Color palette",
+                DIVERGING_COLORSCALE_OPTIONS,
+                index=0,
+                help="Diverging colorscale centered on zero flow.",
+                key=f"colorscale_select_{key_suffix}",
+            )
+        with col_b:
+            clamp_range = st.number_input(
+                "Clamp range (± mm/s)",
+                min_value=0.0,
+                value=default_range,
+                help="Values beyond ±this are shown with the colorscale's "
+                "end colors, so out-of-range data still gets a color. "
+                "Kept symmetric around zero to preserve the diverging scale.",
+                key=f"clamp_range_input_{key_suffix}",
+            )
+
+    colorscale = colorscale or DIVERGING_COLORSCALE_OPTIONS[0]
+    return colorscale, -clamp_range, clamp_range
+
 
 # =============================================================================
 # GUARD: require a loaded file
@@ -129,8 +201,8 @@ st.divider()
 # TABS
 # =============================================================================
 
-tab_diag, tab_snap, tab_fill, tab_reset = st.tabs(
-    ["Diagnose", "Snap Time Axis", "Fill Time Gaps", "Reset"]
+tab_diag, tab_snap, tab_fill, tab_vel, tab_reset = st.tabs(
+    ["Diagnose", "Snap Time Axis", "Fill Time Gaps", "Velocity View", "Reset"]
 )
 
 # ---------------------------------------------------------------------------
@@ -376,7 +448,84 @@ with tab_fill:
             st.info("Time gaps have already been filled this session.")
 
 # ---------------------------------------------------------------------------
-# TAB 4: RESET
+# TAB 4: VELOCITY VIEW
+# ---------------------------------------------------------------------------
+
+with tab_vel:
+    st.subheader("Velocity View")
+    st.write(
+        "Inspect the velocity field on the **current** time axis, reflecting "
+        "any Snap / Fill corrections applied above. Ensembles inserted by "
+        "**Fill Time Gaps** show up as blank (missing-value) columns, making "
+        "it easy to confirm where gaps were filled."
+    )
+
+    if "velocity" not in ds.data_vars:
+        st.info("No velocity data available in this dataset.")
+    else:
+        velocity_vals = ds["velocity"].values
+        n_beams_vel = velocity_vals.shape[0]
+        n_cells_vel = velocity_vals.shape[1]
+
+        try:
+            coord_info = ds.fixed_leader.coordinate_transformation(ens=0)
+            is_earth = "Earth" in coord_info.get("Coordinates", "")
+        except Exception:
+            is_earth = False
+
+        beam_labels = (
+            {1: "Zonal (u)", 2: "Meridional (v)", 3: "Vertical (w)", 4: "Error"}
+            if is_earth
+            else {i: f"Beam {i}" for i in range(1, n_beams_vel + 1)}
+        )
+
+        beam_vel: int = (
+            st.radio(  # type: ignore[assignment]
+                "Select beam/component",
+                list(range(1, n_beams_vel + 1)),
+                horizontal=True,
+                format_func=lambda b: beam_labels.get(b, f"Beam {b}"),
+                key="time_diag_vel_beam",
+            )
+            or 1
+        )
+
+        vel_data_raw = velocity_vals[beam_vel - 1, :, :].astype(float)
+        colorscale, zmin, zmax = render_diverging_color_scale_options(
+            vel_data_raw, key_suffix=f"time_diag_{beam_vel}"
+        )
+
+        vel_data = np.where(vel_data_raw == -32768, np.nan, vel_data_raw)
+        y_cells_vel = np.arange(1, n_cells_vel + 1)
+
+        fig_vel = FigureResampler(go.Figure())
+        fig_vel.add_trace(
+            go.Heatmap(
+                z=vel_data,
+                x=time_s.values,
+                y=y_cells_vel,
+                colorscale=colorscale,
+                zmin=zmin,
+                zmax=zmax,
+                hoverongaps=False,
+                colorbar=dict(title="Velocity (mm/s)"),
+            )
+        )
+        fig_vel.update_layout(
+            xaxis=dict(showline=True, mirror=True, title="Time"),
+            yaxis=dict(
+                showline=True,
+                mirror=True,
+                title="Cell Number",
+                autorange="reversed",
+            ),
+            title_text=f"Velocity - {beam_labels.get(beam_vel, f'Beam {beam_vel}')}",
+            height=500,
+        )
+        st.plotly_chart(fig_vel, use_container_width=True)
+
+# ---------------------------------------------------------------------------
+# TAB 5: RESET
 # ---------------------------------------------------------------------------
 
 with tab_reset:

@@ -227,22 +227,10 @@ class TestMethodChaining:
         result = runner.percent_good(cutoff=50, method="max")
         assert result is runner
 
-    def test_false_target_with_threebeam(self, adcp_dataset):
-        """Test false_target with threebeam parameter."""
-        runner = SignalQualityRunner(adcp_dataset)
-        result = runner.false_target(cutoff=50, threebeam=True)
-        assert result is runner
-
     def test_false_target_with_beam_ignore(self, adcp_dataset):
         """Test false_target with beam_ignore parameter."""
         runner = SignalQualityRunner(adcp_dataset)
         result = runner.false_target(cutoff=50, beam_ignore=0)
-        assert result is runner
-
-    def test_false_target_with_both_params(self, adcp_dataset):
-        """Test false_target with threebeam and beam_ignore."""
-        runner = SignalQualityRunner(adcp_dataset)
-        result = runner.false_target(cutoff=50, threebeam=False, beam_ignore=1)
         assert result is runner
 
     def test_reset_returns_self(self, adcp_dataset):
@@ -631,32 +619,17 @@ class TestThreebeamAndBeamIgnore:
         # Uses only PG4 = 30 < 50, should flag
         assert runner.dataset["mask"].isel(beam=3, cell=0, time=0).values == 1
 
-    def test_false_target_threebeam_default(self, adcp_dataset):
-        """Test false_target uses threebeam=True by default."""
-        runner = SignalQualityRunner(adcp_dataset)
-
-        # Set values with one outlier
-        runner.dataset["echo_intensity"].values[:, 0, 0] = [150, 100, 95, 90]
-        # Max=150, second=100, min=90
-        # With threebeam=True: diff = 150-100 = 50
-        # With threebeam=False: diff = 150-90 = 60
-
-        runner.false_target(cutoff=55)
-
-        # With threebeam=True (default), diff=50 < 55, should NOT flag
-        assert runner.dataset["mask"].isel(beam=3, cell=0, time=0).values == 0
-
-    def test_false_target_threebeam_false(self, adcp_dataset):
-        """Test false_target with threebeam=False uses max-min."""
+    def test_false_target_uses_max_minus_min(self, adcp_dataset):
+        """Test false_target always uses max-min."""
         runner = SignalQualityRunner(adcp_dataset)
 
         # Set values
         runner.dataset["echo_intensity"].values[:, 0, 0] = [150, 100, 95, 90]
         # Max=150, min=90, diff=60
 
-        runner.false_target(cutoff=55, threebeam=False)
+        runner.false_target(cutoff=55)
 
-        # With threebeam=False, diff=60 > 55, should flag
+        # diff=60 > 55, should flag
         assert runner.dataset["mask"].isel(beam=3, cell=0, time=0).values == 1
 
     def test_false_target_beam_ignore(self, adcp_dataset):
@@ -668,7 +641,7 @@ class TestThreebeamAndBeamIgnore:
         # Without ignore: max=200, min=80, diff=120
         # With beam 0 ignored: max=90, min=80, diff=10
 
-        runner.false_target(cutoff=50, threebeam=False, beam_ignore=0)
+        runner.false_target(cutoff=50, beam_ignore=0)
 
         # With beam_ignore=0, diff=10 < 50, should NOT flag
         assert runner.dataset["mask"].isel(beam=3, cell=0, time=0).values == 0
@@ -695,10 +668,10 @@ class TestThreebeamAndBeamIgnore:
         """Test method chaining with threebeam parameters."""
         runner = SignalQualityRunner(adcp_dataset)
         result = (
-            runner.correlation(cutoff=64, threebeam=True, beam_ignore=1)
-            .echo_intensity(cutoff=40, threebeam=False)
+            runner.correlation(cutoff=64, beam_ignore=1)
+            .echo_intensity(cutoff=40, beam_ignore=1)
             .percent_good(cutoff=50, threebeam=True)
-            .false_target(cutoff=50, threebeam=False, beam_ignore=0)
+            .false_target(cutoff=50, beam_ignore=0)
             .finalize()
         )
         assert isinstance(result, xr.Dataset)

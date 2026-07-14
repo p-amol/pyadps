@@ -455,15 +455,16 @@ class TestPageLoads:
         assert "Valid Cells" in labels
         assert "Masked Cells" in labels
 
-    def test_six_checkboxes_rendered(self, loaded_at):
-        """All five QC check boxes plus Three-Beam are rendered."""
+    def test_five_checkboxes_rendered(self, loaded_at):
+        """All five QC check boxes are rendered; Three-Beam is hidden until
+        Percent Good is enabled."""
         labels = [c.label for c in loaded_at.checkbox]
         assert "Apply Correlation Check" in labels
         assert "Apply Error Velocity Check" in labels
         assert "Apply Echo Intensity Check" in labels
         assert "Apply False Target Check" in labels
         assert "Apply Percent Good Check" in labels
-        assert "Enable Three-Beam Mode" in labels
+        assert "Enable Three-Beam Mode" not in labels
 
     def test_core_number_inputs_rendered(self, loaded_at):
         """Inputs always visible regardless of checkbox state (Echo Intensity is conditional)."""
@@ -557,9 +558,6 @@ class TestTab2DefaultState:
         cb = [c for c in loaded_at.checkbox if "Percent Good" in c.label][0]
         assert cb.value is False
 
-    def test_threebeam_checkbox_unchecked_by_default(self, loaded_at):
-        cb = [c for c in loaded_at.checkbox if "Three-Beam" in c.label][0]
-        assert cb.value is False
 
     def test_correlation_threshold_default_value(self, loaded_at):
         ni = [n for n in loaded_at.number_input
@@ -603,6 +601,9 @@ class TestTab2ThreeBeamMode:
     def test_beam_selectbox_present_when_threebeam_enabled(self, proc):
         """Beam to Ignore selectbox remains visible when three-beam is enabled."""
         at = _make_loaded_at(proc)
+        # Three-Beam only appears once Percent Good is enabled.
+        pg_cb = [c for c in at.checkbox if "Percent Good" in c.label][0]
+        pg_cb.check().run()
         cb = [c for c in at.checkbox if "Three-Beam" in c.label][0]
         cb.check().run()
         assert not at.exception
@@ -623,7 +624,7 @@ class TestTab2ThreeBeamMode:
             "apply_correlation": False,
             "apply_echo_intensity": False,
             "apply_error_velocity": False,
-            "apply_percent_good": False,
+            "apply_percent_good": True,
             "apply_false_target": False,
             "correlation_threshold": 64,
             "echo_intensity_threshold": 0,
@@ -712,6 +713,9 @@ class TestTab2PreviewButton:
 
     def test_preview_with_threebeam_enabled(self, proc):
         at = _make_loaded_at(proc)
+        # Three-Beam only appears once Percent Good is enabled.
+        pg_cb = [c for c in at.checkbox if "Percent Good" in c.label][0]
+        pg_cb.check().run()
         cb = [c for c in at.checkbox if "Three-Beam" in c.label][0]
         cb.check().run()
         btn = [b for b in at.button if "Preview QC Impact" in b.label][0]
@@ -858,6 +862,9 @@ class TestTab5SaveButton:
 
     def test_save_with_threebeam_mode(self, proc):
         at = _make_loaded_at(proc)
+        # Three-Beam only appears once Percent Good is enabled.
+        pg_cb = [c for c in at.checkbox if "Percent Good" in c.label][0]
+        pg_cb.check().run()
         cb = [c for c in at.checkbox if "Three-Beam" in c.label][0]
         cb.check().run()
         btn = [b for b in at.button if "Apply Signal Quality Tests" in b.label][0]
@@ -1520,6 +1527,7 @@ class TestConfigurationTablePerBeam:
 
     def test_threebeam_and_beam_ignore_are_separate_rows(self, proc):
         at = _make_loaded_at(proc, extra_ss=_fully_initialized_ss(
+            apply_percent_good=True,
             threebeam_mode=True,
             beam_ignore=0,  # Beam 1
         ))
@@ -2726,3 +2734,44 @@ class TestAdvisorCustomParams:
         at = self._with_custom_checked(proc)
         ni = [n for n in at.number_input if "Pings per Ensemble" in n.label][0]
         assert ni.value == 50
+
+
+# ===========================================================================
+# 31. PG Threshold Advisor — "Apply X% to QC Tests" button
+#     Regression test: this button's on_click callback sets
+#     apply_percent_good=True directly, before the QC Tests tab's own
+#     False->True transition detection runs. Three-Beam Mode must still
+#     default to active in that case, not just when the checkbox itself
+#     is toggled by hand.
+# ===========================================================================
+
+
+class TestAdvisorApplyToQCTests:
+    """Clicking 'Apply X% to QC Tests' turns on Percent Good and defaults
+    Three-Beam Mode to active."""
+
+    def _compute_then_apply(self, proc: MagicMock) -> AppTest:
+        at = _make_loaded_at(proc)
+        compute_btn = [b for b in at.button if "Compute Threshold" in b.label][0]
+        compute_btn.click().run()
+        apply_btn = [
+            b for b in at.button
+            if "Apply" in b.label and "QC Tests" in b.label
+        ][0]
+        apply_btn.click().run()
+        assert not at.exception
+        return at
+
+    def test_apply_activates_percent_good(self, proc):
+        at = self._compute_then_apply(proc)
+        assert at.session_state["apply_percent_good"] is True
+
+    def test_apply_sets_percent_good_threshold(self, proc):
+        at = self._compute_then_apply(proc)
+        assert at.session_state["percent_good_threshold"] == 55
+
+    def test_apply_activates_threebeam_mode(self, proc):
+        at = self._compute_then_apply(proc)
+        assert at.session_state["threebeam_mode"] is True
+        cb = [c for c in at.checkbox if "Three-Beam" in c.label][0]
+        assert cb.value is True

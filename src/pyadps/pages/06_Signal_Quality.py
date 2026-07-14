@@ -316,8 +316,9 @@ if "qc_initialized" not in st.session_state:
     st.session_state.apply_percent_good = False
     st.session_state.apply_false_target = False
 
-    # Three-beam mode
-    st.session_state.threebeam_mode = False
+    # Three-beam mode (percent good only; active by default when shown)
+    st.session_state.threebeam_mode = True
+    st.session_state._pg_active_prev = False
     st.session_state.beam_ignore = None
 
     # Orientation fix
@@ -495,13 +496,13 @@ when all beams are consistent.
 **Three-Beam Mode and Beam to Ignore (set in QC Tests tab)**
 
 - **Beam to Ignore**: If one beam shows a consistently higher noise floor than
-  the others — suggesting a fouled or damaged transducer — exclude it from all
-  QC checks using the *Beam to Ignore* selector in the QC Tests tab.
-- **Three-Beam Mode**: Changes the masking logic for the Echo Intensity Check.
-  With three-beam *off*, any single beam failing the threshold masks the entire
-  depth cell. With three-beam *on*, at least **two** beams must fail before the
-  cell is masked — more lenient, matching the 3-beam solution logic used in
-  pre-deployment settings.
+  the others — suggesting a fouled or damaged transducer — exclude it from
+  correlation, echo intensity, and false target checks using the *Beam to
+  Ignore* selector in the QC Tests tab.
+- **Three-Beam Mode**: Only appears (and only applies) when *Apply Percent
+  Good Check* is enabled, and is on by default. It sums PG1 (percent 3-beam
+  solutions) and PG4 (percent 4-beam solutions); disabled, it uses PG4 alone.
+  It has no effect on correlation, echo intensity, or false target.
 
 ---
 
@@ -832,31 +833,72 @@ with tab2:
 The **False Target** (WA command) threshold set during deployment compares echo
 intensities across beams to detect fish or debris within a depth cell. Because
 post-collection data is already in Earth coordinates, individual beams cannot be
-selectively flagged — the entire depth cell is rejected instead. The following
-scenarios guide how to set the threshold here:
+selectively flagged — the entire depth cell is rejected instead. The check here
+always compares `max − min` across beams; any ensemble where `max − min >
+threshold` is rejected entirely. The following scenarios guide how to set the
+threshold:
 
-**1. Override pre-deployment 3-beam leniency**
-If the deployment allowed a 3-beam solution but you want a stricter all-beam
-check, disable *Enable Three-Beam Mode* below. Any ensemble where
-`max − min > threshold` is rejected entirely.
-
-**2. Apply a stricter threshold than the deployment setting**
+**1. Apply a stricter threshold than the deployment setting**
 If the deployment WA threshold was high (e.g. 100) and you want a tighter check
 (e.g. 30), enter the new value in the *False Target Threshold* field above.
-With *Enable Three-Beam Mode* on, the comparison is `max − second lowest`,
-mirroring what the instrument's 3-beam mode would have applied. With it off,
-the stricter `max − min` comparison is used.
 
-**3. Known faulty beam**
+**2. Known faulty beam**
 If one beam is permanently faulty (identifiable from correlation, echo
-intensity, or percent-good diagnostics), enable *Enable Three-Beam Mode* and
-select the faulty beam in the *Beam to Ignore* dropdown. The false target check
-then runs on the three remaining beams using `max − min`, which is useful for
-applying a stricter threshold than the deployment setting to the surviving beams.
+intensity, or percent-good diagnostics), select it in the *Beam to Ignore*
+dropdown. The false target check then runs on the three remaining beams using
+`max − min`, which is useful for applying a stricter threshold than the
+deployment setting to the surviving beams.
 
-In all cases, if a false target is detected at depth cell *x*, the adjacent
-cell *x+1* is also flagged, because the ADCP samples echo intensity near the
-end of each depth cell.
+Note: the instrument's own onboard WA check runs per ping, in beam
+coordinates, before any ensemble averaging. There is no reliable post-collection
+equivalent of its 3-beam leniency — by the time ensemble-averaged data reaches
+this check, the single-ping resolution that leniency depends on is already
+gone. Use *Beam to Ignore* for a beam you already know is bad; there is no
+automatic-detection option here.
+
+If a false target is detected at depth cell *x*, the adjacent cell *x+1* is
+also flagged, because the ADCP samples echo intensity near the end of each
+depth cell.
+"""
+            )
+
+        with st.expander("ℹ️ How to use Beam to Ignore"):
+            st.markdown(
+                """
+**Beam to Ignore** excludes one specific, known-bad beam from the
+**Correlation**, **Echo Intensity**, and **False Target** checks. It has no
+effect on **Percent Good** — percent good is a single combined value per
+cell (not per beam), so there is no individual beam to drop from it.
+
+Use it when a beam is identifiable as permanently faulty — a fouled or
+misaligned transducer, for example — from correlation, echo intensity, or
+percent-good diagnostics across the deployment. Once selected, the excluded
+beam is dropped from the comparison in each of the three checks above; the
+remaining beams are checked as usual.
+
+This is a manual setting: you name the beam. There is no automatic
+detection of which beam is bad.
+"""
+            )
+
+        with st.expander("ℹ️ How to use Three-Beam Solution"):
+            st.markdown(
+                """
+**Three-Beam Solution** only appears, and only applies, when *Apply Percent
+Good Check* is enabled — it has no effect on Correlation, Echo Intensity, or
+False Target.
+
+It controls how the Percent Good value is combined from the instrument's
+four percent-good components:
+
+- **Enabled (default)**: uses PG1 (percent 3-beam solutions) + PG4 (percent
+  4-beam solutions). This follows RDI's standard recommendation and accepts
+  cells where the instrument used either a 3-beam or 4-beam solution.
+- **Disabled**: uses PG4 only, requiring a 4-beam solution. This is
+  stricter, and will mask more cells than the default.
+
+Turning off *Apply Percent Good Check* also turns this off; turning it back
+on restores the default (enabled).
 """
             )
 
@@ -976,6 +1018,13 @@ end of each depth cell.
         )
 
         # Percent good threshold
+        # Read from a persisted flag, not st.session_state.apply_percent_good
+        # directly: the PG Threshold Advisor tab's "Apply to QC Tests" button
+        # sets apply_percent_good=True via an on_click callback that runs
+        # before this script body, so by the time we'd read it here it would
+        # already reflect the new value and the False->True transition would
+        # be invisible.
+        _percent_good_was_active = st.session_state.get("_pg_active_prev", False)
         st.session_state.apply_percent_good = st.checkbox(
             "Apply Percent Good Check",
             value=st.session_state.apply_percent_good,
@@ -998,14 +1047,29 @@ end of each depth cell.
 
         st.divider()
 
-        # Three-beam mode
-        st.write("**Three-Beam Solution:**")
-        st.session_state.threebeam_mode = st.checkbox(
-            "Enable Three-Beam Mode",
-            value=st.session_state.threebeam_mode,
-            help="Use when one beam is known to be problematic",
-            key="cb_threebeam",
-        )
+        # Three-beam mode (percent good only): shown only while Percent Good
+        # is active, active by default whenever it (re)appears, and deactivated
+        # whenever Percent Good is turned off.
+        if st.session_state.apply_percent_good:
+            if not _percent_good_was_active:
+                # Widget already owns key "cb_threebeam" from a prior render;
+                # once that key exists, value= below is ignored on rerun, so
+                # the reset must target the widget's own key directly.
+                st.session_state.cb_threebeam = True
+                st.session_state.threebeam_mode = True
+            st.write("**Three-Beam Solution:**")
+            st.session_state.threebeam_mode = st.checkbox(
+                "Enable Three-Beam Mode",
+                value=st.session_state.threebeam_mode,
+                help="Percent Good = PG1 (percent 3-beam solutions) + PG4 "
+                "(percent 4-beam solutions). Disable to use PG4 (4-beam "
+                "solutions) only.",
+                key="cb_threebeam",
+            )
+        else:
+            st.session_state.cb_threebeam = False
+            st.session_state.threebeam_mode = False
+        st.session_state._pg_active_prev = st.session_state.apply_percent_good
 
         st.divider()
 
@@ -1051,7 +1115,6 @@ end of each depth cell.
             ):
                 runner.correlation(
                     cutoff=int(st.session_state.correlation_threshold),
-                    threebeam=st.session_state.threebeam_mode,
                     beam_ignore=st.session_state.beam_ignore,
                 )
 
@@ -1060,13 +1123,11 @@ end of each depth cell.
                 if _ei_pb is not None:
                     runner.echo_intensity(
                         cutoff=_ei_pb,
-                        threebeam=st.session_state.threebeam_mode,
                         beam_ignore=st.session_state.beam_ignore,
                     )
                 elif st.session_state.echo_intensity_threshold is not None:
                     runner.echo_intensity(
                         cutoff=int(st.session_state.echo_intensity_threshold),
-                        threebeam=st.session_state.threebeam_mode,
                         beam_ignore=st.session_state.beam_ignore,
                     )
 
@@ -1093,7 +1154,6 @@ end of each depth cell.
             ):
                 runner.false_target(
                     cutoff=int(st.session_state.false_target_threshold),
-                    threebeam=st.session_state.threebeam_mode,
                     beam_ignore=st.session_state.beam_ignore,
                 )
 

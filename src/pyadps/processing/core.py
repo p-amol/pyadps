@@ -593,9 +593,13 @@ class ProcessedDataset:
         false_target : float, optional
             False target threshold (0-255). None or 0 = skip.
         threebeam : bool, default False
-            Enable three-beam mode (ignore one beam).
+            Percent-good three-beam mode: if True, sums PG1 (3-beam solutions)
+            and PG4 (4-beam solutions); if False, uses PG4 only. Has no effect
+            on correlation, echo_intensity, or false_target — see
+            ``SignalQualityRunner.percent_good`` for details.
         beam_ignore : int, optional
-            Beam index to ignore in three-beam mode (0-3).
+            Beam index (0-3) to exclude from correlation, echo_intensity, and
+            false_target. Has no effect on percent_good.
 
         Returns
         -------
@@ -642,14 +646,12 @@ class ProcessedDataset:
         if correlation and correlation > 0:
             runner.correlation(
                 cutoff=correlation,
-                threebeam=threebeam,
                 beam_ignore=beam_ignore,
             )
 
         if _ei_active:
             runner.echo_intensity(
                 cutoff=echo_intensity,  # type: ignore[arg-type]
-                threebeam=threebeam,
                 beam_ignore=beam_ignore,
             )
 
@@ -665,7 +667,6 @@ class ProcessedDataset:
         if false_target and false_target > 0:
             runner.false_target(
                 cutoff=false_target,
-                threebeam=threebeam,
                 beam_ignore=beam_ignore,
             )
 

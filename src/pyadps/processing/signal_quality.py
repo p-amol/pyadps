@@ -93,7 +93,6 @@ def _validate_threshold(name: str, value: float) -> None:
 def correlation_check(
     ds: xr.Dataset,
     cutoff: float = DEFAULT_CORRELATION_THRESHOLD,
-    threebeam: bool = False,
     beam_ignore: int | None = None,
 ) -> xr.Dataset:
     """
@@ -107,10 +106,10 @@ def correlation_check(
         Input dataset containing correlation data.
     cutoff : float, default 64
         Minimum acceptable correlation value (0-255 scale).
-    threebeam : bool, default False
-        Enable three-beam mode (ignore one beam).
     beam_ignore : int, optional
-        Beam index to ignore in three-beam mode (0-3).
+        Beam index (0-3) to exclude from the check. Use when a beam is known
+        to be permanently faulty (identifiable from correlation, echo
+        intensity, or percent-good diagnostics).
 
     Returns
     -------
@@ -129,12 +128,12 @@ def correlation_check(
     # Flag values < cutoff
     flag = correlation < cutoff
 
-    # Handle 3-beam mode
-    if threebeam and beam_ignore is not None and 0 <= beam_ignore <= 3:
+    # Exclude known-bad beam from the flag
+    if beam_ignore is not None and 0 <= beam_ignore <= 3:
         if "beam" in flag.coords:
             is_ignored = flag["beam"] == beam_ignore
             flag = flag & (~is_ignored)
-            logger.info(f"Three-beam mode: ignoring beam {beam_ignore}")
+            logger.info(f"Correlation check: ignoring beam {beam_ignore}")
 
     # Update mask
     mask_updated = xr.where(flag, 1, mask).astype(np.int8)
@@ -155,16 +154,15 @@ def correlation_check(
 def echo_intensity_check(
     ds: xr.Dataset,
     cutoff: float | list[float] = DEFAULT_ECHO_THRESHOLD,
-    threebeam: bool = False,
     beam_ignore: int | None = None,
 ) -> xr.Dataset:
     """
     Perform echo intensity (signal strength) quality control check.
 
     Flags depth cells where echo intensity falls below the noise floor threshold.
-    When any beam (or 2+ beams in three-beam mode) fails the check, the entire
-    depth cell is masked across all beams, because post-collection data is in
-    Earth coordinates and individual beams cannot be selectively dropped.
+    When any beam fails the check, the entire depth cell is masked across all
+    beams, because post-collection data is in Earth coordinates and individual
+    beams cannot be selectively dropped.
 
     Parameters
     ----------
@@ -176,21 +174,10 @@ def echo_intensity_check(
         threshold, useful when beams have different noise floors (e.g. one beam
         has a fouled transducer face). Use the Noise Floor tab to derive these
         values from in-air recordings.
-    threebeam : bool, default False
-        Controls how many beams must fail before a cell is masked:
-
-        - False (default): mask if **any** beam is below threshold. Use when
-          the pre-deployment setting did not allow a 3-beam solution, or to
-          apply a stricter post-collection check.
-        - True: mask only if **2 or more** beams are below threshold. Use when
-          the pre-deployment setting allowed a 3-beam solution and you want to
-          apply a stricter cutoff than the deployment setting while still
-          tolerating one weak beam.
     beam_ignore : int, optional
         Beam index (0-3) to exclude from the check. Use when a beam is known
         to be permanently faulty (identifiable from correlation, echo intensity,
-        or percent-good diagnostics). The remaining three beams are checked
-        using the ``threebeam`` rule.
+        or percent-good diagnostics).
 
     Returns
     -------
@@ -247,9 +234,8 @@ def echo_intensity_check(
     # Count beams below threshold at each (cell, time) point
     n_failing = below.sum(dim="beam")
 
-    # Apply 3-beam rule: tolerate 1 bad beam when threebeam=True
-    min_failing = 2 if threebeam else 1
-    cell_flag = n_failing >= min_failing
+    # Mask if any remaining beam fails
+    cell_flag = n_failing >= 1
 
     # Mask the full depth cell across all beams. Transpose restores (beam, cell, time)
     # order — xr.where with a (cell, time) condition reorders dims to (cell, time, beam).
@@ -261,7 +247,7 @@ def echo_intensity_check(
 
     newly_flagged = int((mask_updated == 1).sum()) - int((mask == 1).sum())
     logger.info(
-        f"Echo intensity check applied: cutoff={cutoff}, threebeam={threebeam}, "
+        f"Echo intensity check applied: cutoff={cutoff}, "
         f"beam_ignore={beam_ignore}, newly flagged cells: {newly_flagged}"
     )
 
@@ -441,7 +427,6 @@ def percent_good_check(
 def false_target_detection(
     ds: xr.Dataset,
     cutoff: float = DEFAULT_FALSE_TARGET_THRESHOLD,
-    threebeam: bool = True,
     beam_ignore: int | None = None,
 ) -> xr.Dataset:
     """
@@ -463,71 +448,38 @@ def false_target_detection(
     ds : xr.Dataset
         Input dataset containing echo intensity data.
     cutoff : float, default 50
-        Maximum acceptable echo intensity difference between beams. Equivalent
-        to the WA command threshold. Use a value lower than the pre-deployment
-        WA setting to apply a stricter post-collection check.
-    threebeam : bool, default True
-        Controls which beam pair is compared:
-
-        - True (default): compares highest to second-lowest echo intensity
-          (``max - second_lowest``). Mirrors the pre-deployment 3-beam logic:
-          the ensemble is dropped only when two or more beams are anomalous,
-          meaning even a 3-beam solution would have failed. Use this when the
-          deployment used a 3-beam solution and you want to apply a stricter
-          cutoff than the WA setting.
-        - False: compares highest to lowest (``max - min``). Flags the ensemble
-          whenever any single beam is anomalous. Use this to override a
-          pre-deployment 3-beam solution with a stricter all-beam check.
+        Maximum acceptable echo intensity difference between beams (``max -
+        min``). Equivalent to the WA command threshold. Use a value lower than
+        the pre-deployment WA setting to apply a stricter post-collection check.
     beam_ignore : int, optional
         Beam index (0-3) to exclude from the comparison. Use when a beam is
         known to be permanently faulty (identifiable from correlation, echo
         intensity, or percent-good data). The remaining three beams are checked
-        using ``max - min`` with the specified cutoff, allowing a stricter
-        threshold than the pre-deployment WA setting without the ``threebeam``
-        flag affecting the comparison.
+        using ``max - min`` with the specified cutoff.
 
     Returns
     -------
     xr.Dataset
         Dataset with updated mask.
 
-    Post-collection use cases
-    -------------------------
-    The pre-deployment WA command runs on the instrument in beam coordinates
-    before any coordinate transformation. This function extends that check to
-    post-collected Earth-coordinate data, where only whole-ensemble rejection
-    is possible. Three typical scenarios:
-
-    1. **Override pre-deployment 3-beam leniency** — If the deployment allowed
-       a 3-beam solution but a stricter all-beam check is desired, set
-       ``threebeam=False``. Any ensemble where ``max - min > cutoff`` is
-       rejected entirely, regardless of whether a 3-beam solution was available.
-
-    2. **Apply a stricter threshold than the WA setting** — If the pre-deployment
-       WA threshold was, e.g., 100 counts and a tighter check (e.g., 30 counts)
-       is required, set ``cutoff=30``. Use ``threebeam=True`` to mirror the
-       instrument's 3-beam logic (``max - second_lowest``), or ``threebeam=False``
-       for the stricter all-beam comparison (``max - min``).
-
-    3. **Known faulty beam** — If one beam is permanently bad (identifiable from
-       correlation, echo intensity, or percent-good diagnostics), specify it with
-       ``beam_ignore``. The false target check then runs on the three remaining
-       beams using ``max - min``. This is useful when combining a known-bad-beam
-       situation with a stricter cutoff than the pre-deployment WA setting.
-
     Notes
     -----
-    The algorithm works as follows:
+    The pre-deployment WA command runs on the instrument in beam coordinates,
+    per ping, before any coordinate transformation. This function extends that
+    check to post-collected data, where only whole-ensemble rejection is
+    possible. There is no ensemble-data equivalent of the instrument's
+    per-ping 3-beam WA leniency: distinguishing "one beam had a transient
+    false target this ping" from "one beam is systematically different"
+    requires single-ping resolution that ensemble-averaging has already
+    discarded by the time this function runs. Use ``beam_ignore`` for a beam
+    known to be bad; there is no automatic-detection equivalent.
+
+    The algorithm:
 
     1. If ``beam_ignore`` is specified, remove that beam from consideration.
-    2. Sort echo values along the beam dimension.
-    3. Compute the difference:
-
-       - ``threebeam=True`` and no ``beam_ignore``: ``max - second_lowest``
-       - Otherwise: ``max - min``
-
-    4. Flag cells where difference > cutoff.
-    5. Also flag the next depth cell (x+1) for each flagged cell, because the
+    2. Compute ``max - min`` across the remaining beams.
+    3. Flag cells where the difference exceeds ``cutoff``.
+    4. Also flag the next depth cell (x+1) for each flagged cell, because the
        ADCP samples echo intensity near the end of depth cell x, so the
        velocity measurement at x+1 is also contaminated.
     """
@@ -577,20 +529,10 @@ def false_target_detection(
     non_beam_dims = [d for d in echo.dims if d != "beam"]
     non_beam_coords = {d: echo.coords[d] for d in non_beam_dims}
 
-    if threebeam and beam_ignore is None:
-        # max - second_lowest: mirrors the instrument's 3-beam Step C check.
-        # Flags only when two or more beams are anomalous (even a 3-beam
-        # solution would have failed). Index 1 in ascending sort = second_lowest.
-        echo_max = np.take(sorted_echo, -1, axis=beam_axis)
-        echo_second_lowest = np.take(sorted_echo, 1, axis=beam_axis)
-        difference = echo_max - echo_second_lowest
-        logger.debug("False target: using max - second_lowest (threebeam mode)")
-    else:
-        # max - min: flags whenever any single beam is anomalous.
-        echo_max = np.take(sorted_echo, -1, axis=beam_axis)
-        echo_min = np.take(sorted_echo, 0, axis=beam_axis)
-        difference = echo_max - echo_min
-        logger.debug("False target: using max - min")
+    # max - min: flags whenever any single beam is anomalous.
+    echo_max = np.take(sorted_echo, -1, axis=beam_axis)
+    echo_min = np.take(sorted_echo, 0, axis=beam_axis)
+    difference = echo_max - echo_min
 
     # Convert difference back to DataArray
     difference_da = xr.DataArray(
@@ -618,7 +560,7 @@ def false_target_detection(
 
     newly_flagged = int((mask_updated == 1).sum()) - int((mask == 1).sum())
     logger.info(
-        f"False target detection applied: cutoff={cutoff}, threebeam={threebeam}, "
+        f"False target detection applied: cutoff={cutoff}, "
         f"beam_ignore={beam_ignore}, newly flagged cells: {newly_flagged}"
     )
 
@@ -765,7 +707,6 @@ class SignalQualityRunner:
     def correlation(
         self,
         cutoff: float = DEFAULT_CORRELATION_THRESHOLD,
-        threebeam: bool = False,
         beam_ignore: int | None = None,
     ) -> SignalQualityRunner:
         """
@@ -775,10 +716,8 @@ class SignalQualityRunner:
         ----------
         cutoff : float, default 64
             Minimum acceptable correlation value.
-        threebeam : bool, default False
-            Enable three-beam mode.
         beam_ignore : int, optional
-            Beam to ignore in three-beam mode.
+            Beam to ignore (e.g. a known-faulty beam).
 
         Returns
         -------
@@ -789,14 +728,12 @@ class SignalQualityRunner:
             "Correlation",
             correlation_check,
             cutoff,
-            threebeam=threebeam,
             beam_ignore=beam_ignore,
         )
 
     def echo_intensity(
         self,
         cutoff: float | list[float] = DEFAULT_ECHO_THRESHOLD,
-        threebeam: bool = False,
         beam_ignore: int | None = None,
     ) -> SignalQualityRunner:
         """
@@ -807,9 +744,6 @@ class SignalQualityRunner:
         cutoff : float or list of float, default 40
             Minimum acceptable echo intensity. A single value applies to all
             beams; a list of four values sets a per-beam threshold.
-        threebeam : bool, default False
-            If True, mask only when 2+ beams are below threshold.
-            If False, mask when any beam is below threshold.
         beam_ignore : int, optional
             Beam index to exclude from the check (0-3).
 
@@ -822,7 +756,6 @@ class SignalQualityRunner:
             "Echo Intensity",
             echo_intensity_check,
             cutoff,
-            threebeam=threebeam,
             beam_ignore=beam_ignore,
         )
 
@@ -885,7 +818,6 @@ class SignalQualityRunner:
     def false_target(
         self,
         cutoff: float = DEFAULT_FALSE_TARGET_THRESHOLD,
-        threebeam: bool = True,
         beam_ignore: int | None = None,
     ) -> SignalQualityRunner:
         """
@@ -894,14 +826,10 @@ class SignalQualityRunner:
         Parameters
         ----------
         cutoff : float, default 50
-            Maximum acceptable echo intensity difference between beams.
-        threebeam : bool, default True
-            If True and beam_ignore is None, compares highest to second-lowest
-            (``max - second_lowest``), mirroring the instrument's 3-beam Step C.
-            If False, compares highest to lowest (``max - min``).
+            Maximum acceptable echo intensity difference between beams
+            (``max - min``).
         beam_ignore : int, optional
-            Beam index to exclude from comparison (0-3). When set, the
-            remaining beams are checked using ``max - min``.
+            Beam index to exclude from comparison (0-3).
 
         Returns
         -------
@@ -912,7 +840,6 @@ class SignalQualityRunner:
             "False Target",
             false_target_detection,
             cutoff,
-            threebeam=threebeam,
             beam_ignore=beam_ignore,
         )
 

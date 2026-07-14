@@ -249,30 +249,30 @@ class TestCorrelationCheck:
         # Should return dataset unchanged
         assert "mask" in result.data_vars
 
-    def test_threebeam_mode_ignores_beam(self, basic_dataset):
-        """Test three-beam mode ignores specified beam."""
+    def test_beam_ignore_excludes_beam(self, basic_dataset):
+        """Test beam_ignore excludes the specified beam from the flag."""
         # Set low correlation on beam 2
         basic_dataset["correlation"].values[2, :, :] = 30
 
-        # Without threebeam, should flag beam 2
+        # Without beam_ignore, should flag beam 2
         result_normal = correlation_check(basic_dataset, cutoff=64)
         flagged_normal = result_normal["mask"].sum().values
 
-        # With threebeam ignoring beam 2, should not flag beam 2
-        result_threebeam = correlation_check(
-            basic_dataset, cutoff=64, threebeam=True, beam_ignore=2
+        # With beam 2 ignored, should not flag beam 2
+        result_ignored = correlation_check(
+            basic_dataset, cutoff=64, beam_ignore=2
         )
-        flagged_threebeam = result_threebeam["mask"].sum().values
+        flagged_ignored = result_ignored["mask"].sum().values
 
-        assert flagged_threebeam < flagged_normal
+        assert flagged_ignored < flagged_normal
 
-    def test_threebeam_invalid_beam_ignored(self, basic_dataset):
-        """Test threebeam with invalid beam index is ignored."""
+    def test_invalid_beam_ignore_is_ignored(self, basic_dataset):
+        """Test an out-of-range beam_ignore is ignored."""
         basic_dataset["correlation"].values[0, :, :] = 30
 
         # beam_ignore=5 is invalid (only 0-3 valid)
         result = correlation_check(
-            basic_dataset, cutoff=64, threebeam=True, beam_ignore=5
+            basic_dataset, cutoff=64, beam_ignore=5
         )
         # Should still flag beam 0
         assert result["mask"].isel(beam=0).sum() > 0
@@ -372,19 +372,6 @@ class TestEchoIntensityCheck:
         assert result["mask"].isel(cell=1, time=2).values.all()
         # Other cells untouched
         assert result["mask"].isel(cell=0, time=0).values.sum() == 0
-
-    def test_threebeam_masks_only_when_two_beams_fail(self, basic_dataset):
-        """threebeam=True: no mask when only 1 beam fails; mask when 2 fail."""
-        # Only beam 0 below threshold at (cell=0, time=0)
-        basic_dataset["echo_intensity"].values[0, 0, 0] = 10
-
-        result_one = echo_intensity_check(basic_dataset, cutoff=40, threebeam=True)
-        assert result_one["mask"].isel(cell=0, time=0).values.sum() == 0
-
-        # Now also beam 1 below threshold at same location
-        basic_dataset["echo_intensity"].values[1, 0, 0] = 10
-        result_two = echo_intensity_check(basic_dataset, cutoff=40, threebeam=True)
-        assert result_two["mask"].isel(cell=0, time=0).values.all()
 
     def test_beam_ignore_excludes_from_count(self, basic_dataset):
         """beam_ignore removes that beam; remaining beams determine flag."""
@@ -818,10 +805,8 @@ class TestFalseTargetDetection:
 
     def test_flags_large_difference(self, basic_dataset):
         """Test flagging when difference exceeds threshold."""
-        # With threebeam=True (default), uses max - second_highest
-        # Set values so max - second > cutoff
         # All beams at 80 except beam 0 at 150
-        # Sorted: [80, 80, 80, 150], max=150, second=80, diff=70
+        # max - min = 150 - 80 = 70
         basic_dataset["echo_intensity"].values[:, 0, 0] = 80
         basic_dataset["echo_intensity"].values[0, 0, 0] = 150
 
@@ -832,9 +817,7 @@ class TestFalseTargetDetection:
 
     def test_flags_at_threshold_boundary(self, basic_dataset):
         """Test behavior at exact threshold value."""
-        # With threebeam=True (default), uses max - second_highest
-        # Set all beams to 80, except beam 0 to 130
-        # Sorted: [80, 80, 80, 130], max=130, second=80, diff=50
+        # All beams at 80, except beam 0 at 130
         basic_dataset["echo_intensity"].values[:, 0, 0] = 80
         basic_dataset["echo_intensity"].values[0, 0, 0] = 130  # Difference = 50
 
@@ -849,25 +832,23 @@ class TestFalseTargetDetection:
         assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
 
     def test_custom_threshold(self, basic_dataset):
-        """Test with custom threshold using threebeam mode."""
-        # With threebeam=True (default), uses max - second_highest
+        """Test with custom threshold."""
         # Set values: [100, 90, 80, 70]
-        # Sorted: [70, 80, 90, 100], max=100, second=90, diff=10
+        # max - min = 100 - 70 = 30
         basic_dataset["echo_intensity"].values[:, 0, 0] = [100, 90, 80, 70]
 
-        # With cutoff=50, diff=10 < 50, should not flag
+        # With cutoff=50, diff=30 < 50, should not flag
         result = false_target_detection(basic_dataset, cutoff=50)
         assert result["mask"].isel(beam=3, cell=0, time=0).values == 0
 
-        # With cutoff=5, diff=10 > 5, should flag
+        # With cutoff=5, diff=30 > 5, should flag
         result = false_target_detection(basic_dataset, cutoff=5)
         assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
 
     def test_only_flags_beam_3(self, basic_dataset):
         """Test that only beam 3 (combined mask) is flagged."""
-        # With threebeam=True (default), uses max - second_highest
         # Set one beam very high, others at 80
-        # Sorted: [80, 80, 80, 200], max=200, second=80, diff=120
+        # max - min = 200 - 80 = 120
         basic_dataset["echo_intensity"].values[:, 0, 0] = 80
         basic_dataset["echo_intensity"].values[0, 0, 0] = 200
 
@@ -889,9 +870,8 @@ class TestFalseTargetDetection:
         basic_dataset["echo"] = basic_dataset["echo_intensity"]
         del basic_dataset["echo_intensity"]
 
-        # With threebeam=True (default), uses max - second_highest
         # Set one beam very high, others at default 80
-        # Sorted: [80, 80, 80, 200], max=200, second=80, diff=120
+        # max - min = 200 - 80 = 120
         basic_dataset["echo"].values[:, 0, 0] = 80
         basic_dataset["echo"].values[0, 0, 0] = 200
 
@@ -936,65 +916,6 @@ class TestFalseTargetDetection:
         # Mask should be unchanged since echo doesn't have beam dim
         assert result["mask"].sum() == 0
 
-    def test_uses_max_second_difference_by_default(self, basic_dataset):
-        """Test that max-second_highest difference is calculated by default."""
-        # With threebeam=True (default), uses max - second_highest
-        # Set specific values on each beam: [120, 100, 90, 80]
-        # Sorted: [80, 90, 100, 120], max=120, second=100, diff=20
-        basic_dataset["echo_intensity"].values[:, 0, 0] = [120, 100, 90, 80]
-
-        # With cutoff=30, diff=20 < 30, should not flag
-        result = false_target_detection(basic_dataset, cutoff=30)
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 0
-
-        # With cutoff=15, diff=20 > 15, should flag
-        result = false_target_detection(basic_dataset, cutoff=15)
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
-
-    def test_threebeam_true_uses_max_minus_second(self, basic_dataset):
-        """Test threebeam=True compares max to second-highest (more lenient)."""
-        # Set values: max=150, second=100, min=50
-        # Max - second = 50, Max - min = 100
-        basic_dataset["echo_intensity"].values[:, 0, 0] = [150, 100, 90, 50]
-
-        # With threebeam=True, difference = 150-100 = 50
-        # Cutoff=60, 50 < 60, should NOT flag
-        result = false_target_detection(basic_dataset, cutoff=60, threebeam=True)
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 0
-
-        # Cutoff=40, 50 > 40, should flag
-        result = false_target_detection(basic_dataset, cutoff=40, threebeam=True)
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
-
-    def test_threebeam_false_uses_max_minus_min(self, basic_dataset):
-        """Test threebeam=False compares max to min (stricter)."""
-        # Set values: max=150, second=100, min=50
-        basic_dataset["echo_intensity"].values[:, 0, 0] = [150, 100, 90, 50]
-
-        # With threebeam=False, difference = 150-50 = 100
-        # Cutoff=60, 100 > 60, should flag
-        result = false_target_detection(basic_dataset, cutoff=60, threebeam=False)
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
-
-    def test_threebeam_comparison(self, basic_dataset):
-        """Test that threebeam mode is more lenient than strict mode."""
-        # Set values with outlier: max=200, second=100, others=90
-        basic_dataset["echo_intensity"].values[:, 0, 0] = [200, 100, 90, 95]
-        # Max - second = 100, Max - min = 110
-
-        # With cutoff=105:
-        # threebeam=True: 100 < 105, not flagged
-        # threebeam=False: 110 > 105, flagged
-        result_threebeam = false_target_detection(
-            basic_dataset, cutoff=105, threebeam=True
-        )
-        result_strict = false_target_detection(
-            basic_dataset, cutoff=105, threebeam=False
-        )
-
-        assert result_threebeam["mask"].isel(beam=3, cell=0, time=0).values == 0
-        assert result_strict["mask"].isel(beam=3, cell=0, time=0).values == 1
-
     def test_beam_ignore_excludes_beam(self, basic_dataset):
         """Test that beam_ignore excludes specified beam from comparison."""
         # Set values with one extreme outlier on beam 0
@@ -1003,35 +924,14 @@ class TestFalseTargetDetection:
         # With beam 0 ignored: max=90, min=80, diff=10
 
         # Without beam_ignore, diff=120 > 50, should flag
-        result_normal = false_target_detection(
-            basic_dataset, cutoff=50, threebeam=False
-        )
+        result_normal = false_target_detection(basic_dataset, cutoff=50)
         assert result_normal["mask"].isel(beam=3, cell=0, time=0).values == 1
 
         # With beam_ignore=0, diff=10 < 50, should NOT flag
         result_ignore = false_target_detection(
-            basic_dataset, cutoff=50, threebeam=False, beam_ignore=0
+            basic_dataset, cutoff=50, beam_ignore=0
         )
         assert result_ignore["mask"].isel(beam=3, cell=0, time=0).values == 0
-
-    def test_beam_ignore_with_threebeam(self, basic_dataset):
-        """Test beam_ignore with threebeam uses max-min on remaining beams."""
-        # When beam_ignore is set, threebeam uses max-min on remaining beams
-        basic_dataset["echo_intensity"].values[:, 0, 0] = [200, 100, 90, 50]
-
-        # With beam_ignore=0, remaining = [100, 90, 50]
-        # Max - min = 100 - 50 = 50
-        result = false_target_detection(
-            basic_dataset, cutoff=40, threebeam=True, beam_ignore=0
-        )
-        # 50 > 40, should flag
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
-
-        result = false_target_detection(
-            basic_dataset, cutoff=60, threebeam=True, beam_ignore=0
-        )
-        # 50 < 60, should NOT flag
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 0
 
     def test_beam_ignore_invalid_index(self, basic_dataset):
         """Test that invalid beam_ignore index is ignored."""
@@ -1039,7 +939,7 @@ class TestFalseTargetDetection:
 
         # beam_ignore=5 is invalid (only 0-3 valid), should be ignored
         result = false_target_detection(
-            basic_dataset, cutoff=60, threebeam=False, beam_ignore=5
+            basic_dataset, cutoff=60, beam_ignore=5
         )
         # Should still use all beams, diff = 150-50 = 100 > 60, flagged
         assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
@@ -1051,14 +951,14 @@ class TestFalseTargetDetection:
 
         # Ignore beam 0: remaining = [80, 60, 40], diff = 40
         result = false_target_detection(
-            basic_dataset, cutoff=30, threebeam=False, beam_ignore=0
+            basic_dataset, cutoff=30, beam_ignore=0
         )
         # 40 > 30, should flag
         assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
 
         # Ignore beam 3: remaining = [100, 80, 60], diff = 40
         result = false_target_detection(
-            basic_dataset, cutoff=50, threebeam=False, beam_ignore=3
+            basic_dataset, cutoff=50, beam_ignore=3
         )
         # 40 < 50, should NOT flag
         assert result["mask"].isel(beam=3, cell=0, time=0).values == 0
@@ -1171,10 +1071,9 @@ class TestDefaultThresholds:
         assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
 
     def test_false_target_default_threshold(self, basic_dataset):
-        """Test false_target uses default threshold of 50 with threebeam mode."""
-        # With threebeam=True (default), max - second_highest is used
+        """Test false_target uses default threshold of 50."""
         # Set values: beam0=131, beam1=80, beam2=80, beam3=80
-        # Sorted: [80, 80, 80, 131], max=131, second=80, diff=51
+        # max - min = 131 - 80 = 51
         basic_dataset["echo_intensity"].values[0, 0, 0] = 131
         basic_dataset["echo_intensity"].values[1, 0, 0] = 80
         basic_dataset["echo_intensity"].values[2, 0, 0] = 80

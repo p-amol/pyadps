@@ -2499,6 +2499,209 @@ class ProcessedDataset:
 
         return ds_out
 
+    def get_export_dataset(
+        self,
+        include_velocity: bool = True,
+        include_echo: bool = False,
+        include_correlation: bool = False,
+        include_percent_good: bool = False,
+        apply_mask: bool = True,
+        ensure_depth_ascending: bool = True,
+        velocity_units: str = "cm/s",
+        velocity_names: Optional[Dict[str, str]] = None,
+    ) -> xr.Dataset:
+        """
+        Build a dataset containing exactly the selected processed variables.
+
+        Unlike ``to_netcdf()`` (entire dataset) or ``velocity_to_netcdf()``
+        (velocity only), this assembles any combination of velocity, echo
+        intensity, correlation, and percent good into a single dataset — the
+        processed-data equivalent of the raw-file page's "Select Data
+        Components to Download".
+
+        Parameters
+        ----------
+        include_velocity : bool, default True
+            Include velocity, split into separate u/v/w variables (see
+            ``get_velocity_dataset``). Error velocity (beam 3) is excluded.
+        include_echo : bool, default False
+            Include echo intensity (all 4 beams, mask applied if requested).
+        include_correlation : bool, default False
+            Include correlation (all 4 beams, mask applied if requested).
+        include_percent_good : bool, default False
+            Include percent good (all 4 components, mask applied if
+            requested).
+        apply_mask : bool, default True
+            If True, masked cells become NaN in every included variable.
+        ensure_depth_ascending : bool, default True
+            See ``finalize()``.
+        velocity_units : str, default 'cm/s'
+            See ``velocity_to_netcdf()``. Only used if include_velocity=True.
+        velocity_names : dict, optional
+            See ``velocity_to_netcdf()``. Only used if include_velocity=True.
+
+        Returns
+        -------
+        xr.Dataset
+            Dataset containing only the requested variables.
+
+        Raises
+        ------
+        ValueError
+            If no component is selected.
+
+        Examples
+        --------
+        >>> ds = proc.get_export_dataset(include_velocity=True, include_echo=True)
+        """
+        if not any(
+            [include_velocity, include_echo, include_correlation, include_percent_good]
+        ):
+            raise ValueError("At least one component must be selected for export.")
+
+        ds_final = self.finalize(ensure_depth_ascending=ensure_depth_ascending)
+        mask = ds_final["mask"] if "mask" in ds_final.data_vars else None
+
+        data_vars: Dict[str, xr.DataArray] = {}
+        coords: Dict[str, Any] = {}
+
+        if include_velocity and "velocity" in ds_final.data_vars:
+            vel_ds = self.get_velocity_dataset(
+                apply_mask=apply_mask,
+                ensure_depth_ascending=ensure_depth_ascending,
+                units=velocity_units,
+                velocity_names=velocity_names,
+            )
+            data_vars.update(vel_ds.data_vars)
+            for coord_name, coord_val in vel_ds.coords.items():
+                coords[str(coord_name)] = coord_val
+
+        def _add_beam_variable(var_name: str) -> None:
+            if var_name not in ds_final.data_vars:
+                return
+            da = ds_final[var_name]
+            if apply_mask and mask is not None and mask.dims == da.dims:
+                values = np.where(
+                    mask.values == 1, np.nan, da.values.astype(np.float32)
+                )
+                da = xr.DataArray(values, dims=da.dims, coords=da.coords, attrs=da.attrs)
+            data_vars[var_name] = da
+            for dim in da.dims:
+                dim_name = str(dim)
+                if dim_name in ds_final.coords and dim_name not in coords:
+                    coords[dim_name] = ds_final.coords[dim_name]
+
+        if include_echo:
+            _add_beam_variable(
+                "echo_intensity" if "echo_intensity" in ds_final.data_vars else "echo"
+            )
+        if include_correlation:
+            _add_beam_variable("correlation")
+        if include_percent_good:
+            _add_beam_variable(
+                "percent_good" if "percent_good" in ds_final.data_vars else "pg"
+            )
+
+        return xr.Dataset(data_vars, coords=coords)
+
+    def export_to_netcdf(
+        self,
+        filepath: Union[str, Path],
+        include_velocity: bool = True,
+        include_echo: bool = False,
+        include_correlation: bool = False,
+        include_percent_good: bool = False,
+        apply_mask: bool = True,
+        ensure_depth_ascending: bool = True,
+        velocity_units: str = "cm/s",
+        velocity_names: Optional[Dict[str, str]] = None,
+        include_metadata: bool = True,
+    ) -> None:
+        """
+        Save a selected subset of processed variables to NetCDF.
+
+        The processed-data equivalent of the raw-file page's
+        component-selection download: choose any combination of velocity,
+        echo intensity, correlation, and percent good, and write exactly
+        those to one file.
+
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        include_velocity, include_echo, include_correlation, include_percent_good : bool
+            Which components to include. See ``get_export_dataset``.
+        apply_mask : bool, default True
+            If True, masked cells become NaN.
+        ensure_depth_ascending : bool, default True
+            See ``finalize()``.
+        velocity_units : str, default 'cm/s'
+            Output velocity units. Only used if include_velocity=True.
+        velocity_names : dict, optional
+            Custom velocity variable names. Only used if include_velocity=True.
+        include_metadata : bool, default True
+            If True, include processing metadata in global attributes.
+
+        Examples
+        --------
+        >>> proc.export_to_netcdf(
+        ...     "export.nc", include_velocity=True, include_echo=True
+        ... )
+        """
+        ds_out = self.get_export_dataset(
+            include_velocity=include_velocity,
+            include_echo=include_echo,
+            include_correlation=include_correlation,
+            include_percent_good=include_percent_good,
+            apply_mask=apply_mask,
+            ensure_depth_ascending=ensure_depth_ascending,
+            velocity_units=velocity_units,
+            velocity_names=velocity_names,
+        )
+
+        included = []
+        if include_velocity:
+            included.append("velocity")
+        if include_echo:
+            included.append("echo_intensity")
+        if include_correlation:
+            included.append("correlation")
+        if include_percent_good:
+            included.append("percent_good")
+
+        if include_metadata:
+            ds_out.attrs = {
+                "title": "ADCP Processed Data (Selected Components)",
+                "institution": self.dataset.attrs.get("institution", ""),
+                "source": f"pyadps v{_PYADPS_VERSION}",
+                "history": f"Created {datetime.now(timezone.utc).isoformat()}",
+                "references": "pyadps ADCP processing package",
+                "Conventions": "CF-1.8",
+                "processing_log": str(self.processing_log),
+                "mask_applied": int(apply_mask),
+                "components_exported": ", ".join(included),
+            }
+            for attr in [
+                "deployment_name",
+                "instrument_type",
+                "serial_number",
+                "latitude",
+                "longitude",
+                "water_depth",
+            ]:
+                if attr in self.dataset.attrs:
+                    ds_out.attrs[attr] = self.dataset.attrs[attr]
+        else:
+            ds_out.attrs = {
+                "source": f"pyadps v{_PYADPS_VERSION}",
+                "Conventions": "CF-1.8",
+            }
+
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        ds_out.to_netcdf(filepath)
+        logger.info(f"Export dataset saved to {filepath}: components={included}")
+
     # ========================================================================
     # REPORTING
     # ========================================================================

@@ -117,6 +117,29 @@ def get_velocity_labels() -> tuple[str, str, str, str]:
         return ("Beam 1", "Beam 2", "Beam 3", "Beam 4")
 
 
+def get_velocity_names() -> dict[str, str]:
+    """Resolve the u/v/w variable names from the naming-style selection.
+
+    CF Convention governs attribute values (standard_name, units, etc.), not
+    variable names, so all three styles remain CF-compliant — only the
+    output variable names differ.
+    """
+    style = st.session_state.get("velocity_naming_style", "Short (u, v, w)")
+    if style == "Short (u, v, w)":
+        return {"u": "u", "v": "v", "w": "w"}
+    if style == "Custom":
+        return {
+            "u": st.session_state.get("velocity_name_u") or "u",
+            "v": st.session_state.get("velocity_name_v") or "v",
+            "w": st.session_state.get("velocity_name_w") or "w",
+        }
+    return {
+        "u": "zonal_velocity",
+        "v": "meridional_velocity",
+        "w": "vertical_velocity",
+    }
+
+
 def get_file_prefix() -> str:
     """Get file prefix from session state or derive from filename."""
     if "file_prefix" in st.session_state and st.session_state.file_prefix:
@@ -329,9 +352,21 @@ if not st.session_state.write_initialized:
 
     # Export options
     st.session_state.export_format = "NetCDF"
-    st.session_state.export_type = "Velocity Only"  # Default to velocity-only
     st.session_state.apply_mask_export = True
     st.session_state.velocity_units = "cm/s"
+
+    # Data component selection (mirrors Download Raw File page)
+    st.session_state.export_entire_dataset = False
+    st.session_state.export_include_velocity = True  # Default: velocity only
+    st.session_state.export_include_echo = False
+    st.session_state.export_include_correlation = False
+    st.session_state.export_include_percent_good = False
+
+    # Velocity variable naming
+    st.session_state.velocity_naming_style = "Short (u, v, w)"
+    st.session_state.velocity_name_u = "zonal_velocity"
+    st.session_state.velocity_name_v = "meridional_velocity"
+    st.session_state.velocity_name_w = "vertical_velocity"
 
     # Standard attributes: seeded from Page 03 values if the user filled them in
     st.session_state.add_attributes = False
@@ -358,9 +393,10 @@ with _col_fname:
 st.header("💾 Write Processed Data", divider="blue")
 
 st.write("""
-Export your processed ADCP data to NetCDF or CSV format. You can choose between:
-- **Velocity Only** (recommended): Exports just U, V, W velocity components with QC mask applied
-- **Full Dataset**: Exports the complete dataset including all variables and metadata
+Export your processed ADCP data to NetCDF or CSV format. Choose which
+components to include — **Velocity** (recommended, selected by default),
+**Echo Intensity**, **Correlation**, **Percent Good** — or select
+**Entire Dataset** to export everything, including all variables and metadata.
 """)
 
 
@@ -668,28 +704,115 @@ with tab3:
 
     st.divider()
 
-    # Export format selection
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.session_state.export_format = st.radio(
-            "Output format",
-            ["NetCDF", "CSV"],
-            key="export_format_radio",
-            help="NetCDF is recommended for most use cases",
-        )
-
-    with col2:
-        st.session_state.export_type = st.radio(
-            "Export type",
-            ["Velocity Only", "Full Dataset"],
-            key="export_type_radio",
-            help="Velocity Only exports U, V, W components. Full Dataset includes all variables.",
-        )
+    # Output format
+    st.session_state.export_format = st.radio(
+        "Output format",
+        ["NetCDF", "CSV"],
+        key="export_format_radio",
+        help="NetCDF is recommended for most use cases",
+    )
 
     st.divider()
 
-    # Export options
+    # -------------------------------------------------------------------
+    # DATA COMPONENT SELECTION (mirrors Download Raw File page)
+    # -------------------------------------------------------------------
+    st.subheader("Select Data Components to Export")
+
+    st.session_state.export_entire_dataset = st.checkbox(
+        "📦 **Entire Dataset**",
+        value=st.session_state.export_entire_dataset,
+        help="Exports the complete processed dataset, including all "
+        "variables and metadata (equivalent to the previous 'Full Dataset' "
+        "option).",
+    )
+
+    st.write("Or select individual components:")
+
+    _entire = st.session_state.export_entire_dataset
+    col1, col2 = st.columns(2)
+    with col1:
+        st.session_state.export_include_velocity = st.checkbox(
+            "Velocity",
+            value=True if _entire else st.session_state.export_include_velocity,
+            disabled=_entire,
+        )
+        st.session_state.export_include_echo = st.checkbox(
+            "Echo Intensity",
+            value=True if _entire else st.session_state.export_include_echo,
+            disabled=_entire,
+        )
+    with col2:
+        st.session_state.export_include_correlation = st.checkbox(
+            "Correlation",
+            value=True if _entire else st.session_state.export_include_correlation,
+            disabled=_entire,
+        )
+        st.session_state.export_include_percent_good = st.checkbox(
+            "Percent Good",
+            value=True if _entire else st.session_state.export_include_percent_good,
+            disabled=_entire,
+        )
+
+    _any_component_selected = _entire or any(
+        [
+            st.session_state.export_include_velocity,
+            st.session_state.export_include_echo,
+            st.session_state.export_include_correlation,
+            st.session_state.export_include_percent_good,
+        ]
+    )
+    if not _any_component_selected:
+        st.warning("⚠️ Select at least one component to export.")
+
+    st.divider()
+
+    # -------------------------------------------------------------------
+    # VELOCITY VARIABLE NAMING
+    # Not shown for Entire Dataset: that path uses to_netcdf() directly and
+    # doesn't apply naming/unit conversion to any variable.
+    # -------------------------------------------------------------------
+    if not _entire and st.session_state.export_include_velocity:
+        st.subheader("Velocity Variable Naming")
+        _naming_options = ["CF-style", "Short (u, v, w)", "Custom"]
+        st.session_state.velocity_naming_style = st.radio(
+            "Naming style",
+            _naming_options,
+            index=_naming_options.index(st.session_state.velocity_naming_style),
+            key="velocity_naming_style_radio",
+            help="CF-style (zonal_velocity, meridional_velocity, "
+            "vertical_velocity) matches CF Convention long-form naming. "
+            "Short (u, v, w) is easier to type and reference in downstream "
+            "analysis. Either way, the CF-compliant standard_name attribute "
+            "(e.g. eastward_sea_water_velocity) is always included, so the "
+            "file remains CF-compliant regardless of the variable name "
+            "chosen — CF Convention governs attribute values, not variable "
+            "names.",
+        )
+
+        if st.session_state.velocity_naming_style == "Custom":
+            nc1, nc2, nc3 = st.columns(3)
+            with nc1:
+                st.session_state.velocity_name_u = st.text_input(
+                    "U (zonal/eastward) name",
+                    value=st.session_state.velocity_name_u,
+                )
+            with nc2:
+                st.session_state.velocity_name_v = st.text_input(
+                    "V (meridional/northward) name",
+                    value=st.session_state.velocity_name_v,
+                )
+            with nc3:
+                st.session_state.velocity_name_w = st.text_input(
+                    "W (vertical) name",
+                    value=st.session_state.velocity_name_w,
+                )
+
+        st.divider()
+
+    # -------------------------------------------------------------------
+    # EXPORT OPTIONS
+    # -------------------------------------------------------------------
     col1, col2 = st.columns(2)
 
     with col1:
@@ -700,7 +823,7 @@ with tab3:
         )
 
     with col2:
-        if st.session_state.export_type == "Velocity Only":
+        if not _entire and st.session_state.export_include_velocity:
             st.session_state.velocity_units = st.selectbox(
                 "Velocity units",
                 ["mm/s", "cm/s", "m/s"],
@@ -747,35 +870,15 @@ with tab3:
                     )
                     proc.apply_attributes(all_export_attrs)
 
+                _entire = st.session_state.export_entire_dataset
+                _inc_velocity = _entire or st.session_state.export_include_velocity
+                _inc_echo = _entire or st.session_state.export_include_echo
+                _inc_correlation = _entire or st.session_state.export_include_correlation
+                _inc_percent_good = _entire or st.session_state.export_include_percent_good
+
                 if st.session_state.export_format == "NetCDF":
-                    if st.session_state.export_type == "Velocity Only":
-                        filename = get_prefixed_filename("velocity.nc")
-                        filepath = os.path.join(temp_dir, filename)
-
-                        proc.velocity_to_netcdf(
-                            filepath,
-                            apply_mask=st.session_state.apply_mask_export,
-                            units=st.session_state.velocity_units,
-                            include_metadata=True,
-                        )
-
-                        with open(filepath, "rb") as f:
-                            file_data = f.read()
-
-                        st.download_button(
-                            label="📥 Download Velocity NetCDF",
-                            data=file_data,
-                            file_name=filename,
-                            mime="application/x-netcdf",
-                        )
-
-                        st.success(f"✅ Velocity file generated: {filename}")
-
-                        if st.session_state.add_attributes:
-                            st.write(f"📝 Included {len(all_export_attrs)} attributes")
-
-                    else:
-                        filename = get_prefixed_filename("processed.nc")
+                    if _entire:
+                        filename = get_prefixed_filename("PRO.nc")
                         filepath = os.path.join(temp_dir, filename)
 
                         proc.to_netcdf(filepath)
@@ -784,13 +887,44 @@ with tab3:
                             file_data = f.read()
 
                         st.download_button(
-                            label="📥 Download Full Dataset NetCDF",
+                            label="📥 Download Entire Dataset NetCDF",
                             data=file_data,
                             file_name=filename,
                             mime="application/x-netcdf",
                         )
 
-                        st.success(f"✅ Full dataset file generated: {filename}")
+                        st.success(f"✅ Entire dataset file generated: {filename}")
+
+                        if st.session_state.add_attributes:
+                            st.write(f"📝 Included {len(all_export_attrs)} attributes")
+
+                    else:
+                        filename = get_prefixed_filename("PRO.nc")
+                        filepath = os.path.join(temp_dir, filename)
+
+                        proc.export_to_netcdf(
+                            filepath,
+                            include_velocity=_inc_velocity,
+                            include_echo=_inc_echo,
+                            include_correlation=_inc_correlation,
+                            include_percent_good=_inc_percent_good,
+                            apply_mask=st.session_state.apply_mask_export,
+                            velocity_units=st.session_state.velocity_units,
+                            velocity_names=get_velocity_names(),
+                            include_metadata=True,
+                        )
+
+                        with open(filepath, "rb") as f:
+                            file_data = f.read()
+
+                        st.download_button(
+                            label="📥 Download NetCDF",
+                            data=file_data,
+                            file_name=filename,
+                            mime="application/x-netcdf",
+                        )
+
+                        st.success(f"✅ Export file generated: {filename}")
 
                         if st.session_state.add_attributes:
                             st.write(f"📝 Included {len(all_export_attrs)} attributes")
@@ -798,49 +932,78 @@ with tab3:
                 else:  # CSV format
                     st.write("Generating CSV files...")
 
-                    # Get velocity data
-                    velocity = ds["velocity"].values
                     time_axis = get_time_axis()
                     depth_axis = get_depth_axis()
+                    mask_arr = (
+                        ds["mask"].values
+                        if (st.session_state.apply_mask_export and "mask" in ds.data_vars)
+                        else None
+                    )
 
-                    # Apply mask if requested
-                    if st.session_state.apply_mask_export and "mask" in ds.data_vars:
-                        mask = ds["mask"].values
-
-                    u_label, v_label, w_label, _ = get_velocity_labels()
-
-                    # Generate CSV for each velocity component
-                    for i, (beam_idx, label) in enumerate(
-                        [(0, "zonal"), (1, "meridional"), (2, "vertical")]
-                    ):
-                        vel_data = velocity[beam_idx, :, :].copy().astype(float)
-                        vel_data[vel_data == -32768] = np.nan
-
-                        if (
-                            st.session_state.apply_mask_export
-                            and "mask" in ds.data_vars
-                        ):
-                            vel_data = np.where(
-                                mask[beam_idx, :, :] == 1, np.nan, vel_data
+                    def _export_beam_csvs(var_name: str, display_name: str) -> None:
+                        """Generate one CSV per beam for a raw (beam, cell, time) variable."""
+                        if var_name not in ds.data_vars:
+                            return
+                        data = ds[var_name].values.astype(float)
+                        for beam_idx in range(data.shape[0]):
+                            comp_data = data[beam_idx, :, :].copy()
+                            comp_data[comp_data == -32768] = np.nan
+                            if mask_arr is not None and mask_arr.shape[0] > beam_idx:
+                                comp_data = np.where(
+                                    mask_arr[beam_idx, :, :] == 1, np.nan, comp_data
+                                )
+                            df = pd.DataFrame(
+                                comp_data.T, index=time_axis, columns=depth_axis
+                            )
+                            csv_data = df.to_csv().encode("utf-8")
+                            filename = get_prefixed_filename(
+                                f"{display_name}_beam{beam_idx + 1}.csv"
+                            )
+                            st.download_button(
+                                label=f"📥 Download {display_name.replace('_', ' ').title()} Beam {beam_idx + 1} CSV",
+                                data=csv_data,
+                                file_name=filename,
+                                mime="text/csv",
+                                key=f"csv_{display_name}_{beam_idx}",
                             )
 
-                        # Create DataFrame
-                        df = pd.DataFrame(
-                            vel_data.T,
-                            index=time_axis,
-                            columns=depth_axis,
-                        )
+                    # Velocity: u/v/w components (raw mm/s, unit selector applies to NetCDF only)
+                    if _inc_velocity and "velocity" in ds.data_vars:
+                        velocity = ds["velocity"].values
+                        vel_names = get_velocity_names()
+                        for beam_idx, comp_key in [(0, "u"), (1, "v"), (2, "w")]:
+                            vel_data = velocity[beam_idx, :, :].copy().astype(float)
+                            vel_data[vel_data == -32768] = np.nan
 
-                        csv_data = df.to_csv().encode("utf-8")
-                        filename = get_prefixed_filename(f"{label}_velocity.csv")
+                            if mask_arr is not None:
+                                vel_data = np.where(
+                                    mask_arr[beam_idx, :, :] == 1, np.nan, vel_data
+                                )
 
-                        st.download_button(
-                            label=f"📥 Download {label.title()} Velocity CSV",
-                            data=csv_data,
-                            file_name=filename,
-                            mime="text/csv",
-                            key=f"csv_{label}",
-                        )
+                            df = pd.DataFrame(
+                                vel_data.T,
+                                index=time_axis,
+                                columns=depth_axis,
+                            )
+
+                            csv_data = df.to_csv().encode("utf-8")
+                            comp_name = vel_names[comp_key]
+                            filename = get_prefixed_filename(f"{comp_name}.csv")
+
+                            st.download_button(
+                                label=f"📥 Download {comp_name} CSV",
+                                data=csv_data,
+                                file_name=filename,
+                                mime="text/csv",
+                                key=f"csv_{comp_key}",
+                            )
+
+                    if _inc_echo:
+                        _export_beam_csvs("echo_intensity", "echo_intensity")
+                    if _inc_correlation:
+                        _export_beam_csvs("correlation", "correlation")
+                    if _inc_percent_good:
+                        _export_beam_csvs("percent_good", "percent_good")
 
                     # Export mask as CSV
                     if "mask" in ds.data_vars:
@@ -947,10 +1110,24 @@ with st.sidebar:
     # Export settings summary
     st.write("**Export Settings:**")
     st.write(f"- Format: {st.session_state.export_format}")
-    st.write(f"- Type: {st.session_state.export_type}")
+    if st.session_state.export_entire_dataset:
+        st.write("- Components: Entire Dataset")
+    else:
+        _selected_components = [
+            name
+            for name, flag in [
+                ("Velocity", st.session_state.export_include_velocity),
+                ("Echo Intensity", st.session_state.export_include_echo),
+                ("Correlation", st.session_state.export_include_correlation),
+                ("Percent Good", st.session_state.export_include_percent_good),
+            ]
+            if flag
+        ]
+        st.write(f"- Components: {', '.join(_selected_components) or 'None selected'}")
     st.write(f"- Apply Mask: {'✅' if st.session_state.apply_mask_export else '❌'}")
-    if st.session_state.export_type == "Velocity Only":
-        st.write(f"- Units: {st.session_state.velocity_units}")
+    if not st.session_state.export_entire_dataset and st.session_state.export_include_velocity:
+        st.write(f"- Velocity Units: {st.session_state.velocity_units}")
+        st.write(f"- Velocity Naming: {st.session_state.velocity_naming_style}")
     n_attrs_total = (
         len([v for v in st.session_state.write_std_attributes.values() if v])
         + len([v for v in st.session_state.get("raw_custom_attributes", {}).values() if v])

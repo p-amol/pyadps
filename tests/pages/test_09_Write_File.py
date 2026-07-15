@@ -186,6 +186,66 @@ def _make_proc(ds: Optional[xr.Dataset] = None) -> MagicMock:
     def _to_nc(filepath, **kw):
         ds.to_netcdf(filepath)
 
+    # export_to_netcdf writes a minimal real file containing exactly the
+    # requested components, so the download button gets real data and
+    # tests can assert on which variables ended up in the file.
+    def _export_to_nc(
+        filepath,
+        include_velocity=True,
+        include_echo=False,
+        include_correlation=False,
+        include_percent_good=False,
+        apply_mask=True,
+        velocity_units="cm/s",
+        velocity_names=None,
+        **kw,
+    ):
+        data_vars: Dict[str, Any] = {}
+        if include_velocity:
+            vel = ds["velocity"].values.astype(float) * 0.1
+            names = velocity_names or {
+                "u": "zonal_velocity",
+                "v": "meridional_velocity",
+                "w": "vertical_velocity",
+            }
+            data_vars[names["u"]] = (["cell", "time"], vel[0])
+            data_vars[names["v"]] = (["cell", "time"], vel[1])
+            data_vars[names["w"]] = (["cell", "time"], vel[2])
+        if include_echo and "echo_intensity" in ds.data_vars:
+            data_vars["echo_intensity"] = (
+                ["beam", "cell", "time"],
+                ds["echo_intensity"].values,
+            )
+        if include_correlation and "correlation" in ds.data_vars:
+            data_vars["correlation"] = (
+                ["beam", "cell", "time"],
+                ds["correlation"].values,
+            )
+        if include_percent_good and "percent_good" in ds.data_vars:
+            data_vars["percent_good"] = (
+                ["beam", "cell", "time"],
+                ds["percent_good"].values,
+            )
+        ds_out = xr.Dataset(
+            data_vars,
+            coords={
+                "time": ds["time"].values,
+                "cell": ds["cell"].values,
+                "beam": ds["beam"].values,
+            },
+        )
+        ds_out.attrs["components_exported"] = ", ".join(
+            name
+            for name, flag in [
+                ("velocity", include_velocity),
+                ("echo_intensity", include_echo),
+                ("correlation", include_correlation),
+                ("percent_good", include_percent_good),
+            ]
+            if flag
+        )
+        ds_out.to_netcdf(filepath)
+
     # apply_attributes mirrors ProcessedDataset.apply_attributes: writes
     # straight into dataset.attrs, so downstream assertions on
     # proc.dataset.attrs reflect what the page actually requested.
@@ -197,6 +257,7 @@ def _make_proc(ds: Optional[xr.Dataset] = None) -> MagicMock:
 
     proc.velocity_to_netcdf.side_effect = _vel_to_nc
     proc.to_netcdf.side_effect = _to_nc
+    proc.export_to_netcdf.side_effect = _export_to_nc
     proc.export_config_string.return_value = "[FileSettings]\ninput_file_name = test.pd0\n"
 
     return proc
@@ -209,7 +270,15 @@ def _full_ss(proc: MagicMock, **overrides) -> Dict[str, Any]:
         "write_initialized": True,
         "file_prefix": "ADCP",
         "export_format": "NetCDF",
-        "export_type": "Velocity Only",
+        "export_entire_dataset": False,
+        "export_include_velocity": True,
+        "export_include_echo": False,
+        "export_include_correlation": False,
+        "export_include_percent_good": False,
+        "velocity_naming_style": "Short (u, v, w)",
+        "velocity_name_u": "zonal_velocity",
+        "velocity_name_v": "meridional_velocity",
+        "velocity_name_w": "vertical_velocity",
         "apply_mask_export": True,
         "velocity_units": "cm/s",
         "add_attributes": False,
@@ -381,7 +450,12 @@ class TestSessionStateInit:
         assert not at.exception
         assert at.session_state["write_initialized"] is True
         assert at.session_state["export_format"] == "NetCDF"
-        assert at.session_state["export_type"] == "Velocity Only"
+        assert at.session_state["export_entire_dataset"] is False
+        assert at.session_state["export_include_velocity"] is True
+        assert at.session_state["export_include_echo"] is False
+        assert at.session_state["export_include_correlation"] is False
+        assert at.session_state["export_include_percent_good"] is False
+        assert at.session_state["velocity_naming_style"] == "Short (u, v, w)"
         assert at.session_state["apply_mask_export"] is True
         assert at.session_state["velocity_units"] == "cm/s"
         assert at.session_state["add_attributes"] is False
@@ -689,20 +763,46 @@ class TestTab3ExportNetCDFVelocity:
         at = _run(_full_ss(proc))
         assert any(r.key == "export_format_radio" for r in at.radio)
 
-    def test_export_type_radio_present(self, proc):
+    def test_entire_dataset_checkbox_present(self, proc):
         at = _run(_full_ss(proc))
-        assert any(r.key == "export_type_radio" for r in at.radio)
+        assert any("Entire Dataset" in c.label for c in at.checkbox)
+
+    def test_component_checkboxes_present(self, proc):
+        at = _run(_full_ss(proc))
+        labels = [c.label for c in at.checkbox]
+        assert any("Velocity" in l for l in labels)
+        assert any("Echo Intensity" in l for l in labels)
+        assert any("Correlation" in l for l in labels)
+        assert any("Percent Good" in l for l in labels)
+
+    def test_velocity_selected_by_default(self, proc):
+        at = _run(_full_ss(proc))
+        cb = next(c for c in at.checkbox if c.label == "Velocity")
+        assert cb.value is True
+
+    def test_other_components_unselected_by_default(self, proc):
+        at = _run(_full_ss(proc))
+        assert next(c for c in at.checkbox if "Echo Intensity" in c.label).value is False
+        assert next(c for c in at.checkbox if c.label == "Correlation").value is False
+        assert next(c for c in at.checkbox if c.label == "Percent Good").value is False
 
     def test_velocity_units_selectbox_shown_for_velocity_only(self, proc):
-        ss = _full_ss(proc, export_type="Velocity Only")
+        ss = _full_ss(proc, export_include_velocity=True)
         at = _run(ss)
         assert any(s.key == "velocity_units_select" for s in at.selectbox)
 
-    def test_velocity_units_hidden_for_full_dataset(self, proc):
-        """Switching export_type radio to Full Dataset hides velocity_units selectbox."""
+    def test_velocity_units_hidden_for_entire_dataset(self, proc):
+        """Checking Entire Dataset hides velocity_units selectbox."""
         at = _run(_full_ss(proc))
-        export_type_radio = next(r for r in at.radio if r.key == "export_type_radio")
-        export_type_radio.set_value("Full Dataset").run()
+        entire_cb = next(c for c in at.checkbox if "Entire Dataset" in c.label)
+        entire_cb.check().run()
+        assert not at.exception
+        assert not any(s.key == "velocity_units_select" for s in at.selectbox)
+
+    def test_velocity_units_hidden_when_velocity_unchecked(self, proc):
+        at = _run(_full_ss(proc))
+        vel_cb = next(c for c in at.checkbox if c.label == "Velocity")
+        vel_cb.uncheck().run()
         assert not at.exception
         assert not any(s.key == "velocity_units_select" for s in at.selectbox)
 
@@ -712,7 +812,6 @@ class TestTab3ExportNetCDFVelocity:
         ss = _full_ss(
             proc,
             export_format="NetCDF",
-            export_type="Velocity Only",
             apply_mask_export=True,
             velocity_units="cm/s",
             add_attributes=False,
@@ -720,7 +819,10 @@ class TestTab3ExportNetCDFVelocity:
         at = _run(ss)
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
-        proc.velocity_to_netcdf.assert_called_once()
+        proc.export_to_netcdf.assert_called_once()
+        _, kwargs = proc.export_to_netcdf.call_args
+        assert kwargs.get("include_velocity") is True
+        assert kwargs.get("include_echo") is False
 
     def test_generate_netcdf_velocity_with_attrs(self):
         ds = _make_ds()
@@ -728,14 +830,13 @@ class TestTab3ExportNetCDFVelocity:
         ss = _full_ss(
             proc,
             export_format="NetCDF",
-            export_type="Velocity Only",
             add_attributes=True,
             write_custom_attributes={"cruise_number": "CR001", "ship_name": "RV Test"},
         )
         at = _run(ss)
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
-        proc.velocity_to_netcdf.assert_called_once()
+        proc.export_to_netcdf.assert_called_once()
         # Custom attrs should have been written to dataset.attrs
         assert proc.dataset.attrs.get("cruise_number") == "CR001"
 
@@ -743,32 +844,32 @@ class TestTab3ExportNetCDFVelocity:
         """Set units to mm/s via selectbox interaction before clicking export."""
         ds = _make_ds()
         proc = _make_proc(ds)
-        at = _run(_full_ss(proc, export_format="NetCDF", export_type="Velocity Only"))
+        at = _run(_full_ss(proc, export_format="NetCDF"))
         units_sb = next(s for s in at.selectbox if s.key == "velocity_units_select")
         units_sb.set_value("mm/s").run()
         assert not at.exception
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
-        _, kwargs = proc.velocity_to_netcdf.call_args
-        assert kwargs.get("units") == "mm/s"
+        _, kwargs = proc.export_to_netcdf.call_args
+        assert kwargs.get("velocity_units") == "mm/s"
 
     def test_generate_netcdf_m_per_s_units(self):
         """Set units to m/s via selectbox interaction before clicking export."""
         ds = _make_ds()
         proc = _make_proc(ds)
-        at = _run(_full_ss(proc, export_format="NetCDF", export_type="Velocity Only"))
+        at = _run(_full_ss(proc, export_format="NetCDF"))
         units_sb = next(s for s in at.selectbox if s.key == "velocity_units_select")
         units_sb.set_value("m/s").run()
         assert not at.exception
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
-        _, kwargs = proc.velocity_to_netcdf.call_args
-        assert kwargs.get("units") == "m/s"
+        _, kwargs = proc.export_to_netcdf.call_args
+        assert kwargs.get("velocity_units") == "m/s"
 
     def test_success_message_shown_after_export(self):
         ds = _make_ds()
         proc = _make_proc(ds)
-        ss = _full_ss(proc, export_format="NetCDF", export_type="Velocity Only")
+        ss = _full_ss(proc, export_format="NetCDF")
         at = _run(ss)
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
@@ -780,7 +881,6 @@ class TestTab3ExportNetCDFVelocity:
         ss = _full_ss(
             proc,
             export_format="NetCDF",
-            export_type="Velocity Only",
             add_attributes=True,
             write_custom_attributes={"cruise_number": "CR001", "ship_name": "RV Test"},
         )
@@ -795,7 +895,6 @@ class TestTab3ExportNetCDFVelocity:
         ss = _full_ss(
             proc,
             export_format="NetCDF",
-            export_type="Velocity Only",
             add_attributes=True,
             write_custom_attributes={"cruise_number": "", "ship_name": "RV Test"},
         )
@@ -809,6 +908,78 @@ class TestTab3ExportNetCDFVelocity:
 
 
 # ===========================================================================
+# CLASS 5b — Tab 3: Export — Velocity Naming
+# ===========================================================================
+
+
+class TestTab3VelocityNaming:
+    def test_naming_style_radio_present(self, proc):
+        at = _run(_full_ss(proc))
+        assert any(
+            r.key == "velocity_naming_style_radio" for r in at.radio
+        )
+
+    def test_naming_style_hidden_for_entire_dataset(self, proc):
+        at = _run(_full_ss(proc))
+        entire_cb = next(c for c in at.checkbox if "Entire Dataset" in c.label)
+        entire_cb.check().run()
+        assert not any(r.key == "velocity_naming_style_radio" for r in at.radio)
+
+    def test_default_naming_is_short(self, proc):
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        at = _run(_full_ss(proc, export_format="NetCDF"))
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        _, kwargs = proc.export_to_netcdf.call_args
+        assert kwargs.get("velocity_names") == {"u": "u", "v": "v", "w": "w"}
+
+    def test_cf_style_naming_style(self, proc):
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        at = _run(_full_ss(proc, export_format="NetCDF"))
+        radio = next(r for r in at.radio if r.key == "velocity_naming_style_radio")
+        radio.set_value("CF-style").run()
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        _, kwargs = proc.export_to_netcdf.call_args
+        assert kwargs.get("velocity_names") == {
+            "u": "zonal_velocity",
+            "v": "meridional_velocity",
+            "w": "vertical_velocity",
+        }
+
+    def test_custom_naming_style_shows_text_inputs(self, proc):
+        at = _run(_full_ss(proc))
+        radio = next(r for r in at.radio if r.key == "velocity_naming_style_radio")
+        at = radio.set_value("Custom").run()
+        assert not at.exception
+        labels = [t.label for t in at.text_input]
+        assert any("U" in l for l in labels)
+        assert any("V" in l for l in labels)
+        assert any("W" in l for l in labels)
+
+    def test_custom_naming_style_applied(self, proc):
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        ss = _full_ss(
+            proc,
+            export_format="NetCDF",
+            velocity_naming_style="Custom",
+            velocity_name_u="u_vel",
+            velocity_name_v="v_vel",
+            velocity_name_w="w_vel",
+        )
+        at = _run(ss)
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        _, kwargs = proc.export_to_netcdf.call_args
+        assert kwargs.get("velocity_names") == {
+            "u": "u_vel",
+            "v": "v_vel",
+            "w": "w_vel",
+        }
+
+
+# ===========================================================================
 # CLASS 6 — Tab 3: Export — NetCDF Full Dataset
 # ===========================================================================
 
@@ -818,14 +989,13 @@ class TestTab3ExportNetCDFFull:
         ds = _make_ds()
         proc = _make_proc(ds)
         at = _run(_full_ss(proc, add_attributes=False))
-        # Switch export_type radio to Full Dataset
-        next(r for r in at.radio if r.key == "export_type_radio").set_value(
-            "Full Dataset"
-        ).run()
+        # Check the Entire Dataset checkbox
+        next(c for c in at.checkbox if "Entire Dataset" in c.label).check().run()
         assert not at.exception
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
         proc.to_netcdf.assert_called_once()
+        proc.export_to_netcdf.assert_not_called()
 
     def test_generate_netcdf_full_with_attrs(self):
         ds = _make_ds()
@@ -836,9 +1006,7 @@ class TestTab3ExportNetCDFFull:
             write_custom_attributes={"project_number": "P42", "contact": "foo@bar.com"},
         )
         at = _run(ss)
-        next(r for r in at.radio if r.key == "export_type_radio").set_value(
-            "Full Dataset"
-        ).run()
+        next(c for c in at.checkbox if "Entire Dataset" in c.label).check().run()
         assert not at.exception
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
@@ -849,9 +1017,7 @@ class TestTab3ExportNetCDFFull:
         ds = _make_ds()
         proc = _make_proc(ds)
         at = _run(_full_ss(proc))
-        next(r for r in at.radio if r.key == "export_type_radio").set_value(
-            "Full Dataset"
-        ).run()
+        next(c for c in at.checkbox if "Entire Dataset" in c.label).check().run()
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
         assert any(at.success)
@@ -865,11 +1031,17 @@ class TestTab3ExportNetCDFFull:
             write_custom_attributes={"cruise_number": "CR42", "ship_name": "RV Sea"},
         )
         at = _run(ss)
-        next(r for r in at.radio if r.key == "export_type_radio").set_value(
-            "Full Dataset"
-        ).run()
+        next(c for c in at.checkbox if "Entire Dataset" in c.label).check().run()
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
+
+    def test_entire_dataset_checks_all_component_boxes(self, proc):
+        at = _run(_full_ss(proc))
+        next(c for c in at.checkbox if "Entire Dataset" in c.label).check().run()
+        assert next(c for c in at.checkbox if c.label == "Velocity").value is True
+        assert next(c for c in at.checkbox if "Echo Intensity" in c.label).value is True
+        assert next(c for c in at.checkbox if c.label == "Correlation").value is True
+        assert next(c for c in at.checkbox if c.label == "Percent Good").value is True
 
     def test_file_prefix_applied_to_filename(self):
         """get_prefixed_filename uses the file_prefix from session state."""
@@ -878,21 +1050,43 @@ class TestTab3ExportNetCDFFull:
         ss = _full_ss(
             proc,
             export_format="NetCDF",
-            export_type="Velocity Only",
             file_prefix="CRUISE01",
         )
         at = _run(ss)
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
-        filepath = proc.velocity_to_netcdf.call_args[0][0]
+        filepath = proc.export_to_netcdf.call_args[0][0]
         assert "CRUISE01" in filepath
+
+    def test_filename_suffix_is_pro(self):
+        """Selective-export NetCDF filename ends with _PRO.nc."""
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        ss = _full_ss(proc, export_format="NetCDF", file_prefix="CRUISE01")
+        at = _run(ss)
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        filepath = proc.export_to_netcdf.call_args[0][0]
+        assert filepath.endswith("CRUISE01_PRO.nc")
+
+    def test_entire_dataset_filename_suffix_is_pro(self):
+        """Entire Dataset NetCDF filename also ends with _PRO.nc."""
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        ss = _full_ss(proc, export_format="NetCDF", file_prefix="CRUISE01")
+        at = _run(ss)
+        next(c for c in at.checkbox if "Entire Dataset" in c.label).check().run()
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        filepath = proc.to_netcdf.call_args[0][0]
+        assert filepath.endswith("CRUISE01_PRO.nc")
 
     def test_empty_prefix_filename_no_prefix(self):
         """When file_prefix is empty, filename has no prefix prepended."""
         ds = _make_ds()
         proc = _make_proc(ds)
         ss = _full_ss(
-            proc, export_format="NetCDF", export_type="Velocity Only", file_prefix=""
+            proc, export_format="NetCDF", file_prefix=""
         )
         at = _run(ss)
         next(b for b in at.button if b.key == "generate_export").click().run()
@@ -973,11 +1167,11 @@ class TestTab3ExportCSV:
         assert any("CSV" in (s.value or "") for s in at.success)
 
     def test_export_error_shows_error_widget(self):
-        """If velocity_to_netcdf raises, page catches it and calls st.error."""
+        """If export_to_netcdf raises, page catches it and calls st.error."""
         ds = _make_ds()
         proc = _make_proc(ds)
-        proc.velocity_to_netcdf.side_effect = RuntimeError("disk full")
-        ss = _full_ss(proc, export_format="NetCDF", export_type="Velocity Only")
+        proc.export_to_netcdf.side_effect = RuntimeError("disk full")
+        ss = _full_ss(proc, export_format="NetCDF")
         at = _run(ss)
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
@@ -990,7 +1184,6 @@ class TestTab3ExportCSV:
         ss = _full_ss(
             proc,
             export_format="NetCDF",
-            export_type="Velocity Only",
             add_attributes=False,
         )
         at = _run(ss)
@@ -1011,6 +1204,79 @@ class TestTab3ExportCSV:
         assert not at.exception
         success_vals = [s.value or "" for s in at.success]
         assert any("1" in v and "included" in v.lower() for v in success_vals)
+
+    def test_csv_uses_resolved_velocity_name_in_filename(self):
+        """CSV filenames use the resolved velocity name, not hardcoded
+        zonal/meridional/vertical labels."""
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        ss = _full_ss(
+            proc,
+            velocity_naming_style="Short (u, v, w)",
+        )
+        at = _run(ss)
+        next(r for r in at.radio if r.key == "export_format_radio").set_value(
+            "CSV"
+        ).run()
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        dl_labels = [d.proto.label for d in at.get("download_button")]
+        assert any(l == "📥 Download u CSV" for l in dl_labels)
+        assert any(l == "📥 Download v CSV" for l in dl_labels)
+        assert any(l == "📥 Download w CSV" for l in dl_labels)
+
+    def test_csv_echo_intensity_generates_per_beam_downloads(self):
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        ss = _full_ss(
+            proc,
+            export_include_velocity=False,
+            export_include_echo=True,
+        )
+        at = _run(ss)
+        next(r for r in at.radio if r.key == "export_format_radio").set_value(
+            "CSV"
+        ).run()
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        dl_labels = [d.proto.label for d in at.get("download_button")]
+        assert any("Echo Intensity Beam 1" in l for l in dl_labels)
+        assert any("Echo Intensity Beam 4" in l for l in dl_labels)
+
+    def test_csv_correlation_and_percent_good_selectable(self):
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        ss = _full_ss(
+            proc,
+            export_include_velocity=False,
+            export_include_correlation=True,
+            export_include_percent_good=True,
+        )
+        at = _run(ss)
+        next(r for r in at.radio if r.key == "export_format_radio").set_value(
+            "CSV"
+        ).run()
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        dl_labels = [d.proto.label for d in at.get("download_button")]
+        assert any("Correlation Beam 1" in l for l in dl_labels)
+        assert any("Percent Good Beam 1" in l for l in dl_labels)
+
+    def test_csv_entire_dataset_exports_all_components(self):
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        at = _run(_full_ss(proc))
+        next(c for c in at.checkbox if "Entire Dataset" in c.label).check().run()
+        next(r for r in at.radio if r.key == "export_format_radio").set_value(
+            "CSV"
+        ).run()
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        dl_labels = [d.proto.label for d in at.get("download_button")]
+        assert any(l == "📥 Download u CSV" for l in dl_labels)
+        assert any("Echo Intensity Beam 1" in l for l in dl_labels)
+        assert any("Correlation Beam 1" in l for l in dl_labels)
+        assert any("Percent Good Beam 1" in l for l in dl_labels)
 
 
 # ===========================================================================
@@ -1057,7 +1323,7 @@ class TestTab4ConfigFile:
         assert not at.exception
 
     def test_config_velocity_only_section(self, proc):
-        ss = _full_ss(proc, export_type="Velocity Only", velocity_units="m/s")
+        ss = _full_ss(proc, export_include_velocity=True, velocity_units="m/s")
         at = _run(ss)
         cb = next(c for c in at.checkbox if c.key == "generate_config_checkbox")
         cb.check().run()
@@ -1065,7 +1331,7 @@ class TestTab4ConfigFile:
         assert not at.exception
 
     def test_config_full_dataset_type(self, proc):
-        ss = _full_ss(proc, export_type="Full Dataset")
+        ss = _full_ss(proc, export_entire_dataset=True)
         at = _run(ss)
         cb = next(c for c in at.checkbox if c.key == "generate_config_checkbox")
         cb.check().run()
@@ -1183,14 +1449,18 @@ class TestSidebar:
         assert not at.exception
 
     def test_sidebar_shows_velocity_units_for_velocity_only(self, proc):
-        ss = _full_ss(proc, export_type="Velocity Only", velocity_units="m/s")
+        ss = _full_ss(proc, export_include_velocity=True, velocity_units="m/s")
         at = _run(ss)
         assert not at.exception
+        markdown_text = " ".join(m.value or "" for m in at.sidebar.markdown)
+        assert "m/s" in markdown_text
 
-    def test_sidebar_hides_velocity_units_for_full_dataset(self, proc):
-        ss = _full_ss(proc, export_type="Full Dataset")
+    def test_sidebar_hides_velocity_units_for_entire_dataset(self, proc):
+        ss = _full_ss(proc, export_entire_dataset=True)
         at = _run(ss)
         assert not at.exception
+        markdown_text = " ".join(m.value or "" for m in at.sidebar.markdown)
+        assert "Velocity Units" not in markdown_text
 
     def test_sidebar_earth_coords_label(self, proc):
         at = _run(_full_ss(proc))
@@ -1269,7 +1539,12 @@ class TestHelperFunctions:
                     "processor": proc_mod,
                     "write_initialized": True,
                     "export_format": "NetCDF",
-                    "export_type": "Velocity Only",
+                    "export_entire_dataset": False,
+                    "export_include_velocity": True,
+                    "export_include_echo": False,
+                    "export_include_correlation": False,
+                    "export_include_percent_good": False,
+                    "velocity_naming_style": "CF-style",
                     "apply_mask_export": True,
                     "velocity_units": "cm/s",
                     "add_attributes": False,
@@ -1547,7 +1822,12 @@ class TestPlottingFunctions:
                     "processor": proc_mod,
                     "write_initialized": True,
                     "export_format": "NetCDF",
-                    "export_type": "Velocity Only",
+                    "export_entire_dataset": False,
+                    "export_include_velocity": True,
+                    "export_include_echo": False,
+                    "export_include_correlation": False,
+                    "export_include_percent_good": False,
+                    "velocity_naming_style": "CF-style",
                     "apply_mask_export": True,
                     "velocity_units": "cm/s",
                     "add_attributes": False,
@@ -1785,7 +2065,12 @@ class TestCoverageGaps:
                     "processor": proc_mod,
                     "write_initialized": True,
                     "export_format": "NetCDF",
-                    "export_type": "Velocity Only",
+                    "export_entire_dataset": False,
+                    "export_include_velocity": True,
+                    "export_include_echo": False,
+                    "export_include_correlation": False,
+                    "export_include_percent_good": False,
+                    "velocity_naming_style": "CF-style",
                     "apply_mask_export": True,
                     "velocity_units": "cm/s",
                     "add_attributes": False,
@@ -1918,7 +2203,12 @@ def _make_page_module(inject_pyadps_mock):
                 "processor": proc_mod,
                 "write_initialized": True,
                 "export_format": "NetCDF",
-                "export_type": "Velocity Only",
+                "export_entire_dataset": False,
+                "export_include_velocity": True,
+                "export_include_echo": False,
+                "export_include_correlation": False,
+                "export_include_percent_good": False,
+                "velocity_naming_style": "CF-style",
                 "apply_mask_export": True,
                 "velocity_units": "cm/s",
                 "add_attributes": False,

@@ -35,6 +35,8 @@ All pipeline methods return `self`, enabling method chaining.
 |--------|-------------|
 | `to_netcdf(filepath)` | Finalise and save the full dataset |
 | `velocity_to_netcdf(filepath, units='cm/s')` | Save u/v/w velocity components only |
+| `get_export_dataset(include_velocity=True, include_echo=False, ...)` | Build a dataset with any combination of velocity/echo/correlation/percent good |
+| `export_to_netcdf(filepath, include_velocity=True, include_echo=False, ...)` | Save any combination of velocity/echo/correlation/percent good to one file |
 | `save_netcdf(config, ...)` | Finalise and save using paths from a config |
 | `export_config(filepath)` | Save all applied settings to `config.ini` |
 | `export_config_string()` | Return settings as an INI-formatted string |
@@ -69,6 +71,39 @@ result = (
 
 result.to_netcdf('processed.nc')
 ```
+
+## Selective Export
+
+`export_to_netcdf()` writes any combination of velocity, echo intensity,
+correlation, and percent good to a single file — the processed-data
+equivalent of the raw-file page's "Select Data Components to Download".
+Velocity is split into separate u/v/w variables; the other components keep
+their native (beam, cell/depth, time) shape.
+
+```python
+# Velocity + echo intensity only
+proc.export_to_netcdf('export.nc', include_velocity=True, include_echo=True)
+
+# Every component
+proc.export_to_netcdf(
+    'export.nc',
+    include_velocity=True,
+    include_echo=True,
+    include_correlation=True,
+    include_percent_good=True,
+)
+
+# Short u/v/w names instead of the CF-style defaults (zonal_velocity, etc.)
+# — CF Convention governs attribute values (standard_name, units), not
+# variable names, so this stays fully CF-compliant either way.
+proc.export_to_netcdf(
+    'export.nc',
+    velocity_names={'u': 'u', 'v': 'v', 'w': 'w'},
+)
+```
+
+Use `get_export_dataset(...)` instead to get the `xarray.Dataset` back
+without writing a file.
 
 ## Config-Based Workflow
 

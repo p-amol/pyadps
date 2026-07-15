@@ -1568,6 +1568,126 @@ class TestGetVelocityDatasetCoverageGaps:
         assert u.dims == ("row", "time")
 
 
+class TestGetExportDataset:
+    """Tests for get_export_dataset method."""
+
+    def test_default_is_velocity_only(self, sample_dataset):
+        proc = ProcessedDataset(sample_dataset)
+        result = proc.get_export_dataset()
+        assert set(result.data_vars) == {
+            "zonal_velocity",
+            "meridional_velocity",
+            "vertical_velocity",
+        }
+
+    def test_raises_when_nothing_selected(self, sample_dataset):
+        proc = ProcessedDataset(sample_dataset)
+        with pytest.raises(ValueError, match="At least one component"):
+            proc.get_export_dataset(include_velocity=False)
+
+    def test_echo_only(self, sample_dataset):
+        proc = ProcessedDataset(sample_dataset)
+        result = proc.get_export_dataset(include_velocity=False, include_echo=True)
+        assert set(result.data_vars) == {"echo_intensity"}
+        assert result["echo_intensity"].dims == ("beam", "cell", "time")
+
+    def test_correlation_only(self, sample_dataset):
+        proc = ProcessedDataset(sample_dataset)
+        result = proc.get_export_dataset(
+            include_velocity=False, include_correlation=True
+        )
+        assert set(result.data_vars) == {"correlation"}
+
+    def test_percent_good_only(self, sample_dataset):
+        proc = ProcessedDataset(sample_dataset)
+        result = proc.get_export_dataset(
+            include_velocity=False, include_percent_good=True
+        )
+        assert set(result.data_vars) == {"percent_good"}
+
+    def test_all_components_combined(self, sample_dataset):
+        proc = ProcessedDataset(sample_dataset)
+        result = proc.get_export_dataset(
+            include_velocity=True,
+            include_echo=True,
+            include_correlation=True,
+            include_percent_good=True,
+        )
+        assert set(result.data_vars) == {
+            "zonal_velocity",
+            "meridional_velocity",
+            "vertical_velocity",
+            "echo_intensity",
+            "correlation",
+            "percent_good",
+        }
+
+    def test_velocity_names_applied_within_combined_export(self, sample_dataset):
+        proc = ProcessedDataset(sample_dataset)
+        result = proc.get_export_dataset(
+            include_velocity=True,
+            include_echo=True,
+            velocity_names={"u": "u", "v": "v", "w": "w"},
+        )
+        assert {"u", "v", "w", "echo_intensity"} <= set(result.data_vars)
+
+    def test_mask_applied_to_echo(self, sample_dataset_with_mask):
+        proc = ProcessedDataset(sample_dataset_with_mask)
+        result = proc.get_export_dataset(
+            include_velocity=False, include_echo=True, apply_mask=True
+        )
+        # sample_dataset_with_mask masks the first cell across all beams
+        assert np.all(np.isnan(result["echo_intensity"].isel(cell=0).values))
+
+    def test_mask_not_applied_when_disabled(self, sample_dataset_with_mask):
+        proc = ProcessedDataset(sample_dataset_with_mask)
+        result = proc.get_export_dataset(
+            include_velocity=False, include_echo=True, apply_mask=False
+        )
+        assert not np.any(np.isnan(result["echo_intensity"].values))
+
+
+class TestExportToNetcdf:
+    """Tests for export_to_netcdf method."""
+
+    def test_creates_file(self, sample_dataset, temp_dir):
+        proc = ProcessedDataset(sample_dataset)
+        filepath = temp_dir / "export.nc"
+        proc.export_to_netcdf(filepath)
+        assert filepath.exists()
+
+    def test_combined_components_written(self, sample_dataset, temp_dir):
+        proc = ProcessedDataset(sample_dataset)
+        filepath = temp_dir / "export.nc"
+        proc.export_to_netcdf(
+            filepath, include_velocity=True, include_echo=True, include_correlation=True
+        )
+        ds_read = xr.open_dataset(filepath)
+        assert "zonal_velocity" in ds_read.data_vars
+        assert "echo_intensity" in ds_read.data_vars
+        assert "correlation" in ds_read.data_vars
+        assert "percent_good" not in ds_read.data_vars
+        ds_read.close()
+
+    def test_components_exported_attr(self, sample_dataset, temp_dir):
+        proc = ProcessedDataset(sample_dataset)
+        filepath = temp_dir / "export.nc"
+        proc.export_to_netcdf(filepath, include_velocity=True, include_percent_good=True)
+        ds_read = xr.open_dataset(filepath)
+        assert "velocity" in ds_read.attrs["components_exported"]
+        assert "percent_good" in ds_read.attrs["components_exported"]
+        ds_read.close()
+
+    def test_no_metadata(self, sample_dataset, temp_dir):
+        proc = ProcessedDataset(sample_dataset)
+        filepath = temp_dir / "export.nc"
+        proc.export_to_netcdf(filepath, include_metadata=False)
+        ds_read = xr.open_dataset(filepath)
+        assert "title" not in ds_read.attrs
+        assert ds_read.attrs["Conventions"] == "CF-1.8"
+        ds_read.close()
+
+
 # ============================================================================
 # UTILITY METHOD TESTS
 # ============================================================================

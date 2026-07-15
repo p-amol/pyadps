@@ -2,18 +2,41 @@
 
 **Professional Python package for RDI ADCP data processing**
 
-pyadps provides tools for reading, quality controlling, and processing 
-Acoustic Doppler Current Profiler (ADCP) data from RDI instruments.
+pyadps provides tools for reading, quality controlling, and processing
+Acoustic Doppler Current Profiler (ADCP) data — designed for Teledyne RDI
+ADCPs recording in the PD0 binary format. PD0 files from other RDI models,
+such as Ocean Surveyor and DVS, can also be read; take extra care when
+processing that data, since the pipeline's defaults were tuned against
+Workhorse deployments.
+
+## Background
+
+`pyadps` was built to process PD0 files from moored ADCP deployments that
+lack navigation (GPS) data. It was developed primarily for the COSINE and
+ECO-IOD mooring programs in the north Indian Ocean, which together span
+over 600 ADCP deployments — a scale that made it worth standardizing and
+documenting the processing steps rather than repeating ad hoc scripts for
+each dataset. The processing pipeline is designed to encourage a close
+look at the quality-control results before the velocity output is treated
+as final. The package currently processes only data recorded in Earth
+coordinates; Beam-coordinate support and the associated coordinate
+transformation are planned for a future release.
+
+This version of the package was developed with extensive use of Claude
+(Anthropic) as a coding assistant.
 
 ## Features
 
 - Read RDI binary files (PD0 format) with xarray integration
-- Comprehensive quality control tests
-- Sensor health diagnostics
-- Velocity validation
-- Interactive web interface (Streamlit)
-- Batch processing support
+- Robust reading of corrupted or truncated binary files, with per-ensemble
+  checksum verification and partial-data recovery
+- Six-step quality control pipeline: time axis correction, sensor health,
+  signal quality, profile operations, and velocity checks
+- Interactive web interface (Streamlit) — no Python knowledge required
+- Batch processing and multi-file combining
 - CF Convention compliant output
+- Reproducible processing via `config.ini` export
+- Extensively tested: 4,200+ automated tests (`pytest`), 98% coverage
 
 ## Quick Example
 

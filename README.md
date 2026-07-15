@@ -11,9 +11,16 @@
 - **Source code:** <https://github.com/p-amol/pyadps>
 - **Bug reports:** <https://github.com/p-amol/pyadps/issues>
 
+## Background
+
+`pyadps` was built to process Teledyne RDI PD0 files from moored ADCP deployments that lack navigation (GPS) data. It was developed primarily for the COSINE and ECO-IOD mooring programs in the north Indian Ocean, which together span over 600 ADCP deployments — a scale that made it worth standardizing and documenting the processing steps rather than repeating ad hoc scripts for each dataset. The accompanying web interface lets users with limited programming experience run the same pipeline, while the processing workflow still requires a close look at the quality-control results before the velocity output is treated as final. The package currently processes only data recorded in Earth coordinates; Beam-coordinate support and the associated coordinate transformation are planned for a future release.
+
+This version of the package was developed with extensive use of Claude (Anthropic) as a coding assistant.
+
 ## Features
 
 - Read RDI binary files (PD0 format) as `xarray.Dataset`
+- Robust reading of corrupted or truncated binary files, with per-ensemble checksum verification and partial-data recovery
 - Six-step quality control pipeline (time axis, sensor health, signal quality, profile operations, velocity checks)
 - Interactive web interface (Streamlit) — no Python knowledge required
 - Batch processing and multi-file combining
@@ -82,8 +89,9 @@ ds.to_netcdf('raw_output.nc')
 ```python
 from pyadps.processing import ProcessedDataset
 
+proc = ProcessedDataset(ds)
 result = (
-    ProcessedDataset(ds)
+    proc
     .apply_time_axis(snap=True, snap_freq='h')
     .apply_sensor_health(roll=True, roll_threshold=15.0)
     .apply_signal_quality(correlation=64, echo_intensity=40,

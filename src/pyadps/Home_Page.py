@@ -19,7 +19,7 @@ def main():
   
     `pyadps` is a Python package for processing moored Acoustic Doppler Current Profiler (ADCP) data. It provides various functionalities such as data reading, quality control tests, NetCDF file creation, and visualization.
 
-    This software offers both a graphical interface (Streamlit) for those new to Python and direct Python package access for experienced users. Please note that pyadps is primarily designed for Teledyne RDI workhorse ADCPs. Other company's ADCP files are not compatible, and while some other RDI models may work, they might require additional considerations.
+    This software offers both a graphical interface (Streamlit) for those new to Python and direct Python package access for experienced users. Please note that pyadps reads PD0 files from Teledyne RDI instruments; other manufacturers' ADCP files are not compatible. PD0 files from Workhorse, Ocean Surveyor, and DVS ADCPs can all be read, but take extra care when processing data from non-Workhorse models, since the pipeline's defaults were tuned against Workhorse deployments.
 
     * Documentation: https://pyadps.readthedocs.io
     * Source code: https://github.com/p-amol/pyadps

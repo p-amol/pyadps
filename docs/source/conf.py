@@ -17,6 +17,7 @@ extensions = [
     "sphinx.ext.duration",
     "sphinx.ext.doctest",
     "sphinx.ext.viewcode",
+    "sphinx.ext.graphviz",
     "myst_nb",
     "sphinx_rtd_theme",  # ReadTheDocs theme
 ]

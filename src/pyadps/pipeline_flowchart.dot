@@ -1,0 +1,197 @@
+digraph pipeline {
+    rankdir=TB;
+    bgcolor="transparent";
+    splines=ortho;
+    nodesep=0.45;
+    ranksep=0.75;
+
+    node [shape=box, style="rounded,filled", fontname="Helvetica,Arial,sans-serif",
+          fontsize=13, margin="0.25,0.15"];
+    edge [color="#888888", arrowsize=0.8, fontname="Helvetica,Arial,sans-serif",
+          fontsize=10.5];
+
+    // Shared cluster style: alternating light/darker blue so adjacent
+    // cluster boxes are easy to tell apart; titles are bold and larger
+    // than node text.
+    // (Set per-cluster below since Graphviz clusters don't inherit a
+    // top-level "cluster" default attribute block.)
+
+    read [label="Read PD0 File", fillcolor="#fbe0e0", color="#b33a3a"];
+
+    check_view [label="Check and View Data", fillcolor="#eaf3ea", color="#4a8f5c"];
+
+    // -- Time Diagnostics --
+    subgraph cluster_time {
+        label=<<B><FONT FACE="Helvetica">Time Diagnostics</FONT></B>>;
+        fontsize=16;
+        style="rounded,filled";
+        color="#4a6fa5";
+        fillcolor="#eef4fb";
+        margin=20;
+
+        time_check [label="Is the time axis\nirregular?", shape=diamond,
+                    fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        time_minor [label="Is it a minor issue\n(within tolerance)?", shape=diamond,
+                    fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        time_fix   [label="Snap / Fill\nTime Gaps", fillcolor="#eaf3ea", color="#4a8f5c"];
+
+        { rank=same; time_check; time_minor; time_fix; }
+
+        time_check -> time_minor [xlabel="Yes", fontcolor="#28a745"];
+        time_minor -> time_fix [xlabel="Yes", fontcolor="#28a745"];
+    }
+
+    // -- Sensor Health --
+    subgraph cluster_sensor {
+        label=<<B><FONT FACE="Helvetica">Sensor Health</FONT></B>>;
+        fontsize=16;
+        style="rounded,filled";
+        color="#4a6fa5";
+        fillcolor="#b3c9e8";
+        margin=20;
+
+        sensor_check [label="Are sensors working\n(per deployment config)?", shape=diamond,
+                      fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        sensor_alt   [label="Is an alternate/external\nsensor available?", shape=diamond,
+                      fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        sensor_replace [label="Replace with alternate\nsensor data", fillcolor="#eaf3ea", color="#4a8f5c"];
+        sensor_fixed   [label="Use a fixed value\n(deployment config)", fillcolor="#eaf3ea", color="#4a8f5c"];
+
+        { rank=same; sensor_check; sensor_alt; sensor_replace; sensor_fixed; }
+
+        sensor_check -> sensor_alt [xlabel="No", fontcolor="#dc3545"];
+        sensor_alt -> sensor_replace [xlabel="Yes", fontcolor="#28a745", weight=5];
+        sensor_alt -> sensor_fixed [xlabel="No", fontcolor="#dc3545"];
+        sensor_replace -> sensor_fixed [style=invis];
+    }
+
+    // -- Signal Quality --
+    subgraph cluster_signal {
+        label=<<B><FONT FACE="Helvetica">Signal Quality</FONT></B>>;
+        fontsize=16;
+        style="rounded,filled";
+        color="#4a6fa5";
+        fillcolor="#eef4fb";
+        margin=20;
+
+        sig_q1  [label="Apply Echo Intensity\nThreshold?", shape=diamond,
+                 fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        sig_q1b [label="Echo intensity data\ncollected in air?", shape=diamond,
+                 fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        sig_noise   [label="Noise Floor\nIdentification", fillcolor="#eaf3ea", color="#4a8f5c"];
+        sig_userdef [label="User-Defined\nThreshold", fillcolor="#eaf3ea", color="#4a8f5c"];
+        { rank=same; sig_q1; sig_q1b; sig_noise; sig_userdef; }
+
+        sig_q2 [label="Apply Percent Good\nThreshold?", shape=diamond,
+                fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        sig_pgadvisor [label="PG Threshold\nAdvisor", fillcolor="#eaf3ea", color="#4a8f5c"];
+        { rank=same; sig_q2; sig_pgadvisor; }
+
+        sig_q3 [label="Change default Correlation /\nError Velocity / False Target\nthresholds?", shape=diamond,
+                fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        sig_qcconfig [label="QC Test\nConfiguration", fillcolor="#eaf3ea", color="#4a8f5c"];
+        { rank=same; sig_q3; sig_qcconfig; }
+
+        sig_q4 [label="Has the orientation\nsensor gone bad?", shape=diamond,
+                fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        sig_orient [label="Fix Orientation", fillcolor="#eaf3ea", color="#4a8f5c"];
+        { rank=same; sig_q4; sig_orient; }
+
+        sig_q1 -> sig_q1b [xlabel="Yes", fontcolor="#28a745"];
+        sig_q1b -> sig_noise [xlabel="Yes", fontcolor="#28a745", weight=5];
+        sig_q1b -> sig_userdef [xlabel="No", fontcolor="#dc3545"];
+        sig_noise -> sig_userdef [style=invis];
+        sig_q1 -> sig_q2 [xlabel="No", fontcolor="#dc3545", weight=10];
+        sig_noise -> sig_q2;
+        sig_userdef -> sig_q2;
+
+        sig_q2 -> sig_pgadvisor [xlabel="Yes", fontcolor="#28a745"];
+        sig_q2 -> sig_q3 [xlabel="No", fontcolor="#dc3545", weight=10];
+        sig_pgadvisor -> sig_q3;
+
+        sig_q3 -> sig_qcconfig [xlabel="Yes", fontcolor="#28a745"];
+        sig_q3 -> sig_q4 [xlabel="No", fontcolor="#dc3545", weight=10];
+        sig_qcconfig -> sig_q4;
+
+        sig_q4 -> sig_orient [xlabel="Yes", fontcolor="#28a745"];
+    }
+
+    // -- Profile Operations --
+    subgraph cluster_profile {
+        label=<<B><FONT FACE="Helvetica">Profile Operations</FONT></B>>;
+        fontsize=16;
+        style="rounded,filled";
+        color="#4a6fa5";
+        fillcolor="#b3c9e8";
+        margin=20;
+
+        profile_q1 [label="Data collected in air —\npre-deployment or\npost-recovery?", shape=diamond,
+                    fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        profile_trim [label="Trim Ends", fillcolor="#eaf3ea", color="#4a8f5c"];
+        { rank=same; profile_q1; profile_trim; }
+
+        profile_q2 [label="Cells contaminated by\nside-lobe echo?", shape=diamond,
+                    fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        profile_cut [label="Side Lobe Cut", fillcolor="#eaf3ea", color="#4a8f5c"];
+        { rank=same; profile_q2; profile_cut; }
+
+        profile_q3 [label="Any other cells or\nensembles contaminated?", shape=diamond,
+                    fillcolor="#fdf6e3", color="#b8860b", fontsize=11];
+        profile_manual [label="Manual Cut", fillcolor="#eaf3ea", color="#4a8f5c"];
+        { rank=same; profile_q3; profile_manual; }
+
+        profile_regrid [label="Regrid", fillcolor="#eaf3ea", color="#4a8f5c"];
+
+        profile_q1 -> profile_trim [xlabel="Yes", fontcolor="#28a745"];
+        profile_q1 -> profile_q2 [xlabel="No", fontcolor="#dc3545", weight=10];
+        profile_trim -> profile_q2;
+
+        profile_q2 -> profile_cut [xlabel="Yes", fontcolor="#28a745"];
+        profile_q2 -> profile_q3 [xlabel="No", fontcolor="#dc3545", weight=10];
+        profile_cut -> profile_q3;
+
+        profile_q3 -> profile_manual [xlabel="Yes", fontcolor="#28a745"];
+        profile_q3 -> profile_regrid [xlabel="No", fontcolor="#dc3545", weight=10];
+        profile_manual -> profile_regrid;
+    }
+
+    // -- Velocity Processing --
+    subgraph cluster_velocity {
+        label=<<B><FONT FACE="Helvetica">Velocity Processing</FONT></B>>;
+        fontsize=16;
+        style="rounded,filled";
+        color="#4a6fa5";
+        fillcolor="#eef4fb";
+        margin=20;
+
+        vel_magdec   [label="Magnetic Declination\nCorrection (Optional)", fillcolor="#eaf3ea", color="#4a8f5c"];
+        vel_thresh   [label="Apply Velocity\nThresholds (Optional)", fillcolor="#eaf3ea", color="#4a8f5c"];
+        vel_despike  [label="Despike Data\n(Optional)", fillcolor="#eaf3ea", color="#4a8f5c"];
+        vel_flatline [label="Flatline Detection\n(Optional)", fillcolor="#eaf3ea", color="#4a8f5c"];
+
+        vel_magdec -> vel_thresh -> vel_despike -> vel_flatline;
+    }
+
+    finalize [label="Finalize & Export\n(NetCDF / CSV)", fillcolor="#fbe0e0", color="#b33a3a"];
+
+    // Main trunk — heavier weight keeps this column straight and reads as
+    // the primary pipeline at a glance.
+    read -> check_view [weight=10, minlen=2];
+    check_view -> time_check [weight=10, minlen=2];
+    time_check -> sensor_check [xlabel="No", fontcolor="#dc3545", weight=10, minlen=4];
+    sensor_check -> sig_q1 [xlabel="Yes", fontcolor="#28a745", weight=10, minlen=4];
+    sig_q4 -> profile_q1 [xlabel="No", fontcolor="#dc3545", weight=10, minlen=4];
+    profile_regrid -> vel_magdec [weight=10, minlen=4];
+    vel_flatline -> finalize [weight=10, minlen=4];
+
+    // Time Diagnostics merges back into the trunk.
+    time_minor -> sensor_check [xlabel="No — continue,\nuse external tools\nafter processing", fontcolor="#dc3545"];
+    time_fix -> sensor_check;
+
+    // Sensor Health merges back into the trunk.
+    sensor_replace -> sig_q1;
+    sensor_fixed -> sig_q1;
+
+    // Signal Quality merges back into the trunk.
+    sig_orient -> profile_q1;
+}

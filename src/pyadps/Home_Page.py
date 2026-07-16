@@ -1,4 +1,8 @@
+import pathlib
+
 import streamlit as st
+
+_FLOWCHART_PATH = pathlib.Path(__file__).parent / "pipeline_flowchart.dot"
 
 
 def main():
@@ -34,6 +38,20 @@ def main():
     * Visualize raw and processed data at every step
     * Export processed data to NetCDF (CF Convention compliant) or CSV
     * Save your processing choices to a configuration file, so a run can be reproduced or repeated later with minor changes
+
+    ## Processing Pipeline
+    """
+
+    st.graphviz_chart(_FLOWCHART_PATH.read_text())
+
+    """
+    **Before you start:** go through the pages in the sidebar in order, top
+    to bottom — each one builds on the state saved by the one before it. If
+    you go back to an earlier page and change a value, refresh the browser
+    tab afterward (a known Streamlit tab-selection quirk, not a caching
+    issue). See the
+    [Processing Guidelines](https://pyadps.readthedocs.io/en/latest/webapp/index.html#processing-guidelines)
+    for a page-by-page walkthrough of what to check at each step.
 
     ## Contribute
     Issue Tracker: https://github.com/p-amol/pyadps/issues

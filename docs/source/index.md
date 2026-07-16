@@ -58,6 +58,11 @@ print(f"Shape: {velocity.shape}")
 ds.to_netcdf('output.nc')
 ```
 
+## Processing Pipeline
+
+```{graphviz} ../../src/pyadps/pipeline_flowchart.dot
+```
+
 ## Package Structure
 
 pyadps is organized into three main components:

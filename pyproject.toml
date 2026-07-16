@@ -15,6 +15,10 @@ include = [
     "sdist",
     "wheel",
   ] },
+  { path = "pyadps/*.dot", format = [
+    "sdist",
+    "wheel",
+  ] },
 ]
 classifiers = [
   "Programming Language :: Python :: 3",

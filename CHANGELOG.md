@@ -6,6 +6,8 @@ All notable changes to `pyadps` are documented in this file. The format is based
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-17
+
 ### Added
 
 - New `binary_reader` module with `xarray.Dataset` output
@@ -32,6 +34,9 @@ All notable changes to `pyadps` are documented in this file. The format is based
   check only; it previously also appeared on Correlation, Echo Intensity, and False
   Target, where it was either non-functional or not reliably grounded on
   ensemble-averaged data
+- Renamed the installed console scripts for a consistent, collision-resistant
+  naming scheme: `run-pyadps` → `pyadps-gui`, `run-auto` → `pyadps-auto`,
+  `run-cat` → `pyadps-cat` (new; combines multiple ADCP binary files)
 
 ### Fixed
 
@@ -47,6 +52,11 @@ All notable changes to `pyadps` are documented in this file. The format is based
 - `pd0_parser` error code 5 documented under the wrong name
   (`WRONG_RDIFILE_TYPE` instead of `WRONG_ADCPFILE_TYPE`)
 - Write File page documentation describing the pre-redesign Export Data tab
+- `pyadps-auto` console script pointed at a module that no longer existed and
+  crashed immediately on use; it now has a working CLI
+- Time Diagnostics' "Fill Time Gaps" (forward-fill) could silently leave gaps
+  as `NaN` instead of filling them when the optional `bottleneck` package
+  wasn't installed; it's now a declared dependency
 
 ### Deprecated
 

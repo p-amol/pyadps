@@ -55,7 +55,17 @@ print(f"Shape: {velocity.shape}")
 ds.to_netcdf('output.nc')
 ```
 
+(processing-pipeline)=
 ## Processing Pipeline
+
+The diagram below adds the decision logic behind the steps that involve a
+judgment call — time diagnostics, sensor health, signal quality, and
+profile operations — on top of the overall pipeline order. Each of these
+appears as its own box: work down the diamonds inside it, answering the
+question at each one, before moving on to the next box in the main
+column. Velocity processing has no decision points of its own — its four
+checks (magnetic declination, velocity thresholds, despike, flatline) are
+each independently optional and can be applied in any combination.
 
 ```{graphviz} ../../src/pyadps/pipeline_flowchart.dot
 ```

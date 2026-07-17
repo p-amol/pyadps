@@ -8,7 +8,6 @@ This package contains:
 - ProcessingConfig: Configuration bridge between Streamlit INI and Python
 - Core processing functions: sensor_health, signal_quality, velocity_test, profile_test
 - Utilities: autoprocess, multifile, writenc
-- Optional: xarray accessors for advanced usage
 """
 
 from .core import ProcessedDataset
@@ -23,12 +22,6 @@ from . import signal_quality
 from . import velocity_check
 from . import profile_operation
 from . import autoprocess
-
-# Optional: Accessors for xarray integration
-try:
-    from . import accessors
-except ImportError:
-    accessors = None
 
 __version__ = "1.0.0"
 
@@ -49,6 +42,4 @@ __all__ = [
     "profile_operation",
     "velocity_check",
     "autoprocess",
-    # Optional
-    "accessors",
 ]

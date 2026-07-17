@@ -33,7 +33,7 @@ Version: 1.0.0
 """
 
 from collections import Counter
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 import logging
 import xarray as xr
 import numpy as np
@@ -259,8 +259,8 @@ class HeaderAccessor:
         # Cache for computed properties
         self._ensemble = None
         self._data_type_index = None
-        self._error_code = None
-        self._calculated_size_bytes = None
+        self._error_code: Optional[int] = None
+        self._calculated_size_bytes: Optional[int] = None
 
     def _validate_dataset(self) -> None:
         """
@@ -909,7 +909,7 @@ class FixedLeaderAccessor:
     def __init__(self, xarray_obj: xr.Dataset):
         """Initialize the accessor with validation."""
         self._obj = xarray_obj
-        self._fl_fields = None
+        self._fl_fields: Optional[List[str]] = None
         self._validate_dataset()
 
     @classmethod
@@ -970,7 +970,7 @@ class FixedLeaderAccessor:
 
         # Case 1: Standalone FixedLeader dataset
         if self._obj.attrs.get("pyadps_component") == "FixedLeader":
-            self._fl_fields = list(self._obj.data_vars)
+            self._fl_fields = cast(List[str], list(self._obj.data_vars))
 
         else:
             # Case 2: Merged dataset - check if FixedLeader was included
@@ -986,9 +986,10 @@ class FixedLeaderAccessor:
                 known_fl_fields = self._load_fl_fields_from_metadata()
 
                 # Only return fields that exist in the dataset
-                self._fl_fields = [
-                    var for var in self._obj.data_vars if var in known_fl_fields
-                ]
+                self._fl_fields = cast(
+                    List[str],
+                    [var for var in self._obj.data_vars if var in known_fl_fields],
+                )
             else:
                 # FixedLeader was not included in this merged dataset
                 self._fl_fields = []
@@ -1192,19 +1193,21 @@ class FixedLeaderAccessor:
 
         # Bit 12: Beam Pattern (1 bit)
         bit_group = binary_bits[12]
-        sys_cfg["Beam Pattern"] = beam_code.get(bit_group)
+        sys_cfg["Beam Pattern"] = beam_code.get(bit_group, "Beam pattern not found")
 
         # Bits 10-11: Sensor Configuration (2 bits)
         bit_group = binary_bits[10:12]
-        sys_cfg["Sensor Configuration"] = sensor_code.get(bit_group)
+        sys_cfg["Sensor Configuration"] = sensor_code.get(
+            bit_group, "Sensor configuration not found"
+        )
 
         # Bit 9: XDCR HD (1 bit)
         bit_group = binary_bits[9]
-        sys_cfg["XDCR HD"] = xdcr_code.get(bit_group)
+        sys_cfg["XDCR HD"] = xdcr_code.get(bit_group, "XDCR HD not found")
 
         # Bit 8: Beam Direction (1 bit)
         bit_group = binary_bits[8]
-        sys_cfg["Beam Direction"] = dir_code.get(bit_group)
+        sys_cfg["Beam Direction"] = dir_code.get(bit_group, "Beam direction not found")
 
         # Bits 4-7: Beam Angle (4 bits)
         bit_group = binary_bits[4:8]
@@ -1271,7 +1274,7 @@ class FixedLeaderAccessor:
 
         bool_code = {"1": True, "0": False}
 
-        transform = {}
+        transform: Dict[str, object] = {}
         transform["Coordinates"] = trans_code.get(bit_group[3:5])
         transform["Tilt Correction"] = bool_code.get(bit_group[5])
         transform["Three-Beam Solution"] = bool_code.get(bit_group[6])
@@ -1339,18 +1342,18 @@ class FixedLeaderAccessor:
         # Boolean lookup table
         bool_code = {"1": True, "0": False}
 
-        sensor = {}
-        sensor["Sound Speed"] = bool_code.get(bit_group[1])
-        sensor["Depth Sensor"] = bool_code.get(bit_group[2])
-        sensor["Heading Sensor"] = bool_code.get(bit_group[3])
-        sensor["Pitch Sensor"] = bool_code.get(bit_group[4])
-        sensor["Roll Sensor"] = bool_code.get(bit_group[5])
-        sensor["Conductivity Sensor"] = bool_code.get(bit_group[6])
-        sensor["Temperature Sensor"] = bool_code.get(bit_group[7])
+        sensor: Dict[str, bool] = {}
+        sensor["Sound Speed"] = bool_code.get(bit_group[1], False)
+        sensor["Depth Sensor"] = bool_code.get(bit_group[2], False)
+        sensor["Heading Sensor"] = bool_code.get(bit_group[3], False)
+        sensor["Pitch Sensor"] = bool_code.get(bit_group[4], False)
+        sensor["Roll Sensor"] = bool_code.get(bit_group[5], False)
+        sensor["Conductivity Sensor"] = bool_code.get(bit_group[6], False)
+        sensor["Temperature Sensor"] = bool_code.get(bit_group[7], False)
 
         return sensor
 
-    def validate(self) -> Dict[str, any]:
+    def validate(self) -> Dict[str, Any]:
         """
         Validate Fixed Leader data integrity.
 
@@ -1378,7 +1381,7 @@ class FixedLeaderAccessor:
         ...     for issue in report['issues']:
         ...         print(f"ERROR: {issue}")
         """
-        report = {"valid": True, "issues": [], "warnings": []}
+        report: Dict[str, Any] = {"valid": True, "issues": [], "warnings": []}
 
         # Get only Fixed Leader fields from the dataset
         # This ensures we only validate FL fields, not other components (Variable Leader, Velocity, etc.)
@@ -2012,7 +2015,7 @@ class VariableLeaderAccessor:
                     bit_values = self._obj[decoded_field_name].values
                 else:
                     # Fall back to bit extraction
-                    bit_values = (esw_data & (1 << bit_pos)) != 0
+                    bit_values = (esw_data & (1 << int(bit_pos))) != 0
 
                 event_count = int(np.sum(bit_values))
 
@@ -2135,7 +2138,9 @@ class VariableLeaderAccessor:
         common_interval = diffs.mode()[0]
 
         # Check maximum deviation from common interval
-        max_deviation = (diffs - common_interval).abs().max().total_seconds()
+        max_deviation = cast(
+            pd.Timedelta, (diffs - common_interval).abs().max()
+        ).total_seconds()
 
         return max_deviation <= tolerance_s
 
@@ -2176,7 +2181,7 @@ class VariableLeaderAccessor:
         # Return the most common interval
         common_interval = diffs.mode()
         if len(common_interval) > 0:
-            return common_interval.iloc[0]
+            return cast(pd.Timedelta, common_interval.iloc[0])
         return None
 
     def get_time_interval_frequency(self) -> Dict[str, int]:
@@ -2224,7 +2229,7 @@ class VariableLeaderAccessor:
         result = {}
         for td, count in freq_counts.items():
             # Format timedelta as HH:MM:SS
-            td_cast = pd.Timedelta(td)
+            td_cast = pd.Timedelta(cast(pd.Timedelta, td))
             total_seconds = int(td_cast.total_seconds())
             hours = total_seconds // 3600
             minutes = (total_seconds % 3600) // 60
@@ -2299,7 +2304,7 @@ class VariableLeaderAccessor:
             freq = time_index.second.value_counts().sort_index()
 
         # Return as dictionary for consistency with v0.4.0
-        return freq.to_dict()
+        return cast(Dict[int, int], freq.to_dict())
 
     def summary(self) -> None:
         """

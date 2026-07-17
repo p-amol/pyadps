@@ -283,7 +283,7 @@ class ProcessingConfig:
         config = configparser.ConfigParser()
         config.read(filepath)
 
-        kwargs = {}
+        kwargs: Dict[str, Any] = {}
 
         # ========================
         # FILE SETTINGS

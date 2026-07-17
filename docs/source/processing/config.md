@@ -106,23 +106,23 @@ roll_cutoff = 15.0
 
 [QCTest]
 qc_test = true
-correlation_threshold = 64.0
-echo_intensity_threshold = 0.0
-error_velocity_threshold = 2000.0
+correlation = 64.0
+echo_intensity = 0.0
+error_velocity = 2000.0
 
 [ProfileTest]
 profile_test = true
 trim_ends = true
 trim_start = 100
 trim_end = 50
-cut_bins_side_lobe = true
+cut_sidelobe = true
 
 [VelocityTest]
 velocity_test = true
-cutoff_check = true
-max_u_velocity = 2500.0
-max_v_velocity = 2500.0
-max_w_velocity = 500.0
+velocity_cutoff = true
+max_zonal_velocity = 2500.0
+max_meridional_velocity = 2500.0
+max_vertical_velocity = 500.0
 ```
 
 ## Usage with ProcessedDataset

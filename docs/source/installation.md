@@ -89,8 +89,9 @@ Accessor methods are registered automatically when you import pyadps — no addi
 ```python
 import pyadps
 
-ds = pyadps.read('file.000')
-ds.header.summary()  # Works out of the box
+# include_header=True is required for ds.header.* — it defaults to False
+ds = pyadps.read('file.000', include_header=True)
+ds.header.summary()
 ```
 
 ## Next Steps

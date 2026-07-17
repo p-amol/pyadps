@@ -18,7 +18,8 @@ read functions:
 ```python
 import pyadps
 
-ds = pyadps.read('deployment.000')
+# include_header=True is required for ds.header.* — it defaults to False
+ds = pyadps.read('deployment.000', include_header=True)
 
 # File integrity
 ds.header.check_file()

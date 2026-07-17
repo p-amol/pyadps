@@ -73,6 +73,13 @@ read functions.
 
 ### Header (`ds.header.*`)
 
+```{note}
+Header data is not loaded by default. Pass `include_header=True` to
+`pyadps.read()` before using any `ds.header.*` method, or they will
+silently report failure (e.g. `check_file()` returning
+`File Size Match: False`) rather than raising an error.
+```
+
 | Method | Description |
 |--------|-------------|
 | `check_file()` | Verify file integrity (size, byte uniformity) |

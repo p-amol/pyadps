@@ -15,6 +15,13 @@ All notable changes to `pyadps` are documented in this file. The format is based
 - Selectable export components (velocity, echo intensity, correlation, percent good) on
   the Write File page, replacing the earlier velocity-only/full-dataset choice
 - Short (u, v, w) velocity variable naming option alongside the CF-style long names
+- Processing pipeline flowchart on the Streamlit home page and in the docs, showing
+  the six-step pipeline plus the decision logic within Time Diagnostics, Sensor
+  Health, Signal Quality, and Profile Operations
+- "Background" section (motivation, deployment context, current coordinate-system
+  limitation) on the README, Streamlit home page, and docs front page
+- "Processing Guidelines" section on the Web Application docs page, with
+  per-page tips on what to check at each step
 
 ### Changed
 
@@ -25,6 +32,21 @@ All notable changes to `pyadps` are documented in this file. The format is based
   check only; it previously also appeared on Correlation, Echo Intensity, and False
   Target, where it was either non-functional or not reliably grounded on
   ensemble-averaged data
+
+### Fixed
+
+- Documentation examples calling `ds.header.*` right after a plain `pyadps.read()`
+  call, which silently misreports file status since `include_header` defaults to
+  `False` (`installation.md`, `io/accessors.md`, `io/index.md`)
+- Sample `config.ini` in `processing/config.md` used incorrect key names in the
+  `[QCTest]`, `[ProfileTest]`, and `[VelocityTest]` sections that don't match
+  `ProcessingConfig.from_ini()` — a hand-edited file following the old example
+  would have had those settings silently ignored
+- `ProfileOperationRunner.regrid()` documentation listed nonexistent parameters
+  and the wrong default interpolation method
+- `pd0_parser` error code 5 documented under the wrong name
+  (`WRONG_RDIFILE_TYPE` instead of `WRONG_ADCPFILE_TYPE`)
+- Write File page documentation describing the pre-redesign Export Data tab
 
 ### Deprecated
 

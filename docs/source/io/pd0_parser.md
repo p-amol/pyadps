@@ -65,7 +65,7 @@ if err != 0:
 | 2 | `PERMISSION_DENIED` | Access denied |
 | 3 | `IO_ERROR` | File open or read failed |
 | 4 | `OUT_OF_MEMORY` | Insufficient memory |
-| 5 | `WRONG_RDIFILE_TYPE` | Not a valid RDI PD0 file |
+| 5 | `WRONG_ADCPFILE_TYPE` | Not a valid RDI PD0 file |
 | 6 | `ID_NOT_FOUND` | Data type ID not found in ensemble |
 | 7 | `DATATYPE_MISMATCH` | Inconsistent data types across ensembles |
 | 8 | `FILE_CORRUPTED` | Invalid structure or truncated data |

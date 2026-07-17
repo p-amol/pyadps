@@ -16,8 +16,6 @@
 
 `pyadps` was built to process Teledyne RDI PD0 files from moored ADCP deployments that lack navigation (GPS) data. It was developed primarily for the COSINE and ECO-IOD mooring programs in the north Indian Ocean, which together span over 600 ADCP deployments — a scale that made it worth standardizing and documenting the processing steps rather than repeating ad hoc scripts for each dataset. The accompanying web interface lets users with limited programming experience run the same pipeline, while the processing workflow still requires a close look at the quality-control results before the velocity output is treated as final. The package currently processes only data recorded in Earth coordinates; Beam-coordinate support and the associated coordinate transformation are planned for a future release.
 
-This version of the package was developed with extensive use of Claude (Anthropic) as a coding assistant.
-
 ## Features
 
 - Read RDI binary files (PD0 format) as `xarray.Dataset`
@@ -133,3 +131,7 @@ For the complete guide see the [documentation](https://pyadps.readthedocs.io).
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Note
+
+*This version of the package was developed with extensive use of Claude (Anthropic) as a coding assistant.*

@@ -346,13 +346,23 @@ Export the processed dataset and save the processing configuration.
 |-----|-------------|
 | 📊 Preview Data | Visualise processed data with QC mask applied |
 | 📝 Attributes | Add custom metadata (cruise number, location, etc.) |
-| 💾 Export Data | Download NetCDF or CSV output |
+| 💾 Export Data | Choose components and export as NetCDF or CSV |
 | ⚙️ Config File | Download `config.ini` capturing all processing settings |
 
 The exported `config.ini` can be used with the Auto Processing tool (Page 10)
 to reprocess data with adjusted parameters without repeating the full workflow.
 
 ```{tip}
+Export Data lets you pick which components to include — Velocity (checked
+by default), Echo Intensity, Correlation, Percent Good — or check **Entire
+Dataset** to export everything instead (equivalent to a full raw dump,
+overriding the individual checkboxes). Velocity variable names default to
+the short form (`u`, `v`, `w`); switch to CF-style long names
+(`zonal_velocity`, `meridional_velocity`, `vertical_velocity`) or enter
+your own if you prefer — either way the file stays CF-compliant, since CF
+Convention governs attribute values, not variable names. Exported NetCDF
+filenames end in `_PRO.nc`.
+
 Download the final processed data and the `config.ini` together — the
 config file records every setting you used, so the run can be reproduced
 or repeated later with minor adjustments instead of redoing the whole

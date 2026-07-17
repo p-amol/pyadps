@@ -1,8 +1,8 @@
 # pyadps Documentation
 
-**Professional Python package for RDI ADCP data processing**
+**Python package for ADCP data processing**
 
-pyadps provides tools for reading, quality controlling, and processing
+`pyadps` provides tools for reading, quality controlling, and processing
 Acoustic Doppler Current Profiler (ADCP) data — designed for Teledyne RDI
 ADCPs recording in the PD0 binary format. PD0 files from other RDI models,
 such as Ocean Surveyor and DVS, can also be read; take extra care when
@@ -21,9 +21,6 @@ look at the quality-control results before the velocity output is treated
 as final. The package currently processes only data recorded in Earth
 coordinates; Beam-coordinate support and the associated coordinate
 transformation are planned for a future release.
-
-This version of the package was developed with extensive use of Claude
-(Anthropic) as a coding assistant.
 
 ## Features
 
@@ -65,7 +62,7 @@ ds.to_netcdf('output.nc')
 
 ## Package Structure
 
-pyadps is organized into three main components:
+`pyadps` is organized into three main components:
 
 ```{toctree}
 :maxdepth: 1
@@ -95,7 +92,7 @@ reference/changelog
 
 ## Getting Started
 
-1. **Install pyadps**: See {doc}`installation` for instructions
+1. **Install `pyadps`**: See {doc}`installation` for instructions
 2. **Read the Quick Start**: {doc}`quickstart` provides a 5-minute introduction
 3. **Try the Web App**: {doc}`webapp/index` covers the interactive interface
 4. **Go deeper**: {doc}`io/index` and {doc}`processing/index` cover the module details
@@ -138,4 +135,9 @@ reference/changelog
 
 ## License
 
-pyadps is released under the MIT License.
+`pyadps` is released under the MIT License.
+
+## Note
+
+*This version of the package was developed with extensive use of Claude
+(Anthropic) as a coding assistant.*

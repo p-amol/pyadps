@@ -22,7 +22,7 @@ All methods return `self` for chaining.
 | `trim_ensembles(start, end)` | Mask ensembles at the start and/or end of deployment |
 | `cut_bins_side_lobe(orientation, water_depth, extra_cells=1)` | Mask cells contaminated by acoustic side-lobe interference |
 | `cut_bins_manual(min_cell, max_cell, min_ensemble, max_ensemble)` | Mask a rectangular region by cell and ensemble index |
-| `regrid(method='linear', depth_min, depth_max, depth_step)` | Interpolate from cell coordinates to a regular depth grid |
+| `regrid(method='nearest', end_cell_option='cell', trimends=None, orientation=None, boundary_limit=0.0, data_vars=None, fill_value=np.nan)` | Interpolate from cell coordinates to a regular depth grid |
 
 ### Control and Output Methods
 

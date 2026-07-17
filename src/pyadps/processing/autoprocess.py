@@ -193,3 +193,86 @@ def autoprocess(
         proc.print_summary()
 
     return result
+
+
+def main() -> None:
+    """
+    Command-line entry point (``run-auto``) for config-driven processing.
+
+    Wraps :func:`autoprocess` for non-interactive use, e.g. reprocessing a
+    deployment with a previously exported ``config.ini`` outside the
+    Streamlit app. Always writes a NetCDF output, since a CLI run that
+    produces nothing to disk isn't useful.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="run-auto",
+        description="Process an ADCP binary file using a pyadps config.ini file.",
+    )
+    parser.add_argument(
+        "config", help="Path to the config.ini file (from export_config() or the Write File page)."
+    )
+    parser.add_argument(
+        "-b",
+        "--binary",
+        dest="binary_file_path",
+        default=None,
+        help="Path to the ADCP binary file. Defaults to the path recorded in the config file.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        dest="output_dir",
+        default=None,
+        help="Directory for the output NetCDF file. Defaults to the binary file's directory.",
+    )
+    parser.add_argument(
+        "--output-filename",
+        dest="output_filename",
+        default=None,
+        help="Output filename. Defaults to '<input>_processed.nc' (or '_velocity.nc' with --velocity-only).",
+    )
+    parser.add_argument(
+        "--velocity-only",
+        dest="save_velocity_only",
+        action="store_true",
+        help="Save only the velocity components (u, v, w) instead of the full dataset.",
+    )
+    parser.add_argument(
+        "--velocity-units",
+        dest="velocity_units",
+        default="cm/s",
+        choices=["mm/s", "cm/s", "m/s"],
+        help="Units for velocity output when --velocity-only is set (default: cm/s).",
+    )
+    parser.add_argument(
+        "--no-depth-ascending",
+        dest="ensure_depth_ascending",
+        action="store_false",
+        help="Do not force ascending depth order in the output.",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        dest="print_summary",
+        action="store_false",
+        help="Suppress the processing summary printed to the console.",
+    )
+    args = parser.parse_args()
+
+    autoprocess(
+        args.config,
+        binary_file_path=args.binary_file_path,
+        save_netcdf=True,
+        save_velocity_only=args.save_velocity_only,
+        output_dir=args.output_dir,
+        output_filename=args.output_filename,
+        velocity_units=args.velocity_units,
+        ensure_depth_ascending=args.ensure_depth_ascending,
+        print_summary=args.print_summary,
+    )
+
+
+if __name__ == "__main__":
+    main()

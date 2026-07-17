@@ -64,8 +64,7 @@ myst-parser = "^5.0.0"
 
 [tool.poetry.scripts]
 run-pyadps = "pyadps.__main__:main"
-run-auto = "pyadps.legacy.autoprocess:main"
-run-script = "pyadps.legacy.script:main"
+run-auto = "pyadps.processing.autoprocess:main"
 
 [tool.pyright]
 typeCheckingMode = "standard"

@@ -127,6 +127,7 @@ __all__ = [
     "read_status",
     "io",
     "pages",
+    "processing",
     "ProcessedDataset",
     "ProcessingConfig",
 ]

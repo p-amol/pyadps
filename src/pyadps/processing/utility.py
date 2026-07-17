@@ -569,7 +569,6 @@ def replace_data(
     --------
     correct_sound_speed : Uses temperature/salinity data
     """
-    import warnings
 
     # Step 1: Check if variable exists in dataset
     if variable_name not in ds.data_vars:

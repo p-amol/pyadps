@@ -977,13 +977,13 @@ with tab7:
     preview_items = []
 
     if st.session_state.depth_modified:
-        preview_items.append(f"• Depth data will be replaced")
+        preview_items.append("• Depth data will be replaced")
 
     if st.session_state.salinity_modified:
-        preview_items.append(f"• Salinity data will be replaced")
+        preview_items.append("• Salinity data will be replaced")
 
     if st.session_state.temperature_modified:
-        preview_items.append(f"• Temperature data will be replaced")
+        preview_items.append("• Temperature data will be replaced")
 
     if st.session_state.apply_roll_check:
         preview_items.append(

@@ -387,7 +387,6 @@ def display_fixed_leader_summary(ds) -> None:
             uniformity = ds.fixed_leader.is_uniform()
 
             # Separate uniform and non-uniform fields
-            uniform_fields = [k for k, v in uniformity.items() if v]
             non_uniform_fields = [k for k, v in uniformity.items() if not v]
 
             if non_uniform_fields:

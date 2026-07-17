@@ -3023,7 +3023,6 @@ def _merge_datasets(
             logger.debug("Dropping data_type coordinate (include_header=False)")
             ds_merged = ds_merged.drop_vars("data_type")
 
-    component_list = {"fixed_leader": [], "variable_leader": []}
     # Merge Fixed Leader if provided
     if ds_fl is not None:
         logger.debug(f"Merging Fixed Leader: {len(ds_fl.data_vars)} variables")

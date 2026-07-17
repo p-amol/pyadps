@@ -16,7 +16,7 @@ import re
 import tempfile
 import contextlib
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import streamlit as st
 
@@ -25,7 +25,6 @@ from pyadps.processing.autoprocess import autoprocess
 from pyadps.processing.multifile import (
     combine_file_list,
     validate_adcp_file,
-    ADCPFileConfig,
     CombineResult,
 )
 

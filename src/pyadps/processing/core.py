@@ -45,8 +45,6 @@ except Exception:  # pragma: no cover
 
 from .utility import (
     create_default_mask,
-    QCCheckStats,
-    DataModificationStats,
     QCPipelineReport,
 )
 
@@ -1191,7 +1189,7 @@ class ProcessedDataset:
         is_ascending = check_coord[0] < check_coord[-1]
 
         if is_ascending:
-            logger.debug(f"Depth coordinate already in ascending order")
+            logger.debug("Depth coordinate already in ascending order")
             return ds
 
         # Flip the dataset along the appropriate dimension

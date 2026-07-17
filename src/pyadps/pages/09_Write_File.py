@@ -24,7 +24,6 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
 
 # Load default attribute definitions from shared config
 _ATTR_JSON = os.path.join(os.path.dirname(__file__), "..", "default_attributes.json")

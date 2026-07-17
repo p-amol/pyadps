@@ -615,10 +615,6 @@ def plot_flatline_timeseries(
 
         # Add shaded rectangles for each segment
         for seg_start, seg_end in segments:
-            y_min = np.nanmin(vel_slice)
-            y_max = np.nanmax(vel_slice)
-            y_range = y_max - y_min if y_max != y_min else 100
-
             fig.add_vrect(
                 x0=x_axis[seg_start] - 0.5,
                 x1=x_axis[seg_end] + 0.5,

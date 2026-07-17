@@ -1,5 +1,4 @@
 __pycache__/
-recursive-exclude _pycache_ *.py[cod]
 
 # Ignore build artifacts
 build/

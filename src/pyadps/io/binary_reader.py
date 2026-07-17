@@ -10,7 +10,6 @@ Architecture:
     Data Structure: xarray.Dataset
     Custom Methods: Via @xr.register_dataset_accessor (in accessors.py)
     Access Pattern: ds.header.method_name()
-    Backward Compat: FileHeaderLegacy kept for v0.4.0
 
 The Header dataset contains ensemble-level metadata including:
 - File structure information (byte counts, offsets)
@@ -214,8 +213,7 @@ def read_header(adcp_file: FilePathType) -> xr.Dataset:
 
     See Also
     --------
-    FileHeaderLegacy : v0.4.0 interface (deprecated)
-    Header : Convenience wrapper class
+    read : Load the complete ADCP dataset (velocity, correlation, echo, etc.)
     """
 
     filename = str(adcp_file)

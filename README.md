@@ -126,6 +126,17 @@ result = autoprocess(
 )
 ```
 
+The same workflow is available from the command line via the `run-auto` script,
+installed alongside `pyadps`:
+
+```bash
+run-auto config.ini --binary deployment.000
+```
+
+By default this writes `deployment_processed.nc` next to the binary file. Add
+`--velocity-only` to export just the velocity components, or `-o` to choose an
+output directory. Run `run-auto --help` for the full list of options.
+
 For the complete guide see the [documentation](https://pyadps.readthedocs.io).
 
 ## License

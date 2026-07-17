@@ -144,6 +144,27 @@ result = autoprocess(
 )
 ```
 
+The same workflow is available from the command line via the `run-auto`
+script, installed alongside `pyadps` — no Python needed:
+
+```bash
+run-auto config.ini --binary deployment.000
+```
+
+By default this writes `deployment_processed.nc` next to the binary file.
+
+| Flag | Description |
+|------|-------------|
+| `-b`, `--binary` | Path to the ADCP binary file (defaults to the path recorded in the config) |
+| `-o`, `--output-dir` | Directory for the output NetCDF file |
+| `--output-filename` | Output filename (defaults to `<input>_processed.nc`) |
+| `--velocity-only` | Save only the velocity components (`u`, `v`, `w`) |
+| `--velocity-units` | Units for `--velocity-only` output: `mm/s`, `cm/s`, or `m/s` |
+| `--no-depth-ascending` | Skip forcing ascending depth order in the output |
+| `-q`, `--quiet` | Suppress the processing summary |
+
+Run `run-auto --help` to see this from the terminal.
+
 ### Binary File Combiner
 
 Combine multiple sequential ADCP binary files into a single file.

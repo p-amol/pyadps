@@ -6,6 +6,21 @@ All notable changes to `pyadps` are documented in this file. The format is based
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-17
+
+### Fixed
+
+- **Critical:** the Streamlit app would crash (server segfault, not a normal
+  Python exception) on the first file upload for anyone installing via `pip
+  install pyadps`. `pyarrow` was never a direct dependency — it came in
+  transitively through `streamlit`'s unbounded `pyarrow >= 7.0` constraint,
+  so a fresh install resolved the newest release (25.0.0), which is
+  incompatible with the pinned `numpy~=1.26.4` inside `pyarrow`'s
+  pandas-to-Arrow conversion (used internally by `st.dataframe()`). Fixed by
+  declaring `pyarrow = "~=17.0"` explicitly. Existing `dev`-branch checkouts
+  with an already-installed compatible `pyarrow` were never affected, which
+  is why this didn't surface in local testing.
+
 ## [1.0.0] - 2026-07-17
 
 ### Added

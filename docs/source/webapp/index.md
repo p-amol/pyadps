@@ -6,7 +6,7 @@ RDI ADCP data without writing any code.
 ## Launching the Application
 
 ```bash
-run-pyadps
+pyadps-gui
 ```
 
 The application opens in your default web browser at `http://localhost:8501`.

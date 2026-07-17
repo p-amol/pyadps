@@ -63,8 +63,9 @@ sphinx-autoapi = "^3.6.1"
 myst-parser = "^5.0.0"
 
 [tool.poetry.scripts]
-run-pyadps = "pyadps.__main__:main"
-run-auto = "pyadps.processing.autoprocess:main"
+pyadps-gui = "pyadps.__main__:main"
+pyadps-auto = "pyadps.processing.autoprocess:main"
+pyadps-cat = "pyadps.processing.multifile:main"
 
 [tool.pyright]
 typeCheckingMode = "standard"

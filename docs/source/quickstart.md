@@ -144,11 +144,11 @@ result = autoprocess(
 )
 ```
 
-The same workflow is available from the command line via the `run-auto`
+The same workflow is available from the command line via the `pyadps-auto`
 script, installed alongside `pyadps` — no Python needed:
 
 ```bash
-run-auto config.ini --binary deployment.000
+pyadps-auto config.ini --binary deployment.000
 ```
 
 By default this writes `deployment_processed.nc` next to the binary file.
@@ -163,7 +163,7 @@ By default this writes `deployment_processed.nc` next to the binary file.
 | `--no-depth-ascending` | Skip forcing ascending depth order in the output |
 | `-q`, `--quiet` | Suppress the processing summary |
 
-Run `run-auto --help` to see this from the terminal.
+Run `pyadps-auto --help` to see this from the terminal.
 
 ### Binary File Combiner
 
@@ -178,6 +178,25 @@ files = [Path('deploy_000.000'), Path('deploy_001.000'), Path('deploy_002.000')]
 result = combine_file_list(files, output_file=Path('merged.000'))
 print(f"Combined {result.total_ensembles} ensembles from {result.files_processed} files")
 ```
+
+The same operation is available from the command line via the `pyadps-cat`
+script, pointed at a folder of files instead of an explicit list:
+
+```bash
+pyadps-cat raw_data/ -o combined.000
+```
+
+By default this writes `combined.000` and matches `*.000` files in the folder.
+
+| Flag | Description |
+|------|-------------|
+| `-o`, `--output` | Output filename for the combined file (default: `combined.000`) |
+| `-v`, `--verbose` | Increase verbosity: `-v` for progress info, `-vv` for debug detail |
+| `--strict` | Stop on the first invalid file instead of skipping it |
+| `--no-size-check` | Disable the ensemble-size consistency check between files |
+| `--extension` | File extension pattern to match (default: `*.000`) |
+
+Run `pyadps-cat --help` to see this from the terminal.
 
 ---
 

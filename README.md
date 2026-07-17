@@ -63,7 +63,7 @@ pip install -e .
 The easiest way to get started — no Python required beyond installation:
 
 ```bash
-run-pyadps
+pyadps-gui
 ```
 
 This launches a Streamlit app that guides you through each processing step.
@@ -126,16 +126,42 @@ result = autoprocess(
 )
 ```
 
-The same workflow is available from the command line via the `run-auto` script,
-installed alongside `pyadps`:
+The same workflow is available from the command line via the `pyadps-auto`
+script, installed alongside `pyadps`:
 
 ```bash
-run-auto config.ini --binary deployment.000
+pyadps-auto config.ini --binary deployment.000
 ```
 
 By default this writes `deployment_processed.nc` next to the binary file. Add
 `--velocity-only` to export just the velocity components, or `-o` to choose an
-output directory. Run `run-auto --help` for the full list of options.
+output directory. Run `pyadps-auto --help` for the full list of options.
+
+### Binary File Combiner
+
+Combine multiple sequential ADCP binary files — e.g. a deployment split across
+files due to instrument memory limits — into a single file.
+
+```python
+from pathlib import Path
+from pyadps.processing.multifile import combine_file_list
+
+files = [Path('deploy_000.000'), Path('deploy_001.000'), Path('deploy_002.000')]
+
+result = combine_file_list(files, output_file=Path('merged.000'))
+print(f"Combined {result.total_ensembles} ensembles from {result.files_processed} files")
+```
+
+Or from the command line via the `pyadps-cat` script, pointed at a folder of
+files instead of an explicit list:
+
+```bash
+pyadps-cat raw_data/ -o combined.000
+```
+
+By default this matches `*.000` files, skips any invalid ones, and requires
+matching ensemble sizes across files. Run `pyadps-cat --help` for the full list
+of options.
 
 For the complete guide see the [documentation](https://pyadps.readthedocs.io).
 

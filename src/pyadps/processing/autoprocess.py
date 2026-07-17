@@ -197,7 +197,7 @@ def autoprocess(
 
 def main() -> None:
     """
-    Command-line entry point (``run-auto``) for config-driven processing.
+    Command-line entry point (``pyadps-auto``) for config-driven processing.
 
     Wraps :func:`autoprocess` for non-interactive use, e.g. reprocessing a
     deployment with a previously exported ``config.ini`` outside the
@@ -207,7 +207,7 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="run-auto",
+        prog="pyadps-auto",
         description="Process an ADCP binary file using a pyadps config.ini file.",
     )
     parser.add_argument(

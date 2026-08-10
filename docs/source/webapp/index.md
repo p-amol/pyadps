@@ -143,6 +143,13 @@ auto-fill the magnetic declination location on the Velocity Processing
 page.
 ```
 
+```{note}
+Beam-dimensioned variables (velocity, correlation, echo intensity, percent
+good, status) tag the `beam` coordinate with the CF `axis: "E"` attribute
+for Ferret compatibility (see the Write File page, further down, for
+details). Reading these files requires Ferret v6.8 or later.
+```
+
 ---
 
 ### Page 4: Time Diagnostics
@@ -359,6 +366,17 @@ Download the final processed data and the `config.ini` together — the
 config file records every setting you used, so the run can be reproduced
 or repeated later with minor adjustments instead of redoing the whole
 workflow by hand.
+```
+
+```{note}
+Echo Intensity, Correlation, and Percent Good keep a `beam` dimension in
+the exported NetCDF (Velocity does not — it's split into separate `u`,
+`v`, `w` variables). The `beam` coordinate is tagged with the CF `axis:
+"E"` attribute so tools like [Ferret](https://ferret.pmel.noaa.gov/) can
+resolve the axis order correctly instead of falling back to a default,
+inconsistent ordering. Reading this requires **Ferret v6.8 or later**
+(released 2013) — earlier versions only support 4-dimensional (X, Y, Z, T)
+grids and don't recognize the `E` axis.
 ```
 
 ---

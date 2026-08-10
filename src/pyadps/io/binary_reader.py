@@ -2110,12 +2110,23 @@ def read_velocity(
         "standard_name": "time_counter",  # If using time
     }
     cell_attrs = {
-        "axis": "Z",  # Z for vertical/depth
+        # No CF "axis"/"positive": cell is a bin-number index, not the
+        # physical vertical coordinate. The "depth" coordinate (added later,
+        # in meters) is the real Z axis for this dimension; tagging both as
+        # axis "Z" - with opposite "positive" directions - gives Ferret two
+        # conflicting Z-axis candidates for the same dimension.
         "long_name": "Depth cell number",
-        "positive": "up",  # Positive upward
     }
     beam_attrs = {
-        "axis": "X",  # X for cross-beam
+        # "E" (not "X"): beam is a categorical instrument index (1-4), not a
+        # spatial coordinate. Tagging it "X" makes tools like Ferret treat it
+        # as a real longitude-like axis, which conflicts with grids in the
+        # same file that have no X axis at all. Leaving "axis" unset instead
+        # is worse: Ferret can't resolve the axis role of a 3rd, unlabeled
+        # dimension and falls back to a default/undefined ordering. "E"
+        # (ensemble) is Ferret's own axis code for exactly this case - a
+        # non-geophysical, categorical axis.
+        "axis": "E",
         "long_name": "Beam number",
     }
     # Attributes for velocity variable (CF Convention)
@@ -2247,12 +2258,23 @@ def read_correlation(
         "standard_name": "time_counter",  # If using time
     }
     cell_attrs = {
-        "axis": "Z",  # Z for vertical/depth
+        # No CF "axis"/"positive": cell is a bin-number index, not the
+        # physical vertical coordinate. The "depth" coordinate (added later,
+        # in meters) is the real Z axis for this dimension; tagging both as
+        # axis "Z" - with opposite "positive" directions - gives Ferret two
+        # conflicting Z-axis candidates for the same dimension.
         "long_name": "Depth cell number",
-        "positive": "up",  # Positive upward
     }
     beam_attrs = {
-        "axis": "X",  # X for cross-beam
+        # "E" (not "X"): beam is a categorical instrument index (1-4), not a
+        # spatial coordinate. Tagging it "X" makes tools like Ferret treat it
+        # as a real longitude-like axis, which conflicts with grids in the
+        # same file that have no X axis at all. Leaving "axis" unset instead
+        # is worse: Ferret can't resolve the axis role of a 3rd, unlabeled
+        # dimension and falls back to a default/undefined ordering. "E"
+        # (ensemble) is Ferret's own axis code for exactly this case - a
+        # non-geophysical, categorical axis.
+        "axis": "E",
         "long_name": "Beam number",
     }
     correlation_attrs = {
@@ -2352,12 +2374,23 @@ def read_echo_intensity(
         "standard_name": "time_counter",  # If using time
     }
     cell_attrs = {
-        "axis": "Z",  # Z for vertical/depth
+        # No CF "axis"/"positive": cell is a bin-number index, not the
+        # physical vertical coordinate. The "depth" coordinate (added later,
+        # in meters) is the real Z axis for this dimension; tagging both as
+        # axis "Z" - with opposite "positive" directions - gives Ferret two
+        # conflicting Z-axis candidates for the same dimension.
         "long_name": "Depth cell number",
-        "positive": "up",  # Positive upward
     }
     beam_attrs = {
-        "axis": "X",  # X for cross-beam
+        # "E" (not "X"): beam is a categorical instrument index (1-4), not a
+        # spatial coordinate. Tagging it "X" makes tools like Ferret treat it
+        # as a real longitude-like axis, which conflicts with grids in the
+        # same file that have no X axis at all. Leaving "axis" unset instead
+        # is worse: Ferret can't resolve the axis role of a 3rd, unlabeled
+        # dimension and falls back to a default/undefined ordering. "E"
+        # (ensemble) is Ferret's own axis code for exactly this case - a
+        # non-geophysical, categorical axis.
+        "axis": "E",
         "long_name": "Beam number",
     }
     echo_attrs = {
@@ -2456,12 +2489,23 @@ def read_percent_good(
         "standard_name": "time_counter",  # If using time
     }
     cell_attrs = {
-        "axis": "Z",  # Z for vertical/depth
+        # No CF "axis"/"positive": cell is a bin-number index, not the
+        # physical vertical coordinate. The "depth" coordinate (added later,
+        # in meters) is the real Z axis for this dimension; tagging both as
+        # axis "Z" - with opposite "positive" directions - gives Ferret two
+        # conflicting Z-axis candidates for the same dimension.
         "long_name": "Depth cell number",
-        "positive": "up",  # Positive upward
     }
     beam_attrs = {
-        "axis": "X",  # X for cross-beam
+        # "E" (not "X"): beam is a categorical instrument index (1-4), not a
+        # spatial coordinate. Tagging it "X" makes tools like Ferret treat it
+        # as a real longitude-like axis, which conflicts with grids in the
+        # same file that have no X axis at all. Leaving "axis" unset instead
+        # is worse: Ferret can't resolve the axis role of a 3rd, unlabeled
+        # dimension and falls back to a default/undefined ordering. "E"
+        # (ensemble) is Ferret's own axis code for exactly this case - a
+        # non-geophysical, categorical axis.
+        "axis": "E",
         "long_name": "Beam number",
     }
     pg_attrs = {
@@ -2558,12 +2602,23 @@ def read_status(
         "standard_name": "time_counter",  # If using time
     }
     cell_attrs = {
-        "axis": "Z",  # Z for vertical/depth
+        # No CF "axis"/"positive": cell is a bin-number index, not the
+        # physical vertical coordinate. The "depth" coordinate (added later,
+        # in meters) is the real Z axis for this dimension; tagging both as
+        # axis "Z" - with opposite "positive" directions - gives Ferret two
+        # conflicting Z-axis candidates for the same dimension.
         "long_name": "Depth cell number",
-        "positive": "up",  # Positive upward
     }
     beam_attrs = {
-        "axis": "X",  # X for cross-beam
+        # "E" (not "X"): beam is a categorical instrument index (1-4), not a
+        # spatial coordinate. Tagging it "X" makes tools like Ferret treat it
+        # as a real longitude-like axis, which conflicts with grids in the
+        # same file that have no X axis at all. Leaving "axis" unset instead
+        # is worse: Ferret can't resolve the axis role of a 3rd, unlabeled
+        # dimension and falls back to a default/undefined ordering. "E"
+        # (ensemble) is Ferret's own axis code for exactly this case - a
+        # non-geophysical, categorical axis.
+        "axis": "E",
         "long_name": "Beam number",
     }
     status_attrs = {

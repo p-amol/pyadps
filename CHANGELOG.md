@@ -6,6 +6,27 @@ All notable changes to `pyadps` are documented in this file. The format is based
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-10
+
+### Added
+
+- Citation section (README and docs front page) referencing the package's Zenodo DOI
+- Documented `pyadps.load_example()` in the README and Quick Start guide, so users can
+  try the package on a bundled demo dataset without a binary ADCP file
+
+### Fixed
+
+- NetCDF exports that included a beam-dimensioned variable (Echo Intensity,
+  Correlation, Percent Good) alongside Velocity carried incorrect CF axis metadata:
+  the `beam` coordinate was tagged `axis: "X"` (a real spatial axis), and `cell`
+  duplicated `depth`'s `axis: "Z"` role with the opposite `positive` direction. Ferret
+  would warn "Unspecified or unsupported ordering of axes" and show inconsistent axis
+  directions across grids in the same file. `beam` now uses Ferret's `axis: "E"`
+  (ensemble) code, the correct label for a categorical, non-spatial dimension; `cell`
+  no longer claims the Z axis that `depth` already owns. Reading these files now
+  requires Ferret v6.8 or later (2013+), noted on the Write File and Download Raw
+  File documentation pages.
+
 ## [1.0.1] - 2026-07-17
 
 ### Fixed

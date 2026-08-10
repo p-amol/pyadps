@@ -18,6 +18,21 @@ ds = pyadps.read('deployment.000')
 print(ds)
 ```
 
+### No Binary File? Use the Demo Dataset
+
+Don't have an ADCP binary file on hand? `pyadps` ships with a small demo
+deployment so you can try the package right away.
+
+```python
+import pyadps
+
+ds = pyadps.load_example("demo")
+print(ds.sizes)
+```
+
+This returns the same kind of `xarray.Dataset` as `pyadps.read()`, so it can
+be used with every example on this page and throughout the documentation.
+
 ### Plot and Save Raw Data
 
 ```python

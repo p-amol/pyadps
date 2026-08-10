@@ -84,6 +84,13 @@ print(f"Frequency: {config['Frequency']}")
 ds.to_netcdf('raw_output.nc')
 ```
 
+Don't have a binary file on hand? Use the bundled demo dataset to try the
+package right away:
+
+```python
+ds = pyadps.load_example('demo')
+```
+
 ### Processing Pipeline
 
 ```python
@@ -164,6 +171,12 @@ matching ensemble sizes across files. Run `pyadps-cat --help` for the full list
 of options.
 
 For the complete guide see the [documentation](https://pyadps.readthedocs.io).
+
+## Citation
+
+If you use `pyadps` in your work, please cite it as:
+
+> Amol, P., Aparna, S. G., Jithin, A. K., Kankonkar, A., Velip, G., Aravind, S., Kamble, S. P., Nandhana V. S., L. & Vishvas, N. (2026). pyadps: A Python package for processing moored ADCP data (Version v1.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.21450363
 
 ## License
 

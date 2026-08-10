@@ -143,6 +143,12 @@ reference/changelog
 - **Issue Tracker**: [GitHub Issues](https://github.com/p-amol/pyadps/issues)
 - **Source Code**: [GitHub Repository](https://github.com/p-amol/pyadps)
 
+## Citation
+
+If you use `pyadps` in your work, please cite it as:
+
+> Amol, P., Aparna, S. G., Jithin, A. K., Kankonkar, A., Velip, G., Aravind, S., Kamble, S. P., Nandhana V. S., L. & Vishvas, N. (2026). pyadps: A Python package for processing moored ADCP data (Version v1.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.21450363
+
 ## License
 
 `pyadps` is released under the MIT License.

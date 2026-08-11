@@ -942,6 +942,37 @@ class TestVelocityToNetcdf:
         assert len(vel_vars) == 3
         ds_read.close()
 
+    def test_velocity_to_netcdf_carries_raw_provenance_attrs(
+        self, sample_dataset, temp_dir
+    ):
+        """'filename'/'adcp_data_format' set by pyadps.read() survive export."""
+        proc = ProcessedDataset(sample_dataset)
+        proc.dataset.attrs["filename"] = "GD15A000.000"
+        proc.dataset.attrs["adcp_data_format"] = "PD0"
+        filepath = temp_dir / "velocities.nc"
+        proc.velocity_to_netcdf(filepath)
+
+        ds_read = xr.open_dataset(filepath)
+        assert ds_read.attrs["filename"] == "GD15A000.000"
+        assert ds_read.attrs["adcp_data_format"] == "PD0"
+        ds_read.close()
+
+    def test_velocity_to_netcdf_components_have_description_and_source(
+        self, sample_dataset, temp_dir
+    ):
+        proc = ProcessedDataset(sample_dataset)
+        filepath = temp_dir / "velocities.nc"
+        proc.velocity_to_netcdf(filepath)
+
+        ds_read = xr.open_dataset(filepath)
+        for name in ("zonal_velocity", "meridional_velocity", "vertical_velocity"):
+            assert (
+                ds_read[name].attrs["description"]
+                == "Velocity magnitude measured by ADCP"
+            )
+            assert ds_read[name].attrs["source"] == "RDI WorkHorse ADCP"
+        ds_read.close()
+
     def test_velocity_to_netcdf_custom_names(self, sample_dataset, temp_dir):
         """Test custom variable names."""
         proc = ProcessedDataset(sample_dataset)
@@ -1631,6 +1662,39 @@ class TestGetExportDataset:
         )
         assert {"u", "v", "w", "echo_intensity"} <= set(result.data_vars)
 
+    def test_velocity_components_have_cf_standard_name(self, sample_dataset):
+        """
+        get_velocity_dataset()'s u/v/w attrs must match velocity_to_netcdf()'s
+        (standard_name/positive/comment), not just long_name/units.
+        """
+        proc = ProcessedDataset(sample_dataset)
+        result = proc.get_export_dataset(include_velocity=True)
+        assert (
+            result["zonal_velocity"].attrs["standard_name"]
+            == "eastward_sea_water_velocity"
+        )
+        assert result["zonal_velocity"].attrs["positive"] == "eastward"
+        assert (
+            result["meridional_velocity"].attrs["standard_name"]
+            == "northward_sea_water_velocity"
+        )
+        assert result["meridional_velocity"].attrs["positive"] == "northward"
+        assert (
+            result["vertical_velocity"].attrs["standard_name"]
+            == "upward_sea_water_velocity"
+        )
+        assert result["vertical_velocity"].attrs["positive"] == "upward"
+
+    def test_velocity_components_have_description_and_source(self, sample_dataset):
+        proc = ProcessedDataset(sample_dataset)
+        result = proc.get_export_dataset(include_velocity=True)
+        for name in ("zonal_velocity", "meridional_velocity", "vertical_velocity"):
+            assert (
+                result[name].attrs["description"]
+                == "Velocity magnitude measured by ADCP"
+            )
+            assert result[name].attrs["source"] == "RDI WorkHorse ADCP"
+
     def test_mask_applied_to_echo(self, sample_dataset_with_mask):
         proc = ProcessedDataset(sample_dataset_with_mask)
         result = proc.get_export_dataset(
@@ -1678,6 +1742,19 @@ class TestExportToNetcdf:
         assert "percent_good" in ds_read.attrs["components_exported"]
         ds_read.close()
 
+    def test_carries_raw_provenance_attrs(self, sample_dataset, temp_dir):
+        """'filename'/'adcp_data_format' set by pyadps.read() survive export."""
+        proc = ProcessedDataset(sample_dataset)
+        proc.dataset.attrs["filename"] = "GD15A000.000"
+        proc.dataset.attrs["adcp_data_format"] = "PD0"
+        filepath = temp_dir / "export.nc"
+        proc.export_to_netcdf(filepath, include_velocity=True, include_echo=True)
+
+        ds_read = xr.open_dataset(filepath)
+        assert ds_read.attrs["filename"] == "GD15A000.000"
+        assert ds_read.attrs["adcp_data_format"] == "PD0"
+        ds_read.close()
+
     def test_no_metadata(self, sample_dataset, temp_dir):
         proc = ProcessedDataset(sample_dataset)
         filepath = temp_dir / "export.nc"
@@ -1686,6 +1763,95 @@ class TestExportToNetcdf:
         assert "title" not in ds_read.attrs
         assert ds_read.attrs["Conventions"] == "CF-1.8"
         ds_read.close()
+
+
+class TestDropAmbiguousAxisCoords:
+    """
+    Tests for ProcessedDataset._drop_ambiguous_axis_coords.
+
+    pyadps.read() keeps 'ensemble'/'cell' around as non-dimension
+    coordinates after swapping to 'time'/'depth', so interactive/CLI xarray
+    users can switch back. They carry no CF axis metadata though, so
+    writing them to NetCDF gives tools like Ferret two coordinate
+    candidates for one dimension - this helper strips the redundant one
+    only at file-write time. See finalize()/export_to_netcdf() etc.
+    """
+
+    @staticmethod
+    def _time_primary_dataset():
+        """dims=(time, cell, beam); 'ensemble' lingers on the time dim."""
+        return xr.Dataset(
+            {"var": (["time", "cell", "beam"], np.zeros((3, 2, 4)))},
+            coords={
+                "time": ("time", np.arange(3), {"axis": "T"}),
+                "ensemble": ("time", np.arange(3), {}),
+                "cell": ("cell", np.arange(2), {}),
+                "depth": ("cell", np.arange(2) * 1.0, {"axis": "Z"}),
+                "beam": ("beam", np.arange(4), {"axis": "E"}),
+            },
+        )
+
+    @staticmethod
+    def _depth_primary_dataset():
+        """dims=(depth, ensemble, beam); 'cell' lingers on the depth dim."""
+        return xr.Dataset(
+            {"var": (["depth", "ensemble", "beam"], np.zeros((2, 3, 4)))},
+            coords={
+                "depth": ("depth", np.arange(2) * 1.0, {"axis": "Z"}),
+                "cell": ("depth", np.arange(2), {}),
+                "ensemble": ("ensemble", np.arange(3), {}),
+                "beam": ("beam", np.arange(4), {"axis": "E"}),
+            },
+        )
+
+    def test_drops_ensemble_when_time_is_dimension(self):
+        ds = self._time_primary_dataset()
+        result = ProcessedDataset._drop_ambiguous_axis_coords(ds)
+        assert "ensemble" not in result.coords
+        assert result.coords["time"].attrs["axis"] == "T"
+
+    def test_drops_cell_when_depth_is_dimension(self):
+        ds = self._depth_primary_dataset()
+        result = ProcessedDataset._drop_ambiguous_axis_coords(ds)
+        assert "cell" not in result.coords
+        assert result.coords["depth"].attrs["axis"] == "Z"
+
+    def test_keeps_ensemble_when_it_is_the_dimension(self):
+        """No 'time' dimension present -> 'ensemble' is the real axis, not a dupe."""
+        ds = xr.Dataset(
+            {"var": (["ensemble", "cell"], np.zeros((3, 2)))},
+            coords={
+                "ensemble": ("ensemble", np.arange(3), {}),
+                "time": ("ensemble", np.arange(3), {"axis": "T"}),
+                "cell": ("cell", np.arange(2), {}),
+            },
+        )
+        result = ProcessedDataset._drop_ambiguous_axis_coords(ds)
+        assert "ensemble" in result.coords
+
+    def test_keeps_cell_when_it_is_the_dimension(self):
+        """No 'depth' dimension present -> 'cell' is the real axis, not a dupe."""
+        ds = xr.Dataset(
+            {"var": (["cell", "time"], np.zeros((2, 3)))},
+            coords={
+                "cell": ("cell", np.arange(2), {}),
+                "depth": ("cell", np.arange(2) * 1.0, {"axis": "Z"}),
+                "time": ("time", np.arange(3), {"axis": "T"}),
+            },
+        )
+        result = ProcessedDataset._drop_ambiguous_axis_coords(ds)
+        assert "cell" in result.coords
+
+    def test_noop_when_no_ambiguous_coords_present(self):
+        ds = xr.Dataset(
+            {"var": (["time", "cell"], np.zeros((3, 2)))},
+            coords={
+                "time": ("time", np.arange(3), {"axis": "T"}),
+                "cell": ("cell", np.arange(2), {}),
+            },
+        )
+        result = ProcessedDataset._drop_ambiguous_axis_coords(ds)
+        assert set(result.coords) == {"time", "cell"}
 
 
 # ============================================================================

@@ -475,6 +475,15 @@ class TestDatatypeAttributes:
         assert var_attrs["valid_min"] == -32768
         assert var_attrs["valid_max"] == 32767
 
+    def test_velocity_description_does_not_mention_beams(self, valid_rdi_file):
+        """
+        'description' must not claim beam-coordinate data, since pyadps
+        supports files in any coordinate system (Beam/Instrument/Ship/
+        Earth) and this attribute isn't coordinate-system-dependent.
+        """
+        ds = read_velocity(valid_rdi_file)
+        assert ds["velocity"].attrs["description"] == "Velocity magnitude measured by ADCP"
+
     def test_correlation_has_variable_attributes(self, valid_rdi_file):
         """Test that correlation variable has CF Convention attributes."""
         ds = read_correlation(valid_rdi_file)
@@ -506,6 +515,43 @@ class TestDatatypeAttributes:
         var_attrs = ds["status"].attrs
         assert "long_name" in var_attrs
         assert "units" in var_attrs
+
+
+class TestVelocityCommentsByCoordinateSystem:
+    """
+    'velocity.comments' depends on the file's coordinate transformation
+    (Fixed Leader byte 26), since beam index meaning differs by coordinate
+    system: an incorrect guess is worse than an empty comment.
+    """
+
+    def _read_velocity_with_coord_transform(self, tmp_path, coord_transform):
+        data = build_ensemble(
+            fixed_leader_data=FixedLeaderData(coord_transform=coord_transform)
+        )
+        rdi_file = tmp_path / "coord_transform.000"
+        rdi_file.write_bytes(data)
+        return read_velocity(rdi_file)
+
+    def test_beam_coordinates_gets_beam_direction_comment(self, tmp_path):
+        ds = self._read_velocity_with_coord_transform(tmp_path, coord_transform=0)
+        assert ds["velocity"].attrs["comments"] == (
+            "Negative values indicate flow direction opposite to beam direction"
+        )
+
+    def test_earth_coordinates_gets_component_mapping_comment(self, tmp_path):
+        ds = self._read_velocity_with_coord_transform(tmp_path, coord_transform=24)
+        assert ds["velocity"].attrs["comments"] == (
+            "Beam index maps to Earth-coordinate velocity components: "
+            "0=eastward (u), 1=northward (v), 2=upward (w), 3=error velocity"
+        )
+
+    def test_instrument_coordinates_leaves_comments_empty(self, tmp_path):
+        ds = self._read_velocity_with_coord_transform(tmp_path, coord_transform=8)
+        assert ds["velocity"].attrs["comments"] == ""
+
+    def test_ship_coordinates_leaves_comments_empty(self, tmp_path):
+        ds = self._read_velocity_with_coord_transform(tmp_path, coord_transform=16)
+        assert ds["velocity"].attrs["comments"] == ""
 
 
 # ============================================================================

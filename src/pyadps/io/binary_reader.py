@@ -2024,6 +2024,13 @@ def read_velocity(
 
     Units are millimeters per second (mm/s) per CF Convention.
 
+    The returned 'velocity' variable's 'comments' attribute depends on the
+    file's coordinate transformation (Beam/Instrument/Ship/Earth), looked
+    up internally via Fixed Leader data - beam index meaning differs by
+    coordinate system, so it is described accurately for Beam and Earth
+    coordinates, and left empty ("") for Instrument/Ship coordinates or if
+    Fixed Leader data could not be read.
+
     See Also
     --------
     read_correlation : Load correlation magnitude data
@@ -2046,6 +2053,26 @@ def read_velocity(
             idarray = header_ds.data_id.values
         if ensemble == 0:
             ensemble = header_ds.attrs["total_ensembles"]
+
+    # Determine coordinate system (Beam/Instrument/Ship/Earth) from Fixed
+    # Leader, to pick an accurate velocity.comments attribute below. Beam
+    # index meaning differs by coordinate system, so a failure here should
+    # leave comments empty rather than assume one - never guess.
+    coordinate_system: Optional[str] = None
+    try:
+        fl_ds = read_fixed_leader(
+            filename,
+            byteskip=byteskip,
+            offset=offset,
+            idarray=idarray,
+            ensemble=ensemble,
+            include_decoded=False,
+        )
+        coordinate_system = fl_ds.fixed_leader.coordinate_transformation(ens=0)[
+            "Coordinates"
+        ]
+    except Exception as e:
+        logger.debug(f"Could not determine coordinate transformation: {e}")
 
     # Extract velocity data using pd0_parser
     logger.debug(f"Extracting velocity data: cell={cell}, beam={beam}")
@@ -2129,6 +2156,23 @@ def read_velocity(
         "axis": "E",
         "long_name": "Beam number",
     }
+    # Comments depend on coordinate system - beam index meaning differs
+    # between them, so an incorrect guess would be worse than none.
+    _comments_by_coordinate_system: Dict[str, str] = {
+        "Beam Coordinates": (
+            "Negative values indicate flow direction opposite to beam direction"
+        ),
+        "Earth Coordinates": (
+            "Beam index maps to Earth-coordinate velocity components: "
+            "0=eastward (u), 1=northward (v), 2=upward (w), 3=error velocity"
+        ),
+    }
+    velocity_comments = (
+        _comments_by_coordinate_system[coordinate_system]
+        if coordinate_system in _comments_by_coordinate_system
+        else ""
+    )
+
     # Attributes for velocity variable (CF Convention)
     if missing_as_nan:
         velocity_attrs = {
@@ -2138,9 +2182,9 @@ def read_velocity(
             "valid_max": 32767,
             "scale_factor": 1.0,
             "add_offset": 0.0,
-            "description": "Velocity magnitude measured by ADCP beams",
+            "description": "Velocity magnitude measured by ADCP",
             "source": "RDI WorkHorse ADCP",
-            "comments": "Negative values indicate flow direction opposite to beam direction",
+            "comments": velocity_comments,
             "missing_value_handling": "nan",
         }
     else:
@@ -2153,9 +2197,9 @@ def read_velocity(
             "_FillValue": -32768,
             "scale_factor": 1.0,
             "add_offset": 0.0,
-            "description": "Velocity magnitude measured by ADCP beams",
+            "description": "Velocity magnitude measured by ADCP",
             "source": "RDI WorkHorse ADCP",
-            "comments": "Negative values indicate flow direction opposite to beam direction",
+            "comments": velocity_comments,
             "missing_value_handling": "sentinel",
         }
 
@@ -3656,7 +3700,11 @@ def read(
     if use_depth_as_primary_dim and "depth" in ds.coords:
         logger.debug("Transposing dimensions to use depth as primary axis...")
         ds = ds.swap_dims({"cell": "depth"})
-        ds = ds.drop_vars("cell")
+        # 'cell' is kept as a non-dimension coordinate (mirrors 'ensemble'
+        # after the time swap above) so interactive/CLI xarray users can
+        # switch back to it. It carries no CF axis metadata, so it's
+        # stripped at NetCDF write time instead - see
+        # ProcessedDataset._drop_ambiguous_axis_coords().
     else:
         if "depth" in ds.coords:
             pass

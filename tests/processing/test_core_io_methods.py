@@ -1050,6 +1050,103 @@ class TestSaveNetcdfIntegration:
             assert "velocity" in ds.data_vars
 
 
+class TestCoordinateAxisAttributesIntegration:
+    """
+    Regression tests for coordinate CF attributes (axis/standard_name/
+    positive) surviving from pyadps.read() through to the exported NetCDF.
+
+    Ferret (and other CF-aware tools) rely on a coordinate's 'axis'
+    attribute to tell T/Z/E axes apart; a missing or duplicated axis
+    candidate produces "Unspecified or unsupported ordering of axes"
+    warnings. Covers two distinct bugs fixed together:
+
+    1. pyadps.read() keeps 'ensemble'/'cell' as leftover non-dimension
+       coordinates (for interactive/CLI flexibility) after swapping to
+       'time'/'depth'. They carry no axis metadata, so leaving them in a
+       written file gives Ferret two coordinate candidates for one
+       dimension. They should be present after read() but stripped from
+       exported NetCDF files (ProcessedDataset._drop_ambiguous_axis_coords,
+       called from to_netcdf/velocity_to_netcdf/export_to_netcdf).
+    2. Signal-quality (and similar) processing steps combine the mask with
+       other variables via xr.where()/comparison ops; in this xarray
+       version that mutates the *shared* dimension-coordinate object in
+       place, silently clearing 'time'/'cell'/'beam' attrs on
+       self.dataset. finalize() restores them from the pristine
+       self.ds_orig before every export.
+    """
+
+    @requires_pyadps
+    def test_read_keeps_both_ensemble_and_time(self, synthetic_binary):
+        """pyadps.read() output preserves both axes for interactive use."""
+        import pyadps
+
+        ds = pyadps.read(str(synthetic_binary))
+        assert "ensemble" in ds.coords
+        assert "time" in ds.coords
+        assert ds.coords["time"].attrs.get("axis") == "T"
+
+    @requires_pyadps
+    def test_export_drops_ensemble_keeps_time_axis(self, synthetic_binary, temp_dir):
+        """export_to_netcdf() strips the redundant 'ensemble' coordinate."""
+        cfg = ProcessingConfig()
+        proc = ProcessedDataset.from_file(cfg, binary_file_path=synthetic_binary)
+        filepath = temp_dir / "export.nc"
+        proc.export_to_netcdf(filepath, include_velocity=True, include_echo=True)
+
+        with xr.open_dataset(filepath) as ds:
+            assert "ensemble" not in ds.variables
+            assert ds.coords["time"].attrs.get("axis") == "T"
+            assert ds.coords["depth"].attrs.get("axis") == "Z"
+            assert ds.coords["depth"].attrs.get("positive") == "down"
+            assert ds.coords["beam"].attrs.get("axis") == "E"
+
+    @requires_pyadps
+    def test_export_no_ambiguous_coordinates_listed(self, synthetic_binary, temp_dir):
+        """3D variables' CF 'coordinates' attr shouldn't list 'ensemble'/'cell'."""
+        cfg = ProcessingConfig()
+        proc = ProcessedDataset.from_file(cfg, binary_file_path=synthetic_binary)
+        filepath = temp_dir / "export.nc"
+        proc.export_to_netcdf(filepath, include_velocity=True, include_echo=True)
+
+        with xr.open_dataset(filepath, decode_cf=False) as ds:
+            coords_attr = ds["echo_intensity"].attrs.get("coordinates", "")
+            assert "ensemble" not in coords_attr.split()
+            assert "cell" not in coords_attr.split()
+
+    @requires_pyadps
+    def test_coordinate_attrs_survive_signal_quality(self, synthetic_binary, temp_dir):
+        """
+        Regression test: apply_signal_quality() must not wipe time/cell/beam
+        coordinate attrs via the xr.where() in-place mutation bug.
+        """
+        cfg = ProcessingConfig()
+        proc = ProcessedDataset.from_file(cfg, binary_file_path=synthetic_binary)
+        proc.apply_signal_quality(correlation=64)
+
+        filepath = temp_dir / "export.nc"
+        proc.export_to_netcdf(filepath, include_velocity=True, include_echo=True)
+
+        with xr.open_dataset(filepath) as ds:
+            assert ds.coords["time"].attrs.get("axis") == "T"
+            assert ds.coords["time"].attrs.get("standard_name") == "time"
+            assert ds.coords["cell"].attrs.get("long_name")
+            assert ds.coords["beam"].attrs.get("axis") == "E"
+            assert ds.coords["depth"].attrs.get("axis") == "Z"
+
+    @requires_pyadps
+    def test_velocity_to_netcdf_axis_attrs(self, synthetic_binary, temp_dir):
+        """velocity_to_netcdf() also gets the coordinate-attr fixes."""
+        cfg = ProcessingConfig()
+        proc = ProcessedDataset.from_file(cfg, binary_file_path=synthetic_binary)
+        filepath = temp_dir / "vel.nc"
+        proc.velocity_to_netcdf(filepath)
+
+        with xr.open_dataset(filepath) as ds:
+            assert "ensemble" not in ds.variables
+            assert ds.coords["time"].attrs.get("axis") == "T"
+            assert ds.coords["depth"].attrs.get("axis") == "Z"
+
+
 class TestFromIniIntegration:
     """Integration tests: from_ini() with a real INI file and real binary."""
 

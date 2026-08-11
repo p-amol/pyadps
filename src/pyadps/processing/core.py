@@ -1278,6 +1278,23 @@ class ProcessedDataset:
             f"processing impact: {final_masked_pct - self._baseline_masked_pct:+.2f}%"
         )
 
+        # Restore coordinate attributes (axis, standard_name, positive, ...)
+        # from the pristine ds_orig. Several processing steps combine the
+        # mask with other variables via xr.where()/comparison ops, and in
+        # this xarray version that alignment mutates the *shared* dimension
+        # coordinate object in place, silently clearing its .attrs on
+        # self.dataset (e.g. 'time', 'cell', 'beam' - anything backing a
+        # pandas Index). Non-dimension coordinates like 'depth' aren't
+        # shared this way and are unaffected. Rather than auditing every
+        # xr.where() call across the pipeline, restore from ds_orig here
+        # since finalize() is the single choke point every export path
+        # (to_netcdf/velocity_to_netcdf/export_to_netcdf) runs through last.
+        for coord_name in ds_out.coords:
+            if coord_name in self.ds_orig.coords:
+                ds_out.coords[coord_name].attrs = dict(
+                    self.ds_orig.coords[coord_name].attrs
+                )
+
         return ds_out
 
     # ========================================================================
@@ -2074,6 +2091,27 @@ class ProcessedDataset:
             "valid_pct": 100 * valid / total if total > 0 else 0.0,
         }
 
+    @staticmethod
+    def _drop_ambiguous_axis_coords(ds: xr.Dataset) -> xr.Dataset:
+        """
+        Drop leftover 'ensemble'/'cell' coordinates when 'time'/'depth' are
+        the actual dimensions.
+
+        ``pyadps.read()`` can swap 'ensemble' -> 'time' and 'cell' ->
+        'depth', but keeps the original names around as non-dimension
+        coordinates so interactive/CLI xarray users can switch back.
+        Neither 'ensemble' nor 'cell' carries CF axis metadata, so leaving
+        them in a written NetCDF file gives tools like Ferret two candidate
+        coordinates per dimension - the real dimension coordinate ('time'
+        axis='T', 'depth' axis='Z') and the attribute-less auxiliary
+        ('ensemble'/'cell') - which can make axis detection ambiguous. Only
+        applied at file-write time, not on ``pyadps.read()`` output.
+        """
+        for aux_name, dim_name in (("ensemble", "time"), ("cell", "depth")):
+            if aux_name in ds.coords and aux_name not in ds.dims and dim_name in ds.dims:
+                ds = ds.drop_vars(aux_name)
+        return ds
+
     def to_netcdf(
         self,
         filepath: Union[str, Path],
@@ -2093,6 +2131,7 @@ class ProcessedDataset:
             by flipping arrays if necessary.
         """
         ds_out = self.finalize(ensure_depth_ascending=ensure_depth_ascending)
+        ds_out = self._drop_ambiguous_axis_coords(ds_out)
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
         ds_out.to_netcdf(filepath)
@@ -2269,6 +2308,8 @@ class ProcessedDataset:
                 "units": units,
                 "positive": "eastward",
                 "comment": "U component, positive eastward",
+                "description": "Velocity magnitude measured by ADCP",
+                "source": "RDI WorkHorse ADCP",
             },
         )
 
@@ -2282,6 +2323,8 @@ class ProcessedDataset:
                 "units": units,
                 "positive": "northward",
                 "comment": "V component, positive northward",
+                "description": "Velocity magnitude measured by ADCP",
+                "source": "RDI WorkHorse ADCP",
             },
         )
 
@@ -2295,6 +2338,8 @@ class ProcessedDataset:
                 "units": units,
                 "positive": "upward",
                 "comment": "W component, positive upward",
+                "description": "Velocity magnitude measured by ADCP",
+                "source": "RDI WorkHorse ADCP",
             },
         )
 
@@ -2330,6 +2375,10 @@ class ProcessedDataset:
 
             # Copy relevant attributes from original
             for attr in [
+                # Raw-file provenance (set by pyadps.read(), not user-supplied)
+                "filename",
+                "adcp_data_format",
+                # User-supplied via apply_attributes()
                 "deployment_name",
                 "instrument_type",
                 "serial_number",
@@ -2346,6 +2395,7 @@ class ProcessedDataset:
             }
 
         # Save to file
+        ds_out = self._drop_ambiguous_axis_coords(ds_out)
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
         ds_out.to_netcdf(filepath)
@@ -2474,22 +2524,48 @@ class ProcessedDataset:
             coords[cell_dim] = ds_final.coords[cell_dim]
 
         # Create dataset
+        # standard_name/positive/comment mirror velocity_to_netcdf() so both
+        # velocity-export paths carry the same CF-complete attributes.
         ds_out = xr.Dataset(
             {
                 velocity_names["u"]: xr.DataArray(
                     data=u_data,
                     dims=out_dims,
-                    attrs={"long_name": "Zonal velocity", "units": units},
+                    attrs={
+                        "long_name": "Zonal velocity (eastward)",
+                        "standard_name": "eastward_sea_water_velocity",
+                        "units": units,
+                        "positive": "eastward",
+                        "comment": "U component, positive eastward",
+                        "description": "Velocity magnitude measured by ADCP",
+                        "source": "RDI WorkHorse ADCP",
+                    },
                 ),
                 velocity_names["v"]: xr.DataArray(
                     data=v_data,
                     dims=out_dims,
-                    attrs={"long_name": "Meridional velocity", "units": units},
+                    attrs={
+                        "long_name": "Meridional velocity (northward)",
+                        "standard_name": "northward_sea_water_velocity",
+                        "units": units,
+                        "positive": "northward",
+                        "comment": "V component, positive northward",
+                        "description": "Velocity magnitude measured by ADCP",
+                        "source": "RDI WorkHorse ADCP",
+                    },
                 ),
                 velocity_names["w"]: xr.DataArray(
                     data=w_data,
                     dims=out_dims,
-                    attrs={"long_name": "Vertical velocity", "units": units},
+                    attrs={
+                        "long_name": "Vertical velocity (upward)",
+                        "standard_name": "upward_sea_water_velocity",
+                        "units": units,
+                        "positive": "upward",
+                        "comment": "W component, positive upward",
+                        "description": "Velocity magnitude measured by ADCP",
+                        "source": "RDI WorkHorse ADCP",
+                    },
                 ),
             },
             coords=coords,
@@ -2680,6 +2756,10 @@ class ProcessedDataset:
                 "components_exported": ", ".join(included),
             }
             for attr in [
+                # Raw-file provenance (set by pyadps.read(), not user-supplied)
+                "filename",
+                "adcp_data_format",
+                # User-supplied via apply_attributes()
                 "deployment_name",
                 "instrument_type",
                 "serial_number",
@@ -2695,6 +2775,7 @@ class ProcessedDataset:
                 "Conventions": "CF-1.8",
             }
 
+        ds_out = self._drop_ambiguous_axis_coords(ds_out)
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
         ds_out.to_netcdf(filepath)

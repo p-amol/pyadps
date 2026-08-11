@@ -905,7 +905,7 @@ def main():
 
     # Title
     st.title("ADCP Data Processing Tool")
-    st.write("*pyadps v1.0.0 - ProcessedDataset Workflow*")
+    st.write(f"*pyadps v{pyadps.__version__} - ProcessedDataset Workflow*")
 
     # File upload
     st.sidebar.header("File Upload")
@@ -933,6 +933,7 @@ def main():
             st.session_state.processor = ProcessedDataset(ds)
             st.session_state.processor.config.input_file_name = uploaded_file.name
             st.session_state.processor.config.input_file_path = fpath
+            st.session_state.processor.config.pyadps_version = pyadps.__version__
             st.session_state.processing_step = 0
 
             # Set file prefix

@@ -134,6 +134,10 @@ class ProcessingConfig:
     input_file_name: str = ""
     input_file_path: str = ""
     output_file_path: str = ""
+    # Version of pyadps that read the binary file. Informational only -
+    # not read by apply_config() - so a config.ini records which version
+    # was used even though it isn't itself processed.
+    pyadps_version: str = ""
 
     # ========================
     # TIME FIXES
@@ -297,6 +301,9 @@ class ProcessingConfig:
             )
             kwargs["output_file_path"] = config.get(
                 "FileSettings", "output_file_path", fallback=""
+            )
+            kwargs["pyadps_version"] = config.get(
+                "FileSettings", "pyadps_version", fallback=""
             )
 
         # ========================
@@ -584,6 +591,7 @@ class ProcessingConfig:
             "input_file_name": self.input_file_name,
             "input_file_path": self.input_file_path,
             "output_file_path": self.output_file_path,
+            "pyadps_version": self.pyadps_version,
         }
 
         # ========================

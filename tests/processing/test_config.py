@@ -220,6 +220,17 @@ class TestToIni:
         cfg.to_ini(str(p))
         assert "output_file_path = /data/processed/" in p.read_text()
 
+    def test_pyadps_version_written(self, tmp_path):
+        """
+        pyadps_version is informational only (not read by apply_config()),
+        but must round-trip so a config.ini records which pyadps version
+        read the binary file.
+        """
+        cfg = ProcessingConfig(pyadps_version="1.0.2")
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        assert "pyadps_version = 1.0.2" in p.read_text()
+
     def test_creates_file(self, tmp_path):
         cfg = ProcessingConfig()
         p = tmp_path / "config.ini"
@@ -317,11 +328,13 @@ class TestFromIni:
             "input_file_name = cruise001.pd0\n"
             "input_file_path = /data/raw/cruise001.pd0\n"
             "output_file_path = /data/processed/\n"
+            "pyadps_version = 1.0.2\n"
         )
         cfg = ProcessingConfig.from_ini(str(p))
         assert cfg.input_file_name == "cruise001.pd0"
         assert cfg.input_file_path == "/data/raw/cruise001.pd0"
         assert cfg.output_file_path == "/data/processed/"
+        assert cfg.pyadps_version == "1.0.2"
 
     def test_filesettings_absent_falls_back_to_defaults(self, tmp_path):
         """Old INI files without [FileSettings] must use empty-string defaults."""
@@ -331,6 +344,7 @@ class TestFromIni:
         assert cfg.input_file_name == ""
         assert cfg.input_file_path == ""
         assert cfg.output_file_path == ""
+        assert cfg.pyadps_version == ""
 
     def test_missing_file_returns_defaults(self):
         # configparser.read() silently ignores missing files, so from_ini

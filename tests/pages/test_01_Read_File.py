@@ -270,6 +270,7 @@ def inject_pyadps_mock():
     mock_pyadps = types.ModuleType("pyadps")
     mock_pyadps.read = MagicMock(return_value=mock_ds)
     mock_pyadps.read_header = MagicMock(return_value=mock_hdr)
+    mock_pyadps.__version__ = "0.0.0.test"
 
     mock_processing = types.ModuleType("pyadps.processing")
     mock_processing.ProcessedDataset = MagicMock(return_value=MagicMock())

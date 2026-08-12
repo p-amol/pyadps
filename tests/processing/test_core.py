@@ -4448,6 +4448,22 @@ class TestApplyConfigSideEffects:
 
     # ---- config stored on self ------------------------------------------
 
+    def test_pyadps_version_stamped_with_current_version(self, sample_dataset):
+        """
+        apply_config() must stamp pyadps_version with the version doing
+        *this* run, overwriting whatever stale value was in the loaded
+        config - reprocessing with a different pyadps install should
+        update the record, not perpetuate the original one.
+        """
+        import pyadps
+
+        proc = self._proc(sample_dataset)
+        cfg = _all_disabled_config()
+        cfg.pyadps_version = "0.0.1-stale"
+        proc.apply_config(cfg)
+        assert proc.config.pyadps_version == pyadps.__version__
+        assert proc.config.pyadps_version != "0.0.1-stale"
+
     def test_config_object_stored_verbatim(self, sample_dataset):
         """When a ProcessingConfig object is passed, self.config is that exact object."""
         proc = self._proc(sample_dataset)

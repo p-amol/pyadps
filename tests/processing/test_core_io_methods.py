@@ -941,6 +941,15 @@ class TestFromFileIntegration:
         assert proc.reports == []
 
     @requires_pyadps
+    def test_stamps_pyadps_version(self, synthetic_binary):
+        """from_file() records the current pyadps version on config."""
+        import pyadps
+
+        cfg = ProcessingConfig()
+        proc = ProcessedDataset.from_file(cfg, binary_file_path=synthetic_binary)
+        assert proc.config.pyadps_version == pyadps.__version__
+
+    @requires_pyadps
     def test_reads_demo_binary_if_present(self, demo_binary_path):
         """demo.000 in data/ is parsed without error when present."""
         if demo_binary_path is None:

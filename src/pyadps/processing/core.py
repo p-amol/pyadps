@@ -1358,6 +1358,13 @@ class ProcessedDataset:
         # Store so export_config() reflects what was applied
         self.config = config
 
+        # Stamp with the version doing *this* processing run, not whatever
+        # was recorded in the loaded config.ini - reprocessing with a
+        # different pyadps install should update this, not perpetuate a
+        # stale value. Save a copy of the config.ini beforehand to keep a
+        # record of the version that did the original processing.
+        self.config.pyadps_version = _PYADPS_VERSION
+
         # Number of ensembles needed for file-based data replacement
         time_dim = "time" if "time" in self.dataset.dims else "ensemble"
         n_ensembles = self.dataset.sizes[time_dim]
@@ -1614,6 +1621,7 @@ class ProcessedDataset:
         proc = cls(ds)
         proc.config.input_file_name = bin_path.name
         proc.config.input_file_path = str(bin_path.parent)
+        proc.config.pyadps_version = _PYADPS_VERSION
         return proc
 
     # ========================================================================

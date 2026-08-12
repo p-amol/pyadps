@@ -171,29 +171,62 @@ def render_autoprocess_tool():
         # Processing options
         st.subheader("Processing Options")
 
-        col1, col2, col3 = st.columns(3)
+        save_netcdf = st.checkbox(
+            "Save NetCDF output",
+            value=True,
+            help="Save processed data to NetCDF file",
+        )
 
-        with col1:
-            save_netcdf = st.checkbox(
-                "Save NetCDF output",
-                value=True,
-                help="Save processed data to NetCDF file",
-            )
+        use_config_export_settings = st.checkbox(
+            "Use export settings from config.ini",
+            value=True,
+            help="If this config.ini was saved after an export on the Write "
+            "File page, reuse that same component selection automatically. "
+            "Uncheck to choose different components for this run. If the "
+            "config predates this feature (no [ExportOptions] section) and "
+            "nothing is chosen below, the entire dataset is saved instead.",
+        )
 
-        with col2:
-            velocity_only = st.checkbox(
-                "Velocity only",
-                value=False,
-                help="Export only velocity components (u, v, w)",
-            )
+        include_velocity = include_echo = include_correlation = None
+        include_percent_good = include_mask = apply_mask = None
+        velocity_units = None
 
-        with col3:
-            velocity_units = st.selectbox(
-                "Velocity units",
-                options=["cm/s", "mm/s", "m/s"],
-                index=0,
-                help="Units for velocity output",
-            )
+        if not use_config_export_settings:
+            st.write("Select Data Components to Export")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                include_velocity = st.checkbox("Velocity", value=True)
+                include_echo = st.checkbox("Echo Intensity", value=False)
+            with col2:
+                include_correlation = st.checkbox("Correlation", value=False)
+                include_percent_good = st.checkbox("Percent Good", value=False)
+            with col3:
+                include_mask = st.checkbox(
+                    "QC Mask",
+                    value=False,
+                    help="The raw QC mask (1=invalid, 0=valid). Export it "
+                    "alongside the raw Echo Intensity/Correlation/Percent "
+                    "Good values above to see which cells were flagged "
+                    "without losing the diagnostic data that explains why.",
+                )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                apply_mask = st.checkbox(
+                    "Apply QC mask to exported data",
+                    value=True,
+                    help="Masked cells become NaN in Velocity only - never "
+                    "in Echo Intensity/Correlation/Percent Good, which are "
+                    "indexed by physical beam, not the mask's velocity-"
+                    "derived U/V/W/combined slots.",
+                )
+            with col2:
+                velocity_units = st.selectbox(
+                    "Velocity units",
+                    options=["cm/s", "mm/s", "m/s"],
+                    index=0,
+                    help="Units for velocity output",
+                )
 
         # Process button
         if st.button("🚀 Process Data", type="primary", use_container_width=True):
@@ -216,7 +249,12 @@ def render_autoprocess_tool():
                             config_file_or_object=config_temp.name,
                             binary_file_path=binary_path,
                             save_netcdf=save_netcdf,
-                            save_velocity_only=velocity_only,
+                            include_velocity=include_velocity,
+                            include_echo=include_echo,
+                            include_correlation=include_correlation,
+                            include_percent_good=include_percent_good,
+                            include_mask=include_mask,
+                            apply_mask=apply_mask,
                             velocity_units=velocity_units,
                             print_summary=True,
                         )
@@ -252,13 +290,22 @@ def render_autoprocess_tool():
                     else:
                         st.metric("Data Masked", "N/A")
 
-                # Provide download if NetCDF was saved
+                # Provide download if NetCDF was saved. autoprocess() picks
+                # the output filename/suffix itself based on which
+                # components ended up included (entire dataset, velocity
+                # only, or any other combination) - so look for whatever it
+                # actually wrote rather than re-deriving the same choice
+                # here and risking the two falling out of sync.
                 if save_netcdf:
-                    output_suffix = "_velocity.nc" if velocity_only else "_processed.nc"
-                    output_filename = Path(binary_path).stem + output_suffix
-                    output_path = Path(binary_path).parent / output_filename
+                    candidates = sorted(
+                        Path(binary_path).parent.glob(
+                            f"{Path(binary_path).stem}*.nc"
+                        )
+                    )
+                    output_path = candidates[0] if candidates else None
 
-                    if output_path.exists():
+                    if output_path is not None and output_path.exists():
+                        output_filename = output_path.name
                         with open(output_path, "rb") as f:
                             st.download_button(
                                 label="📥 Download Processed NetCDF",

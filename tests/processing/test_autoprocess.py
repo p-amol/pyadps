@@ -81,6 +81,14 @@ def mock_config():
     config.isProfileTest = False
     config.isVelocityTest = False
     config.isAttributes = False
+    config.isExportOptions = False
+    config.export_include_velocity = True
+    config.export_include_echo = False
+    config.export_include_correlation = False
+    config.export_include_percent_good = False
+    config.export_include_mask = False
+    config.export_apply_mask = True
+    config.export_velocity_units = "cm/s"
     return config
 
 
@@ -299,7 +307,7 @@ time_axis_modified = False
             mock_proc = MagicMock()
             mock_proc.finalize.return_value = sample_dataset
             mock_proc.print_summary = MagicMock()
-            mock_proc.velocity_to_netcdf.side_effect = ValueError("Invalid units")
+            mock_proc.export_to_netcdf.side_effect = ValueError("Invalid units")
             mock_proc_class.return_value = mock_proc
 
             with pytest.raises(ValueError):
@@ -346,9 +354,12 @@ class TestAutoprocessOutput:
                 print_summary=False,
             )
 
-            # Verify to_netcdf was called
-            mock_result.to_netcdf.assert_called_once()
-            call_path = mock_result.to_netcdf.call_args[0][0]
+            # Verify to_netcdf was called on the ProcessedDataset, not the
+            # raw finalized xr.Dataset directly - so the axis-ordering
+            # fix and export-options stamping in
+            # ProcessedDataset.to_netcdf() are applied.
+            mock_proc.to_netcdf.assert_called_once()
+            call_path = mock_proc.to_netcdf.call_args[0][0]
             assert str(temp_dir) in str(call_path)
             assert "_processed.nc" in str(call_path)
 
@@ -377,10 +388,18 @@ class TestAutoprocessOutput:
                 print_summary=False,
             )
 
-            # Verify velocity_to_netcdf was called
-            mock_proc.velocity_to_netcdf.assert_called_once()
-            call_kwargs = mock_proc.velocity_to_netcdf.call_args[1]
-            assert call_kwargs["units"] == "m/s"
+            # save_velocity_only routes through export_to_netcdf() with
+            # only velocity selected, not the standalone
+            # velocity_to_netcdf() (so it shares the same Ferret-safe
+            # export path as every other component combination).
+            mock_proc.export_to_netcdf.assert_called_once()
+            call_kwargs = mock_proc.export_to_netcdf.call_args[1]
+            assert call_kwargs["include_velocity"] is True
+            assert call_kwargs["include_echo"] is False
+            assert call_kwargs["include_correlation"] is False
+            assert call_kwargs["include_percent_good"] is False
+            assert call_kwargs["include_mask"] is False
+            assert call_kwargs["velocity_units"] == "m/s"
 
     def test_custom_output_filename(
         self, sample_dataset, mock_config, sample_binary_file, temp_dir
@@ -407,7 +426,7 @@ class TestAutoprocessOutput:
                 print_summary=False,
             )
 
-            call_path = mock_result.to_netcdf.call_args[0][0]
+            call_path = mock_proc.to_netcdf.call_args[0][0]
             assert "custom_output.nc" in str(call_path)
 
     def test_default_output_directory(
@@ -433,7 +452,7 @@ class TestAutoprocessOutput:
                 print_summary=False,
             )
 
-            call_path = Path(mock_result.to_netcdf.call_args[0][0])
+            call_path = Path(mock_proc.to_netcdf.call_args[0][0])
             assert call_path.parent == sample_binary_file.parent
 
     def test_print_summary_prints_output_path_when_save_netcdf(
@@ -619,8 +638,8 @@ class TestAutoprocessOptions:
                     print_summary=False,
                 )
 
-                call_kwargs = mock_proc.velocity_to_netcdf.call_args[1]
-                assert call_kwargs["units"] == units
+                call_kwargs = mock_proc.export_to_netcdf.call_args[1]
+                assert call_kwargs["velocity_units"] == units
 
 
 # -----------------------------------------------------------------------------

@@ -313,6 +313,78 @@ class TestToIni:
         assert "regrid_method = nearest" in p.read_text()
 
 
+class TestExportOptionsRoundTrip:
+    """
+    [ExportOptions] records the last-exported component selection so
+    autoprocess()/the Add-Ons page can reproduce it automatically. It's
+    informational only - apply_config() never reads it - but must still
+    round-trip faithfully, and isExportOptions must correctly distinguish
+    "this config was saved after an export" from "old config, or one
+    where nothing was ever exported" (dataclass defaults only).
+    """
+
+    def test_section_written(self, tmp_path):
+        cfg = ProcessingConfig()
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        assert "[ExportOptions]" in p.read_text()
+
+    def test_all_fields_written(self, tmp_path):
+        cfg = ProcessingConfig(
+            export_include_velocity=False,
+            export_include_echo=True,
+            export_include_correlation=True,
+            export_include_percent_good=True,
+            export_include_mask=True,
+            export_apply_mask=False,
+            export_velocity_units="m/s",
+        )
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        text = p.read_text()
+        assert "include_velocity = False" in text
+        assert "include_echo = True" in text
+        assert "include_correlation = True" in text
+        assert "include_percent_good = True" in text
+        assert "include_mask = True" in text
+        assert "apply_mask = False" in text
+        assert "velocity_units = m/s" in text
+
+    def test_round_trip(self, tmp_path):
+        cfg = ProcessingConfig(
+            export_include_echo=True,
+            export_include_mask=True,
+            export_apply_mask=False,
+            export_velocity_units="mm/s",
+        )
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        rt = ProcessingConfig.from_ini(str(p))
+        assert rt.isExportOptions is True
+        assert rt.export_include_velocity is True
+        assert rt.export_include_echo is True
+        assert rt.export_include_correlation is False
+        assert rt.export_include_percent_good is False
+        assert rt.export_include_mask is True
+        assert rt.export_apply_mask is False
+        assert rt.export_velocity_units == "mm/s"
+
+    def test_missing_section_leaves_isexportoptions_false(self, tmp_path):
+        """Old config.ini predating this feature must not look 'exported'."""
+        p = tmp_path / "old.ini"
+        p.write_text("[QCTest]\nqc_test = True\n")
+        cfg = ProcessingConfig.from_ini(str(p))
+        assert cfg.isExportOptions is False
+        assert cfg.export_include_velocity is True
+        assert cfg.export_include_echo is False
+        assert cfg.export_apply_mask is True
+        assert cfg.export_velocity_units == "cm/s"
+
+    def test_fresh_config_defaults_isexportoptions_false(self):
+        """A ProcessingConfig() with nothing ever exported isn't 'exported' either."""
+        assert ProcessingConfig().isExportOptions is False
+
+
 # ===========================================================================
 # 4. from_ini() — parsing
 # ===========================================================================

@@ -483,12 +483,26 @@ def _call_autoprocess(
     mocks,
     autoprocess_fn=None,
     save_netcdf=True,
-    velocity_only=False,
+    use_config_export_settings=True,
+    include_velocity=True,
+    include_echo=False,
+    include_correlation=False,
+    include_percent_good=False,
+    include_mask=False,
+    apply_mask=True,
     velocity_units="cm/s",
     click_process=True,
     output_exists=False,
 ):
-    """Call render_autoprocess_tool() with all st widgets mocked."""
+    """
+    Call render_autoprocess_tool() with all st widgets mocked.
+
+    checkbox/selectbox are mocked by matching the widget's label text
+    (not call order), since render_autoprocess_tool() only renders the
+    include_*/apply_mask/velocity_units widgets when
+    use_config_export_settings is False - a fixed-position side_effect
+    list would desync depending on that branch.
+    """
     import streamlit as st
 
     binary = _fake_binary()
@@ -500,6 +514,20 @@ def _call_autoprocess(
         mocks["pyadps.processing.autoprocess"].autoprocess.side_effect = None
         mocks["pyadps.processing.autoprocess"].autoprocess.return_value = MockDataset()
 
+    checkbox_values = {
+        "Save NetCDF output": save_netcdf,
+        "Use export settings from config.ini": use_config_export_settings,
+        "Velocity": include_velocity,
+        "Echo Intensity": include_echo,
+        "Correlation": include_correlation,
+        "Percent Good": include_percent_good,
+        "QC Mask": include_mask,
+        "Apply QC mask to exported data": apply_mask,
+    }
+
+    def _checkbox_side_effect(label, *args, **kwargs):
+        return checkbox_values[label]
+
     st_p = {
         "header": MagicMock(),
         "write": MagicMock(),
@@ -509,7 +537,7 @@ def _call_autoprocess(
         "success": MagicMock(),
         "expander": MagicMock(return_value=_make_ctx()),
         "subheader": MagicMock(),
-        "checkbox": MagicMock(side_effect=[save_netcdf, velocity_only]),
+        "checkbox": MagicMock(side_effect=_checkbox_side_effect),
         "selectbox": MagicMock(return_value=velocity_units),
         "button": MagicMock(return_value=click_process),
         "spinner": MagicMock(return_value=_make_ctx()),
@@ -526,6 +554,13 @@ def _call_autoprocess(
             if hasattr(st, attr):
                 stack.enter_context(patch.object(st, attr, mock))
         if output_exists:
+            # render_autoprocess_tool() locates the file autoprocess() wrote
+            # via Path.glob() (its exact suffix depends on which components
+            # ended up included, decided inside autoprocess() - not
+            # reconstructed here) rather than a fixed, guessable path.
+            stack.enter_context(
+                patch("pathlib.Path.glob", return_value=[Path("fake_output.nc")])
+            )
             stack.enter_context(patch("pathlib.Path.exists", return_value=True))
             stack.enter_context(
                 patch(
@@ -698,8 +733,55 @@ class TestAutoProcessButton:
 
     def test_velocity_only_mode(self, page):
         mod, mocks = page
-        p = _call_autoprocess(mod, mocks, velocity_only=True)
+        p = _call_autoprocess(
+            mod,
+            mocks,
+            use_config_export_settings=False,
+            include_velocity=True,
+            include_echo=False,
+            include_correlation=False,
+            include_percent_good=False,
+            include_mask=False,
+        )
         p["success"].assert_called()
+
+    def test_export_component_selection_passed_to_autoprocess(self, page):
+        mod, mocks = page
+        _call_autoprocess(
+            mod,
+            mocks,
+            use_config_export_settings=False,
+            include_velocity=True,
+            include_echo=True,
+            include_correlation=False,
+            include_percent_good=False,
+            include_mask=True,
+            apply_mask=False,
+        )
+        _, kwargs = mocks["pyadps.processing.autoprocess"].autoprocess.call_args
+        assert kwargs["include_velocity"] is True
+        assert kwargs["include_echo"] is True
+        assert kwargs["include_correlation"] is False
+        assert kwargs["include_mask"] is True
+        assert kwargs["apply_mask"] is False
+
+    def test_config_export_settings_used_by_default(self, page):
+        """
+        When use_config_export_settings is left checked, none of the
+        include_*/apply_mask/velocity_units widgets render - autoprocess()
+        gets None for all of them, so it falls back to whatever the
+        uploaded config.ini itself specifies.
+        """
+        mod, mocks = page
+        _call_autoprocess(mod, mocks, use_config_export_settings=True)
+        _, kwargs = mocks["pyadps.processing.autoprocess"].autoprocess.call_args
+        assert kwargs["include_velocity"] is None
+        assert kwargs["include_echo"] is None
+        assert kwargs["include_correlation"] is None
+        assert kwargs["include_percent_good"] is None
+        assert kwargs["include_mask"] is None
+        assert kwargs["apply_mask"] is None
+        assert kwargs["velocity_units"] is None
 
     def test_netcdf_output_exists_download_button(self, page):
         mod, mocks = page
@@ -722,13 +804,21 @@ class TestAutoProcessButton:
 
     def test_velocity_units_mm_per_s(self, page):
         mod, mocks = page
-        p = _call_autoprocess(mod, mocks, velocity_units="mm/s")
+        p = _call_autoprocess(
+            mod, mocks, use_config_export_settings=False, velocity_units="mm/s"
+        )
         p["success"].assert_called()
+        _, kwargs = mocks["pyadps.processing.autoprocess"].autoprocess.call_args
+        assert kwargs["velocity_units"] == "mm/s"
 
     def test_velocity_units_m_per_s(self, page):
         mod, mocks = page
-        p = _call_autoprocess(mod, mocks, velocity_units="m/s")
+        p = _call_autoprocess(
+            mod, mocks, use_config_export_settings=False, velocity_units="m/s"
+        )
         p["success"].assert_called()
+        _, kwargs = mocks["pyadps.processing.autoprocess"].autoprocess.call_args
+        assert kwargs["velocity_units"] == "m/s"
 
 
 # ===========================================================================
@@ -1093,7 +1183,7 @@ class TestCoverageGaps:
             "success": MagicMock(),
             "expander": MagicMock(return_value=_make_ctx()),
             "subheader": MagicMock(),
-            "checkbox": MagicMock(side_effect=[True, False]),
+            "checkbox": MagicMock(side_effect=[True, True]),
             "selectbox": MagicMock(return_value="cm/s"),
             "button": MagicMock(return_value=False),
             "spinner": MagicMock(return_value=_make_ctx()),
@@ -1144,7 +1234,7 @@ class TestCoverageGaps:
             "success": MagicMock(),
             "expander": MagicMock(return_value=_make_ctx()),
             "subheader": MagicMock(),
-            "checkbox": MagicMock(side_effect=[True, False]),
+            "checkbox": MagicMock(side_effect=[True, True]),
             "selectbox": MagicMock(return_value="cm/s"),
             "button": MagicMock(return_value=True),
             "spinner": MagicMock(return_value=_make_ctx()),
@@ -1197,7 +1287,7 @@ class TestCoverageGaps:
             "success": MagicMock(),
             "expander": MagicMock(return_value=_make_ctx()),
             "subheader": MagicMock(),
-            "checkbox": MagicMock(side_effect=[True, False]),
+            "checkbox": MagicMock(side_effect=[True, True]),
             "selectbox": MagicMock(return_value="cm/s"),
             "button": MagicMock(return_value=True),
             "spinner": MagicMock(return_value=_make_ctx()),

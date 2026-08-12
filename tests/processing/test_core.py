@@ -897,6 +897,23 @@ class TestToNetcdf:
         assert depth_values[0] < depth_values[-1]
         ds_read.close()
 
+    def test_stamps_config_as_everything_unmasked(self, sample_dataset, temp_dir):
+        """
+        to_netcdf() (entire dataset) never masks anything at the variable
+        level, so it must record that on self.config too - not silently
+        claim apply_mask=True like a component export would.
+        """
+        proc = ProcessedDataset(sample_dataset)
+        filepath = temp_dir / "output.nc"
+        proc.to_netcdf(filepath)
+        assert proc.config.isExportOptions is True
+        assert proc.config.export_include_velocity is True
+        assert proc.config.export_include_echo is True
+        assert proc.config.export_include_correlation is True
+        assert proc.config.export_include_percent_good is True
+        assert proc.config.export_include_mask is True
+        assert proc.config.export_apply_mask is False
+
 
 class TestVelocityToNetcdf:
     """Tests for velocity_to_netcdf method."""
@@ -972,6 +989,19 @@ class TestVelocityToNetcdf:
             )
             assert ds_read[name].attrs["source"] == "RDI WorkHorse ADCP"
         ds_read.close()
+
+    def test_velocity_to_netcdf_stamps_config(self, sample_dataset, temp_dir):
+        proc = ProcessedDataset(sample_dataset)
+        filepath = temp_dir / "velocities.nc"
+        proc.velocity_to_netcdf(filepath, apply_mask=False, units="mm/s")
+        assert proc.config.isExportOptions is True
+        assert proc.config.export_include_velocity is True
+        assert proc.config.export_include_echo is False
+        assert proc.config.export_include_correlation is False
+        assert proc.config.export_include_percent_good is False
+        assert proc.config.export_include_mask is False
+        assert proc.config.export_apply_mask is False
+        assert proc.config.export_velocity_units == "mm/s"
 
     def test_velocity_to_netcdf_custom_names(self, sample_dataset, temp_dir):
         """Test custom variable names."""
@@ -1807,7 +1837,32 @@ class TestExportToNetcdf:
         ds_read = xr.open_dataset(filepath)
         assert "title" not in ds_read.attrs
         assert ds_read.attrs["Conventions"] == "CF-1.8"
-        ds_read.close()
+
+    def test_stamps_config_with_export_options(self, sample_dataset, temp_dir):
+        """
+        export_to_netcdf() must record what was exported on self.config,
+        so export_config()/export_config_string() - and in turn
+        autoprocess() reading that saved config.ini back later - can
+        reproduce this same combination automatically.
+        """
+        proc = ProcessedDataset(sample_dataset)
+        filepath = temp_dir / "export.nc"
+        proc.export_to_netcdf(
+            filepath,
+            include_velocity=False,
+            include_echo=True,
+            include_mask=True,
+            apply_mask=False,
+            velocity_units="m/s",
+        )
+        assert proc.config.isExportOptions is True
+        assert proc.config.export_include_velocity is False
+        assert proc.config.export_include_echo is True
+        assert proc.config.export_include_correlation is False
+        assert proc.config.export_include_percent_good is False
+        assert proc.config.export_include_mask is True
+        assert proc.config.export_apply_mask is False
+        assert proc.config.export_velocity_units == "m/s"
 
 
 class TestDropAmbiguousAxisCoords:

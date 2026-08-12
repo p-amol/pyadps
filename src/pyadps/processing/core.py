@@ -2145,6 +2145,17 @@ class ProcessedDataset:
         ds_out.to_netcdf(filepath)
         logger.info(f"Dataset saved to {filepath}")
 
+        # Record what was exported, so export_config()/export_config_string()
+        # let a saved config.ini reproduce this later - see autoprocess().
+        self.config.isExportOptions = True
+        self.config.export_include_velocity = True
+        self.config.export_include_echo = True
+        self.config.export_include_correlation = True
+        self.config.export_include_percent_good = True
+        self.config.export_include_mask = True
+        self.config.export_apply_mask = False  # entire dataset - nothing masked
+        self.config.export_velocity_units = "mm/s"  # raw, no conversion applied
+
     def velocity_to_netcdf(
         self,
         filepath: Union[str, Path],
@@ -2421,6 +2432,17 @@ class ProcessedDataset:
             f"v={n_valid_v:,} ({100*n_valid_v/total_cells:.1f}%), "
             f"w={n_valid_w:,} ({100*n_valid_w/total_cells:.1f}%)"
         )
+
+        # Record what was exported, so export_config()/export_config_string()
+        # let a saved config.ini reproduce this later - see autoprocess().
+        self.config.isExportOptions = True
+        self.config.export_include_velocity = True
+        self.config.export_include_echo = False
+        self.config.export_include_correlation = False
+        self.config.export_include_percent_good = False
+        self.config.export_include_mask = False
+        self.config.export_apply_mask = apply_mask
+        self.config.export_velocity_units = units
 
     def get_velocity_dataset(
         self,
@@ -2810,6 +2832,17 @@ class ProcessedDataset:
         filepath.parent.mkdir(parents=True, exist_ok=True)
         ds_out.to_netcdf(filepath)
         logger.info(f"Export dataset saved to {filepath}: components={included}")
+
+        # Record what was exported, so export_config()/export_config_string()
+        # let a saved config.ini reproduce this later - see autoprocess().
+        self.config.isExportOptions = True
+        self.config.export_include_velocity = include_velocity
+        self.config.export_include_echo = include_echo
+        self.config.export_include_correlation = include_correlation
+        self.config.export_include_percent_good = include_percent_good
+        self.config.export_include_mask = include_mask
+        self.config.export_apply_mask = apply_mask
+        self.config.export_velocity_units = velocity_units
 
     # ========================================================================
     # REPORTING

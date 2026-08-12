@@ -264,6 +264,24 @@ class ProcessingConfig:
     isAttributes: bool = False
     attributes: Dict[str, Any] = field(default_factory=dict)
 
+    # ========================
+    # EXPORT OPTIONS
+    # ========================
+    # Which components were last exported (NetCDF only - CSV isn't a
+    # ProcessedDataset method yet). isExportOptions gates whether these are
+    # treated as meaningful choices (a config.ini this saved to) vs. just
+    # unset dataclass defaults (an old config.ini predating this section,
+    # or one from a session where nothing was ever exported) - mirrors the
+    # isQCTest/isSensorTest/... gating pattern used for every other section.
+    isExportOptions: bool = False
+    export_include_velocity: bool = True
+    export_include_echo: bool = False
+    export_include_correlation: bool = False
+    export_include_percent_good: bool = False
+    export_include_mask: bool = False
+    export_apply_mask: bool = True
+    export_velocity_units: str = "cm/s"
+
     @classmethod
     def from_ini(cls, filepath: str) -> "ProcessingConfig":
         """
@@ -567,6 +585,33 @@ class ProcessingConfig:
             except json.JSONDecodeError:
                 kwargs["attributes"] = {}
 
+        # ========================
+        # EXPORT OPTIONS
+        # ========================
+        if "ExportOptions" in config:
+            kwargs["isExportOptions"] = True
+            kwargs["export_include_velocity"] = config.getboolean(
+                "ExportOptions", "include_velocity", fallback=True
+            )
+            kwargs["export_include_echo"] = config.getboolean(
+                "ExportOptions", "include_echo", fallback=False
+            )
+            kwargs["export_include_correlation"] = config.getboolean(
+                "ExportOptions", "include_correlation", fallback=False
+            )
+            kwargs["export_include_percent_good"] = config.getboolean(
+                "ExportOptions", "include_percent_good", fallback=False
+            )
+            kwargs["export_include_mask"] = config.getboolean(
+                "ExportOptions", "include_mask", fallback=False
+            )
+            kwargs["export_apply_mask"] = config.getboolean(
+                "ExportOptions", "apply_mask", fallback=True
+            )
+            kwargs["export_velocity_units"] = config.get(
+                "ExportOptions", "velocity_units", fallback="cm/s"
+            )
+
         return cls(**kwargs)
 
     def _build_configparser(self) -> configparser.ConfigParser:
@@ -718,6 +763,19 @@ class ProcessingConfig:
         config["Attributes"] = {
             "add_attributes": str(self.isAttributes),
             "attributes_json": json.dumps(self.attributes),
+        }
+
+        # ========================
+        # EXPORT OPTIONS
+        # ========================
+        config["ExportOptions"] = {
+            "include_velocity": str(self.export_include_velocity),
+            "include_echo": str(self.export_include_echo),
+            "include_correlation": str(self.export_include_correlation),
+            "include_percent_good": str(self.export_include_percent_good),
+            "include_mask": str(self.export_include_mask),
+            "apply_mask": str(self.export_apply_mask),
+            "velocity_units": self.export_velocity_units,
         }
 
         return config

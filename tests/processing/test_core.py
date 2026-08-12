@@ -1695,13 +1695,40 @@ class TestGetExportDataset:
             )
             assert result[name].attrs["source"] == "RDI WorkHorse ADCP"
 
-    def test_mask_applied_to_echo(self, sample_dataset_with_mask):
+    def test_mask_never_applied_to_echo(self, sample_dataset_with_mask):
+        """
+        The mask is velocity-derived (U/V/W/combined failures) and not
+        indexed the same way as echo_intensity's physical beams, so it
+        must never be applied to echo_intensity - regardless of apply_mask.
+        """
         proc = ProcessedDataset(sample_dataset_with_mask)
         result = proc.get_export_dataset(
             include_velocity=False, include_echo=True, apply_mask=True
         )
-        # sample_dataset_with_mask masks the first cell across all beams
-        assert np.all(np.isnan(result["echo_intensity"].isel(cell=0).values))
+        # sample_dataset_with_mask masks the first cell across all beams,
+        # but echo_intensity must stay raw/unmasked regardless.
+        assert not np.any(np.isnan(result["echo_intensity"].isel(cell=0).values))
+
+    def test_mask_never_applied_to_correlation_or_percent_good(
+        self, sample_dataset_with_mask
+    ):
+        proc = ProcessedDataset(sample_dataset_with_mask)
+        result = proc.get_export_dataset(
+            include_velocity=False,
+            include_correlation=True,
+            include_percent_good=True,
+            apply_mask=True,
+        )
+        assert not np.any(np.isnan(result["correlation"].isel(cell=0).values))
+        assert not np.any(np.isnan(result["percent_good"].isel(cell=0).values))
+
+    def test_mask_still_applied_to_velocity(self, sample_dataset_with_mask):
+        """Masking remains velocity-only - that's the actual QC'd product."""
+        proc = ProcessedDataset(sample_dataset_with_mask)
+        result = proc.get_export_dataset(
+            include_velocity=True, apply_mask=True, include_echo=False
+        )
+        assert np.all(np.isnan(result["zonal_velocity"].isel(cell=0).values))
 
     def test_mask_not_applied_when_disabled(self, sample_dataset_with_mask):
         proc = ProcessedDataset(sample_dataset_with_mask)
@@ -1709,6 +1736,24 @@ class TestGetExportDataset:
             include_velocity=False, include_echo=True, apply_mask=False
         )
         assert not np.any(np.isnan(result["echo_intensity"].values))
+
+    def test_include_mask_adds_raw_mask_variable(self, sample_dataset_with_mask):
+        proc = ProcessedDataset(sample_dataset_with_mask)
+        result = proc.get_export_dataset(
+            include_velocity=False, include_mask=True
+        )
+        assert "mask" in result.data_vars
+        assert np.all(result["mask"].isel(cell=0).values == 1)
+
+    def test_include_mask_alone_satisfies_component_requirement(
+        self, sample_dataset_with_mask
+    ):
+        """Selecting only the mask (no velocity/echo/etc.) must not raise."""
+        proc = ProcessedDataset(sample_dataset_with_mask)
+        result = proc.get_export_dataset(
+            include_velocity=False, include_mask=True
+        )
+        assert set(result.data_vars) == {"mask"}
 
 
 class TestExportToNetcdf:

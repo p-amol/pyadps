@@ -275,6 +275,7 @@ def _full_ss(proc: MagicMock, **overrides) -> Dict[str, Any]:
         "export_include_echo": False,
         "export_include_correlation": False,
         "export_include_percent_good": False,
+        "export_include_mask": False,
         "velocity_naming_style": "Short (u, v, w)",
         "velocity_name_u": "zonal_velocity",
         "velocity_name_v": "meridional_velocity",
@@ -774,6 +775,31 @@ class TestTab3ExportNetCDFVelocity:
         assert any("Echo Intensity" in l for l in labels)
         assert any("Correlation" in l for l in labels)
         assert any("Percent Good" in l for l in labels)
+        assert any("QC Mask" in l for l in labels)
+
+    def test_mask_checkbox_unselected_by_default(self, proc):
+        at = _run(_full_ss(proc))
+        assert next(c for c in at.checkbox if "QC Mask" in c.label).value is False
+
+    def test_generate_netcdf_with_mask_included(self):
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        ss = _full_ss(proc, export_format="NetCDF", export_include_mask=True)
+        at = _run(ss)
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        _, kwargs = proc.export_to_netcdf.call_args
+        assert kwargs.get("include_mask") is True
+
+    def test_generate_netcdf_without_mask_by_default(self):
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        ss = _full_ss(proc, export_format="NetCDF")
+        at = _run(ss)
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        _, kwargs = proc.export_to_netcdf.call_args
+        assert kwargs.get("include_mask") is False
 
     def test_velocity_selected_by_default(self, proc):
         at = _run(_full_ss(proc))
@@ -1122,10 +1148,21 @@ class TestTab3ExportCSV:
         assert not at.exception
 
     def test_csv_exports_mask_when_present(self):
-        """CSV path also generates a mask CSV download button."""
+        """CSV path generates a mask CSV download button when QC Mask is selected."""
         ds = _make_ds()
         proc = _make_proc(ds)
-        at = _run(_full_ss(proc, apply_mask_export=False))
+        at = _run(_full_ss(proc, apply_mask_export=False, export_include_mask=True))
+        next(r for r in at.radio if r.key == "export_format_radio").set_value(
+            "CSV"
+        ).run()
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+
+    def test_csv_mask_not_exported_when_unselected(self):
+        """CSV path doesn't crash when QC Mask isn't selected."""
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        at = _run(_full_ss(proc, apply_mask_export=False, export_include_mask=False))
         next(r for r in at.radio if r.key == "export_format_radio").set_value(
             "CSV"
         ).run()
@@ -1137,7 +1174,7 @@ class TestTab3ExportCSV:
         ds = _make_ds(n_beams=4)
         ds["mask"].values[3, :2, :] = 1
         proc = _make_proc(ds)
-        at = _run(_full_ss(proc, apply_mask_export=False))
+        at = _run(_full_ss(proc, apply_mask_export=False, export_include_mask=True))
         next(r for r in at.radio if r.key == "export_format_radio").set_value(
             "CSV"
         ).run()
@@ -1148,7 +1185,7 @@ class TestTab3ExportCSV:
         """2-beam mask: mask[0, :, :] chosen as fallback."""
         ds = _make_ds(n_beams=2)
         proc = _make_proc(ds)
-        at = _run(_full_ss(proc, apply_mask_export=False))
+        at = _run(_full_ss(proc, apply_mask_export=False, export_include_mask=True))
         next(r for r in at.radio if r.key == "export_format_radio").set_value(
             "CSV"
         ).run()
@@ -1544,6 +1581,7 @@ class TestHelperFunctions:
                     "export_include_echo": False,
                     "export_include_correlation": False,
                     "export_include_percent_good": False,
+                    "export_include_mask": False,
                     "velocity_naming_style": "CF-style",
                     "apply_mask_export": True,
                     "velocity_units": "cm/s",
@@ -1827,6 +1865,7 @@ class TestPlottingFunctions:
                     "export_include_echo": False,
                     "export_include_correlation": False,
                     "export_include_percent_good": False,
+                    "export_include_mask": False,
                     "velocity_naming_style": "CF-style",
                     "apply_mask_export": True,
                     "velocity_units": "cm/s",
@@ -2070,6 +2109,7 @@ class TestCoverageGaps:
                     "export_include_echo": False,
                     "export_include_correlation": False,
                     "export_include_percent_good": False,
+                    "export_include_mask": False,
                     "velocity_naming_style": "CF-style",
                     "apply_mask_export": True,
                     "velocity_units": "cm/s",
@@ -2208,6 +2248,7 @@ def _make_page_module(inject_pyadps_mock):
                 "export_include_echo": False,
                 "export_include_correlation": False,
                 "export_include_percent_good": False,
+                "export_include_mask": False,
                 "velocity_naming_style": "CF-style",
                 "apply_mask_export": True,
                 "velocity_units": "cm/s",

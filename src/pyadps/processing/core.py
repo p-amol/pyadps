@@ -2587,6 +2587,7 @@ class ProcessedDataset:
         include_echo: bool = False,
         include_correlation: bool = False,
         include_percent_good: bool = False,
+        include_mask: bool = False,
         apply_mask: bool = True,
         ensure_depth_ascending: bool = True,
         velocity_units: str = "cm/s",
@@ -2597,9 +2598,9 @@ class ProcessedDataset:
 
         Unlike ``to_netcdf()`` (entire dataset) or ``velocity_to_netcdf()``
         (velocity only), this assembles any combination of velocity, echo
-        intensity, correlation, and percent good into a single dataset — the
-        processed-data equivalent of the raw-file page's "Select Data
-        Components to Download".
+        intensity, correlation, percent good, and the QC mask into a single
+        dataset — the processed-data equivalent of the raw-file page's
+        "Select Data Components to Download".
 
         Parameters
         ----------
@@ -2607,14 +2608,27 @@ class ProcessedDataset:
             Include velocity, split into separate u/v/w variables (see
             ``get_velocity_dataset``). Error velocity (beam 3) is excluded.
         include_echo : bool, default False
-            Include echo intensity (all 4 beams, mask applied if requested).
+            Include echo intensity (all 4 beams), always as raw,
+            unmasked values (see ``apply_mask`` below for why).
         include_correlation : bool, default False
-            Include correlation (all 4 beams, mask applied if requested).
+            Include correlation (all 4 beams), always as raw, unmasked
+            values.
         include_percent_good : bool, default False
-            Include percent good (all 4 components, mask applied if
-            requested).
+            Include percent good (all 4 components), always as raw,
+            unmasked values.
+        include_mask : bool, default False
+            Include the QC mask itself (1=invalid, 0=valid), unmodified.
+            Useful alongside the raw echo/correlation/percent_good values
+            above to see which cells were flagged without losing the
+            diagnostic data that explains why.
         apply_mask : bool, default True
-            If True, masked cells become NaN in every included variable.
+            If True, masked cells become NaN in velocity only. The mask's
+            'beam' dimension holds velocity-derived semantics (U/V/W/
+            combined failures - see ``create_default_mask``), not the
+            physical transducer beams that echo/correlation/percent_good
+            are indexed by, so it is never applied to those three -
+            doing so would silently replace valid diagnostic readings
+            with NaN whenever velocity failed QC for an unrelated reason.
         ensure_depth_ascending : bool, default True
             See ``finalize()``.
         velocity_units : str, default 'cm/s'
@@ -2637,12 +2651,17 @@ class ProcessedDataset:
         >>> ds = proc.get_export_dataset(include_velocity=True, include_echo=True)
         """
         if not any(
-            [include_velocity, include_echo, include_correlation, include_percent_good]
+            [
+                include_velocity,
+                include_echo,
+                include_correlation,
+                include_percent_good,
+                include_mask,
+            ]
         ):
             raise ValueError("At least one component must be selected for export.")
 
         ds_final = self.finalize(ensure_depth_ascending=ensure_depth_ascending)
-        mask = ds_final["mask"] if "mask" in ds_final.data_vars else None
 
         data_vars: Dict[str, xr.DataArray] = {}
         coords: Dict[str, Any] = {}
@@ -2658,15 +2677,10 @@ class ProcessedDataset:
             for coord_name, coord_val in vel_ds.coords.items():
                 coords[str(coord_name)] = coord_val
 
-        def _add_beam_variable(var_name: str) -> None:
+        def _add_variable(var_name: str) -> None:
             if var_name not in ds_final.data_vars:
                 return
             da = ds_final[var_name]
-            if apply_mask and mask is not None and mask.dims == da.dims:
-                values = np.where(
-                    mask.values == 1, np.nan, da.values.astype(np.float32)
-                )
-                da = xr.DataArray(values, dims=da.dims, coords=da.coords, attrs=da.attrs)
             data_vars[var_name] = da
             for dim in da.dims:
                 dim_name = str(dim)
@@ -2674,15 +2688,17 @@ class ProcessedDataset:
                     coords[dim_name] = ds_final.coords[dim_name]
 
         if include_echo:
-            _add_beam_variable(
+            _add_variable(
                 "echo_intensity" if "echo_intensity" in ds_final.data_vars else "echo"
             )
         if include_correlation:
-            _add_beam_variable("correlation")
+            _add_variable("correlation")
         if include_percent_good:
-            _add_beam_variable(
+            _add_variable(
                 "percent_good" if "percent_good" in ds_final.data_vars else "pg"
             )
+        if include_mask:
+            _add_variable("mask")
 
         return xr.Dataset(data_vars, coords=coords)
 
@@ -2693,6 +2709,7 @@ class ProcessedDataset:
         include_echo: bool = False,
         include_correlation: bool = False,
         include_percent_good: bool = False,
+        include_mask: bool = False,
         apply_mask: bool = True,
         ensure_depth_ascending: bool = True,
         velocity_units: str = "cm/s",
@@ -2704,17 +2721,19 @@ class ProcessedDataset:
 
         The processed-data equivalent of the raw-file page's
         component-selection download: choose any combination of velocity,
-        echo intensity, correlation, and percent good, and write exactly
-        those to one file.
+        echo intensity, correlation, percent good, and the QC mask, and
+        write exactly those to one file.
 
         Parameters
         ----------
         filepath : str or Path
             Output file path.
-        include_velocity, include_echo, include_correlation, include_percent_good : bool
+        include_velocity, include_echo, include_correlation, include_percent_good, include_mask : bool
             Which components to include. See ``get_export_dataset``.
         apply_mask : bool, default True
-            If True, masked cells become NaN.
+            If True, masked cells become NaN in velocity only - see
+            ``get_export_dataset`` for why it's never applied to
+            echo/correlation/percent_good.
         ensure_depth_ascending : bool, default True
             See ``finalize()``.
         velocity_units : str, default 'cm/s'
@@ -2735,6 +2754,7 @@ class ProcessedDataset:
             include_echo=include_echo,
             include_correlation=include_correlation,
             include_percent_good=include_percent_good,
+            include_mask=include_mask,
             apply_mask=apply_mask,
             ensure_depth_ascending=ensure_depth_ascending,
             velocity_units=velocity_units,
@@ -2750,6 +2770,8 @@ class ProcessedDataset:
             included.append("correlation")
         if include_percent_good:
             included.append("percent_good")
+        if include_mask:
+            included.append("mask")
 
         if include_metadata:
             ds_out.attrs = {

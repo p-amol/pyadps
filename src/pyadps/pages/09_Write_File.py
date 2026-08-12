@@ -360,6 +360,7 @@ if not st.session_state.write_initialized:
     st.session_state.export_include_echo = False
     st.session_state.export_include_correlation = False
     st.session_state.export_include_percent_good = False
+    st.session_state.export_include_mask = False
 
     # Velocity variable naming
     st.session_state.velocity_naming_style = "Short (u, v, w)"
@@ -729,7 +730,7 @@ with tab3:
     st.write("Or select individual components:")
 
     _entire = st.session_state.export_entire_dataset
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.session_state.export_include_velocity = st.checkbox(
             "Velocity",
@@ -752,6 +753,17 @@ with tab3:
             value=True if _entire else st.session_state.export_include_percent_good,
             disabled=_entire,
         )
+    with col3:
+        st.session_state.export_include_mask = st.checkbox(
+            "QC Mask",
+            value=True if _entire else st.session_state.export_include_mask,
+            disabled=_entire,
+            help="The raw QC mask (1=invalid, 0=valid) used to flag "
+            "velocity cells. Export it alongside the raw Echo Intensity/"
+            "Correlation/Percent Good values above to see which cells "
+            "were flagged without losing the diagnostic data that "
+            "explains why.",
+        )
 
     _any_component_selected = _entire or any(
         [
@@ -759,6 +771,7 @@ with tab3:
             st.session_state.export_include_echo,
             st.session_state.export_include_correlation,
             st.session_state.export_include_percent_good,
+            st.session_state.export_include_mask,
         ]
     )
     if not _any_component_selected:
@@ -818,7 +831,13 @@ with tab3:
         st.session_state.apply_mask_export = st.checkbox(
             "Apply QC mask to exported data",
             value=st.session_state.apply_mask_export,
-            help="Masked values will be set to NaN in the exported file",
+            help="Masked cells become NaN in Velocity only. Echo Intensity/"
+            "Correlation/Percent Good are always exported as raw, unmasked "
+            "values - the mask is velocity-derived (U/V/W/combined "
+            "failures), not indexed the same way as these physical-beam "
+            "diagnostics, so applying it to them would silently erase "
+            "valid readings. Enable the QC Mask component above to see "
+            "which cells were flagged.",
         )
 
     with col2:
@@ -874,6 +893,7 @@ with tab3:
                 _inc_echo = _entire or st.session_state.export_include_echo
                 _inc_correlation = _entire or st.session_state.export_include_correlation
                 _inc_percent_good = _entire or st.session_state.export_include_percent_good
+                _inc_mask = _entire or st.session_state.export_include_mask
 
                 if st.session_state.export_format == "NetCDF":
                     if _entire:
@@ -907,6 +927,7 @@ with tab3:
                             include_echo=_inc_echo,
                             include_correlation=_inc_correlation,
                             include_percent_good=_inc_percent_good,
+                            include_mask=_inc_mask,
                             apply_mask=st.session_state.apply_mask_export,
                             velocity_units=st.session_state.velocity_units,
                             velocity_names=get_velocity_names(),
@@ -933,6 +954,10 @@ with tab3:
 
                     time_axis = get_time_axis()
                     depth_axis = get_depth_axis()
+                    # Only velocity uses mask_arr below - it's velocity-derived
+                    # (U/V/W/combined failures), not indexed the same way as
+                    # the physical-beam Echo Intensity/Correlation/Percent
+                    # Good diagnostics, so it's never applied to those.
                     mask_arr = (
                         ds["mask"].values
                         if (st.session_state.apply_mask_export and "mask" in ds.data_vars)
@@ -947,10 +972,6 @@ with tab3:
                         for beam_idx in range(data.shape[0]):
                             comp_data = data[beam_idx, :, :].copy()
                             comp_data[comp_data == -32768] = np.nan
-                            if mask_arr is not None and mask_arr.shape[0] > beam_idx:
-                                comp_data = np.where(
-                                    mask_arr[beam_idx, :, :] == 1, np.nan, comp_data
-                                )
                             df = pd.DataFrame(
                                 comp_data.T, index=time_axis, columns=depth_axis
                             )
@@ -1005,7 +1026,7 @@ with tab3:
                         _export_beam_csvs("percent_good", "percent_good")
 
                     # Export mask as CSV
-                    if "mask" in ds.data_vars:
+                    if _inc_mask and "mask" in ds.data_vars:
                         mask = ds["mask"].values
                         # Use combined mask (beam 3) if available
                         mask_2d = mask[3, :, :] if mask.shape[0] > 3 else mask[0, :, :]
@@ -1119,6 +1140,7 @@ with st.sidebar:
                 ("Echo Intensity", st.session_state.export_include_echo),
                 ("Correlation", st.session_state.export_include_correlation),
                 ("Percent Good", st.session_state.export_include_percent_good),
+                ("QC Mask", st.session_state.export_include_mask),
             ]
             if flag
         ]

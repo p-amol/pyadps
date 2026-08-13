@@ -712,6 +712,14 @@ with tab3:
         help="NetCDF is recommended for most use cases",
     )
 
+    if st.session_state.export_format == "CSV":
+        st.caption(
+            "⚠️ `config.ini` remembers which components you select below, "
+            "but not the CSV format itself. Reprocessing this config.ini "
+            "later (e.g. via Add-Ons → Auto Processing Tool) will always "
+            "produce NetCDF, even though this export is CSV."
+        )
+
     st.divider()
 
     # -------------------------------------------------------------------
@@ -1042,6 +1050,23 @@ with tab3:
                             mime="text/csv",
                             key="csv_mask",
                         )
+
+                    # Record what was exported, same as the NetCDF paths
+                    # (export_to_netcdf()/velocity_to_netcdf()/to_netcdf()
+                    # do this internally; CSV export doesn't go through any
+                    # of them, so it has to be stamped here directly) - so
+                    # "Generate config.ini" reflects this CSV export rather
+                    # than stale/default values.
+                    proc.config.isExportOptions = True
+                    proc.config.export_include_velocity = _inc_velocity
+                    proc.config.export_include_echo = _inc_echo
+                    proc.config.export_include_correlation = _inc_correlation
+                    proc.config.export_include_percent_good = _inc_percent_good
+                    proc.config.export_include_mask = _inc_mask
+                    proc.config.export_apply_mask = st.session_state.apply_mask_export
+                    # CSV velocity is always raw mm/s - the unit selector
+                    # only applies to the NetCDF path (see comment above).
+                    proc.config.export_velocity_units = "mm/s"
 
                     st.success("✅ CSV files generated successfully!")
 

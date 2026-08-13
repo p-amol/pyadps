@@ -282,6 +282,16 @@ class ProcessingConfig:
     export_apply_mask: bool = True
     export_velocity_units: str = "cm/s"
 
+    # ========================
+    # RAW EXPORT
+    # ========================
+    # Whether the *entire* raw (unprocessed) dataset was downloaded as
+    # NetCDF from the Download Raw File page (not a component subset, and
+    # not the CSV format). Same provenance gating as isExportOptions above:
+    # only True when that actually happened, so autoprocess() only
+    # reproduces it when there's something real to reproduce.
+    isRawExportOptions: bool = False
+
     @classmethod
     def from_ini(cls, filepath: str) -> "ProcessingConfig":
         """
@@ -612,6 +622,12 @@ class ProcessingConfig:
                 "ExportOptions", "velocity_units", fallback="cm/s"
             )
 
+        # ========================
+        # RAW EXPORT
+        # ========================
+        if "RawExport" in config:
+            kwargs["isRawExportOptions"] = True
+
         return cls(**kwargs)
 
     def _build_configparser(self) -> configparser.ConfigParser:
@@ -768,15 +784,36 @@ class ProcessingConfig:
         # ========================
         # EXPORT OPTIONS
         # ========================
-        config["ExportOptions"] = {
-            "include_velocity": str(self.export_include_velocity),
-            "include_echo": str(self.export_include_echo),
-            "include_correlation": str(self.export_include_correlation),
-            "include_percent_good": str(self.export_include_percent_good),
-            "include_mask": str(self.export_include_mask),
-            "apply_mask": str(self.export_apply_mask),
-            "velocity_units": self.export_velocity_units,
-        }
+        # Only written when isExportOptions is True (a real export actually
+        # happened - see to_netcdf()/velocity_to_netcdf()/export_to_netcdf()).
+        # from_ini() sets isExportOptions purely from whether this section is
+        # present, so writing it unconditionally would make every generated
+        # config.ini claim "this reflects a real export" even when nothing
+        # was ever exported (or the export_* fields are stale from an
+        # earlier session) - autoprocess() would then reproduce those
+        # stale/default values instead of falling back to the original
+        # full-dataset behavior.
+        if self.isExportOptions:
+            config["ExportOptions"] = {
+                "include_velocity": str(self.export_include_velocity),
+                "include_echo": str(self.export_include_echo),
+                "include_correlation": str(self.export_include_correlation),
+                "include_percent_good": str(self.export_include_percent_good),
+                "include_mask": str(self.export_include_mask),
+                "apply_mask": str(self.export_apply_mask),
+                "velocity_units": self.export_velocity_units,
+            }
+
+        # ========================
+        # RAW EXPORT
+        # ========================
+        # Same gating as ExportOptions above - only written when the entire
+        # raw dataset was actually downloaded as NetCDF (not a subset, not
+        # CSV) from the Download Raw File page.
+        if self.isRawExportOptions:
+            config["RawExport"] = {
+                "save_raw_netcdf": str(self.isRawExportOptions),
+            }
 
         return config
 

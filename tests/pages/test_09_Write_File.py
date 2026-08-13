@@ -1169,6 +1169,41 @@ class TestTab3ExportCSV:
         next(b for b in at.button if b.key == "generate_export").click().run()
         assert not at.exception
 
+    def test_csv_export_stamps_config_export_options(self):
+        """
+        CSV export doesn't go through export_to_netcdf()/
+        velocity_to_netcdf()/to_netcdf() (which stamp config internally),
+        so the CSV branch must stamp proc.config itself - otherwise
+        "Generate config.ini" after a CSV export would show stale/default
+        values instead of what was actually just downloaded.
+        """
+        ds = _make_ds()
+        proc = _make_proc(ds)
+        at = _run(
+            _full_ss(
+                proc,
+                apply_mask_export=False,
+                export_include_velocity=False,
+                export_include_echo=True,
+                export_include_correlation=True,
+                export_include_percent_good=False,
+                export_include_mask=False,
+            )
+        )
+        next(r for r in at.radio if r.key == "export_format_radio").set_value(
+            "CSV"
+        ).run()
+        next(b for b in at.button if b.key == "generate_export").click().run()
+        assert not at.exception
+        assert proc.config.isExportOptions is True
+        assert proc.config.export_include_velocity is False
+        assert proc.config.export_include_echo is True
+        assert proc.config.export_include_correlation is True
+        assert proc.config.export_include_percent_good is False
+        assert proc.config.export_include_mask is False
+        assert proc.config.export_apply_mask is False
+        assert proc.config.export_velocity_units == "mm/s"
+
     def test_csv_mask_4_plus_beams_uses_beam3(self):
         """4-beam mask: mask[3, :, :] chosen for combined mask CSV."""
         ds = _make_ds(n_beams=4)

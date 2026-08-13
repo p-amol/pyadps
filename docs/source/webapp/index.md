@@ -368,6 +368,15 @@ or repeated later with minor adjustments instead of redoing the whole
 workflow by hand.
 ```
 
+```{warning}
+`config.ini` remembers *which components* you selected in Export Data
+(Velocity, Echo Intensity, etc.) so the Auto Processing tool (Page 10) can
+reproduce the same combination automatically — but it does not remember
+the **output format**. Reprocessing a config.ini there always produces
+NetCDF, even if this export was CSV. CSV is a per-file step on this page
+only; it isn't config-driven.
+```
+
 ```{note}
 Echo Intensity, Correlation, and Percent Good keep a `beam` dimension in
 the exported NetCDF (Velocity does not — it's split into separate `u`,
@@ -387,11 +396,21 @@ Supplementary tools for batch reprocessing and combining multi-segment files.
 
 **Auto Processing**
 
-Reprocess an ADCP file using a previously saved `config.ini`.
+Reprocess an ADCP file using a previously saved `config.ini`. By default
+this reproduces whichever components (Velocity, Echo Intensity, etc.) and
+mask settings the config.ini was last exported with on the Write File
+page; "Use export settings from config.ini" can be unchecked to choose a
+different combination for this run instead.
 
 ```{image} ../_static/images/webapp/10_addons_autoprocess.png
 :alt: Add-Ons — Auto Processing tab
 :width: 100%
+```
+
+```{warning}
+This tool only produces **NetCDF** output — there is no CSV option here.
+If you need CSV files, use the Write File page directly (Page 9); that's
+a per-file step and isn't config-driven.
 ```
 
 **File Combiner**

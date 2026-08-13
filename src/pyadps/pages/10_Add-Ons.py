@@ -137,6 +137,13 @@ def render_autoprocess_tool():
     3. The tool will apply all settings from the config file automatically
     """)
 
+    st.caption(
+        "⚠️ This tool only produces **NetCDF** output. If you need CSV "
+        "files, use the **Write File** page directly (Export Data → "
+        "CSV) — that's a per-file step, not something a config.ini can "
+        "drive here."
+    )
+
     # File upload section
     col1, col2 = st.columns(2)
 

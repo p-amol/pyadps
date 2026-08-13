@@ -323,14 +323,26 @@ class TestExportOptionsRoundTrip:
     where nothing was ever exported" (dataclass defaults only).
     """
 
-    def test_section_written(self, tmp_path):
-        cfg = ProcessingConfig()
+    def test_section_written_when_export_happened(self, tmp_path):
+        cfg = ProcessingConfig(isExportOptions=True)
         p = tmp_path / "config.ini"
         cfg.to_ini(str(p))
         assert "[ExportOptions]" in p.read_text()
 
+    def test_section_omitted_when_nothing_exported(self, tmp_path):
+        """
+        Without isExportOptions=True, the section must be entirely absent -
+        not just default-valued - otherwise reading it back would claim a
+        real export happened (see test_round_trip_of_unexported_config).
+        """
+        cfg = ProcessingConfig()
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        assert "[ExportOptions]" not in p.read_text()
+
     def test_all_fields_written(self, tmp_path):
         cfg = ProcessingConfig(
+            isExportOptions=True,
             export_include_velocity=False,
             export_include_echo=True,
             export_include_correlation=True,
@@ -352,6 +364,7 @@ class TestExportOptionsRoundTrip:
 
     def test_round_trip(self, tmp_path):
         cfg = ProcessingConfig(
+            isExportOptions=True,
             export_include_echo=True,
             export_include_mask=True,
             export_apply_mask=False,
@@ -369,6 +382,20 @@ class TestExportOptionsRoundTrip:
         assert rt.export_apply_mask is False
         assert rt.export_velocity_units == "mm/s"
 
+    def test_round_trip_of_unexported_config(self, tmp_path):
+        """
+        Generating a config.ini without ever exporting anything (e.g.
+        clicking "Generate config.ini" on the Write File page before
+        "Generate Files") must not round-trip as isExportOptions=True -
+        autoprocess() would otherwise reproduce stale/default values
+        instead of falling back to the full-dataset default.
+        """
+        cfg = ProcessingConfig()
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        rt = ProcessingConfig.from_ini(str(p))
+        assert rt.isExportOptions is False
+
     def test_missing_section_leaves_isexportoptions_false(self, tmp_path):
         """Old config.ini predating this feature must not look 'exported'."""
         p = tmp_path / "old.ini"
@@ -383,6 +410,52 @@ class TestExportOptionsRoundTrip:
     def test_fresh_config_defaults_isexportoptions_false(self):
         """A ProcessingConfig() with nothing ever exported isn't 'exported' either."""
         assert ProcessingConfig().isExportOptions is False
+
+
+class TestRawExportRoundTrip:
+    """
+    [RawExport] records whether the *entire* raw (unprocessed) dataset
+    was downloaded as NetCDF from the Download Raw File page. Same
+    provenance gating as [ExportOptions]: only written/round-trips as
+    True when that real download happened, not for a subset, not for
+    CSV, and not just because ProcessingConfig() was constructed.
+    """
+
+    def test_section_written_when_raw_export_happened(self, tmp_path):
+        cfg = ProcessingConfig(isRawExportOptions=True)
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        assert "[RawExport]" in p.read_text()
+
+    def test_section_omitted_when_nothing_raw_exported(self, tmp_path):
+        cfg = ProcessingConfig()
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        assert "[RawExport]" not in p.read_text()
+
+    def test_round_trip(self, tmp_path):
+        cfg = ProcessingConfig(isRawExportOptions=True)
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        rt = ProcessingConfig.from_ini(str(p))
+        assert rt.isRawExportOptions is True
+
+    def test_round_trip_of_unexported_config(self, tmp_path):
+        cfg = ProcessingConfig()
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        rt = ProcessingConfig.from_ini(str(p))
+        assert rt.isRawExportOptions is False
+
+    def test_missing_section_leaves_israwexportoptions_false(self, tmp_path):
+        """Old config.ini predating this feature must not look 'raw exported'."""
+        p = tmp_path / "old.ini"
+        p.write_text("[QCTest]\nqc_test = True\n")
+        cfg = ProcessingConfig.from_ini(str(p))
+        assert cfg.isRawExportOptions is False
+
+    def test_fresh_config_defaults_israwexportoptions_false(self):
+        assert ProcessingConfig().isRawExportOptions is False
 
 
 # ===========================================================================

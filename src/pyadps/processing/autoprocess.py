@@ -44,6 +44,7 @@ def autoprocess(
     include_percent_good: Optional[bool] = None,
     include_mask: Optional[bool] = None,
     apply_mask: Optional[bool] = None,
+    save_raw_netcdf: Optional[bool] = None,
     output_dir: Optional[Union[str, Path]] = None,
     output_filename: Optional[str] = None,
     velocity_units: Optional[str] = None,
@@ -81,6 +82,14 @@ def autoprocess(
         Echo Intensity/Correlation/Percent Good - see
         ``get_export_dataset``). None falls back to the config's stored
         choice, or True if there isn't one.
+    save_raw_netcdf : bool, optional
+        If True (and save_netcdf is True), also save the entire raw
+        (unprocessed) dataset as NetCDF - the same output as the Download
+        Raw File page's "Entire Data Set" option - alongside the
+        processed output, as ``<input_stem>_RAW_DATA.nc``. None falls
+        back to whether that page's entire-dataset NetCDF download was
+        actually used for this config.ini (``[RawExport]`` section);
+        False otherwise, the original behavior of this function.
     output_dir : str or Path, optional
         Directory for output files. Defaults to same directory as input.
     output_filename : str, optional
@@ -127,6 +136,13 @@ def autoprocess(
     ...     include_velocity=True,
     ...     include_echo=True,
     ...     include_mask=True,
+    ... )
+
+    >>> # Also save the entire raw dataset alongside the processed output
+    >>> result = autoprocess(
+    ...     'config.ini',
+    ...     save_netcdf=True,
+    ...     save_raw_netcdf=True,
     ... )
 
     >>> # Custom output location
@@ -300,6 +316,30 @@ def autoprocess(
         if print_summary:
             print(f"Output saved to: {output_path}")
 
+        # Optionally also save the entire raw (unprocessed) dataset -
+        # the same output as the Download Raw File page's "Entire Data
+        # Set" NetCDF option - alongside the processed output above.
+        _save_raw_netcdf = (
+            config.isRawExportOptions if save_raw_netcdf is None else save_raw_netcdf
+        )
+        if _save_raw_netcdf:
+            raw_output_path = output_dir / (binary_file_path.stem + "_RAW_DATA.nc")
+            raw_ds_out = ProcessedDataset._drop_ambiguous_axis_coords(ds).copy()
+            # Same internal/metadata attrs the Download Raw File page drops
+            # from its own output - not meaningful once the file is
+            # standalone.
+            for attr in [
+                "pyadps_component",
+                "components",
+                "fixed_leader_variables",
+                "variable_leader_variables",
+            ]:
+                raw_ds_out.attrs.pop(attr, None)
+            raw_ds_out.to_netcdf(raw_output_path)
+
+            if print_summary:
+                print(f"Raw dataset saved to: {raw_output_path}")
+
     # Print summary
     if print_summary:
         proc.print_summary()
@@ -413,6 +453,17 @@ def main() -> None:
         "choice, or 'cm/s'.",
     )
     parser.add_argument(
+        "--save-raw-netcdf",
+        dest="save_raw_netcdf",
+        action="store_true",
+        default=None,
+        help="Also save the entire raw (unprocessed) dataset as "
+        "'<input>_RAW_DATA.nc' alongside the processed output - the same "
+        "output as the Download Raw File page's 'Entire Data Set' NetCDF "
+        "option. Defaults to whether that page's entire-dataset NetCDF "
+        "download was actually used for this config.ini, or False.",
+    )
+    parser.add_argument(
         "--no-depth-ascending",
         dest="ensure_depth_ascending",
         action="store_false",
@@ -438,6 +489,7 @@ def main() -> None:
         include_percent_good=args.include_percent_good,
         include_mask=args.include_mask,
         apply_mask=args.apply_mask,
+        save_raw_netcdf=args.save_raw_netcdf,
         output_dir=args.output_dir,
         output_filename=args.output_filename,
         velocity_units=args.velocity_units,

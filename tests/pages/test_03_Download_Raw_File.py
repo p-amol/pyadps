@@ -1102,6 +1102,40 @@ class TestGenerateNetcdf:
         btn.click().run()
         assert not at.exception
 
+    def test_entire_dataset_stamps_israwexportoptions(self, real_ds):
+        """
+        Downloading the entire raw dataset as NetCDF must record it on
+        processor.config, so autoprocess() can reproduce it later (see
+        ProcessingConfig.isRawExportOptions).
+        """
+        mock_proc = MagicMock()
+        mock_proc.config.isRawExportOptions = False
+        at = self._loaded_with_real_ds(real_ds, processor=mock_proc)
+        entire_cb = next((c for c in at.checkbox if "entire" in c.label.lower()), None)
+        if entire_cb is None:
+            pytest.skip("Entire Dataset checkbox not found")
+        entire_cb.check().run()
+        btn = next((b for b in at.button if "generate" in b.label.lower()), None)
+        if btn is None:
+            pytest.skip("Generate button not found")
+        btn.click().run()
+        assert not at.exception
+        assert mock_proc.config.isRawExportOptions is True
+
+    def test_partial_selection_does_not_stamp_israwexportoptions(self, real_ds):
+        """
+        Downloading only a subset (not "Entire Data Set") must NOT stamp
+        isRawExportOptions - autoprocess()'s raw export has no component
+        picker, so reproducing "entire dataset" wouldn't match what was
+        actually downloaded here.
+        """
+        mock_proc = MagicMock()
+        mock_proc.config.isRawExportOptions = False
+        at = self._loaded_with_real_ds(real_ds, processor=mock_proc)
+        at = self._check_velocity_and_generate(at)
+        assert not at.exception
+        assert mock_proc.config.isRawExportOptions is False
+
     def test_generate_no_vars_selectable_no_crash(self):
         """When no vars exist Generate is disabled — page renders without crash."""
         mock_ds = _make_mock_ds(

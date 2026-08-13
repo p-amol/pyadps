@@ -92,6 +92,7 @@ app's Write File page. Section names match the stage suffixes:
 [FileSettings]
 input_file_name = deployment.000
 input_file_path = /data/
+pyadps_version = 1.0.2
 
 [FixTime]
 is_time_modified = true
@@ -123,6 +124,33 @@ velocity_cutoff = true
 max_zonal_velocity = 2500.0
 max_meridional_velocity = 2500.0
 max_vertical_velocity = 500.0
+
+[ExportOptions]
+include_velocity = True
+include_echo = True
+include_correlation = False
+include_percent_good = False
+include_mask = False
+apply_mask = True
+velocity_units = cm/s
+
+[RawExport]
+save_raw_netcdf = True
+```
+
+```{note}
+`pyadps_version`, `[ExportOptions]`, and `[RawExport]` are informational -
+`apply_config()` never reads them, so they don't affect processing. They
+exist so `autoprocess()` (and the Add-Ons → Auto Processing tool) can
+reproduce what was last exported: `pyadps_version` records which version
+did the processing; `[ExportOptions]` records which components were
+selected in Export Data on the Write File page (only written if an export
+actually happened); `[RawExport]` records whether the *entire* raw
+dataset was downloaded as NetCDF from the Download Raw File page (only
+written if that specific download happened - a partial component
+selection there doesn't set it, since `autoprocess()`'s raw-dataset option
+has no component picker of its own). See {doc}`autoprocess` for how these
+get used.
 ```
 
 ## Usage with ProcessedDataset

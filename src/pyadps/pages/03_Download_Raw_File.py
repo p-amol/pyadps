@@ -592,6 +592,14 @@ if st.button("🔄 Generate NetCDF File", type="primary", disabled=not any_selec
                         mime="application/x-netcdf",
                     )
 
+                # Record that the *entire* raw dataset was downloaded as
+                # NetCDF, so autoprocess() can reproduce it later - only
+                # when it truly is the entire dataset (autoprocess()'s raw
+                # export has no component picker, so a partial subset here
+                # wouldn't match what it would reproduce).
+                if entire_dataset and proc is not None:
+                    proc.config.isRawExportOptions = True
+
 # =============================================================================
 # CSV DOWNLOAD SECTION
 # =============================================================================

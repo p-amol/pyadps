@@ -89,6 +89,7 @@ def mock_config():
     config.export_include_mask = False
     config.export_apply_mask = True
     config.export_velocity_units = "cm/s"
+    config.isRawExportOptions = False
     return config
 
 
@@ -671,6 +672,141 @@ class TestAutoprocessIntegration:
                 # If ProcessedDataset fails, that's expected in unit tests
                 # This test is more for integration testing
                 pytest.skip(f"Integration test skipped: {e}")
+
+
+# -----------------------------------------------------------------------------
+# RAW NETCDF SAVING TESTS (real pyadps.read(), not mocked)
+# -----------------------------------------------------------------------------
+
+_DEMO_BINARY = Path(__file__).parent / "data" / "demo.000"
+_requires_demo_binary = pytest.mark.skipif(
+    not _DEMO_BINARY.exists(), reason="data/demo.000 not present"
+)
+
+
+class TestAutoprocessRawNetcdf:
+    """
+    save_raw_netcdf writes the entire raw (unprocessed) dataset alongside
+    the processed one - the same output as the Download Raw File page's
+    "Entire Data Set" NetCDF option. Uses a real pyadps.read() (not
+    mocked), since the point is to verify actual file content (the Ferret
+    axis-ordering fix, attrs cleanup), not just that a method got called.
+    """
+
+    @_requires_demo_binary
+    def test_explicit_true_writes_raw_file_alongside_processed(self, temp_dir):
+        cfg = ProcessingConfig()
+        cfg_path = temp_dir / "cfg.ini"
+        cfg.to_ini(str(cfg_path))
+
+        autoprocess(
+            str(cfg_path),
+            binary_file_path=str(_DEMO_BINARY),
+            save_netcdf=True,
+            save_raw_netcdf=True,
+            output_dir=temp_dir,
+            print_summary=False,
+        )
+        assert (temp_dir / "demo_RAW_DATA.nc").exists()
+        assert (temp_dir / "demo_processed.nc").exists()
+
+    @_requires_demo_binary
+    def test_default_skips_raw_file(self, temp_dir):
+        cfg = ProcessingConfig()
+        cfg_path = temp_dir / "cfg.ini"
+        cfg.to_ini(str(cfg_path))
+
+        autoprocess(
+            str(cfg_path),
+            binary_file_path=str(_DEMO_BINARY),
+            save_netcdf=True,
+            output_dir=temp_dir,
+            print_summary=False,
+        )
+        assert not (temp_dir / "demo_RAW_DATA.nc").exists()
+        assert (temp_dir / "demo_processed.nc").exists()
+
+    @_requires_demo_binary
+    def test_config_israwexportoptions_auto_applies(self, temp_dir):
+        """
+        A config.ini saved after a real "Entire Data Set" NetCDF download
+        on the Download Raw File page (isRawExportOptions=True) must be
+        reproduced automatically, with no explicit override needed.
+        """
+        cfg = ProcessingConfig(isRawExportOptions=True)
+        cfg_path = temp_dir / "cfg.ini"
+        cfg.to_ini(str(cfg_path))
+
+        autoprocess(
+            str(cfg_path),
+            binary_file_path=str(_DEMO_BINARY),
+            save_netcdf=True,
+            output_dir=temp_dir,
+            print_summary=False,
+        )
+        assert (temp_dir / "demo_RAW_DATA.nc").exists()
+
+    @_requires_demo_binary
+    def test_explicit_false_overrides_config(self, temp_dir):
+        cfg = ProcessingConfig(isRawExportOptions=True)
+        cfg_path = temp_dir / "cfg.ini"
+        cfg.to_ini(str(cfg_path))
+
+        autoprocess(
+            str(cfg_path),
+            binary_file_path=str(_DEMO_BINARY),
+            save_netcdf=True,
+            save_raw_netcdf=False,
+            output_dir=temp_dir,
+            print_summary=False,
+        )
+        assert not (temp_dir / "demo_RAW_DATA.nc").exists()
+
+    @_requires_demo_binary
+    def test_raw_file_has_no_ambiguous_axis_coord(self, temp_dir):
+        """
+        The raw NetCDF must get the same Ferret axis-ordering fix as the
+        processed output - not reintroduce the leftover 'ensemble'
+        coordinate that everything else in this codebase strips at write
+        time (see ProcessedDataset._drop_ambiguous_axis_coords).
+        """
+        cfg = ProcessingConfig()
+        cfg_path = temp_dir / "cfg.ini"
+        cfg.to_ini(str(cfg_path))
+
+        autoprocess(
+            str(cfg_path),
+            binary_file_path=str(_DEMO_BINARY),
+            save_netcdf=True,
+            save_raw_netcdf=True,
+            output_dir=temp_dir,
+            print_summary=False,
+        )
+        with xr.open_dataset(temp_dir / "demo_RAW_DATA.nc") as ds:
+            assert "ensemble" not in ds.variables
+
+    @_requires_demo_binary
+    def test_raw_file_drops_internal_metadata_attrs(self, temp_dir):
+        cfg = ProcessingConfig()
+        cfg_path = temp_dir / "cfg.ini"
+        cfg.to_ini(str(cfg_path))
+
+        autoprocess(
+            str(cfg_path),
+            binary_file_path=str(_DEMO_BINARY),
+            save_netcdf=True,
+            save_raw_netcdf=True,
+            output_dir=temp_dir,
+            print_summary=False,
+        )
+        with xr.open_dataset(temp_dir / "demo_RAW_DATA.nc") as ds:
+            for attr in (
+                "pyadps_component",
+                "components",
+                "fixed_leader_variables",
+                "variable_leader_variables",
+            ):
+                assert attr not in ds.attrs
 
 
 if __name__ == "__main__":

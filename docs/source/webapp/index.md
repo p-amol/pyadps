@@ -150,6 +150,14 @@ for Ferret compatibility (see the Write File page, further down, for
 details). Reading these files requires Ferret v6.8 or later.
 ```
 
+```{tip}
+Downloading a **NetCDF** file here (whichever components you selected,
+including "Entire Data Set") is recorded on `config.ini`, so the Auto
+Processing tool (Page 10) can reproduce that same raw-dataset download
+automatically the next time you reprocess this file - no need to revisit
+this page. CSV downloads aren't recorded this way.
+```
+
 ---
 
 ### Page 4: Time Diagnostics

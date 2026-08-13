@@ -414,11 +414,12 @@ class TestExportOptionsRoundTrip:
 
 class TestRawExportRoundTrip:
     """
-    [RawExport] records whether the *entire* raw (unprocessed) dataset
-    was downloaded as NetCDF from the Download Raw File page. Same
-    provenance gating as [ExportOptions]: only written/round-trips as
-    True when that real download happened, not for a subset, not for
-    CSV, and not just because ProcessingConfig() was constructed.
+    [RawExport] records which raw (unprocessed) components were
+    downloaded as NetCDF from the Download Raw File page - the same
+    choice as its component checkboxes (all six True is its "Entire Data
+    Set" option). Same provenance gating as [ExportOptions]: only
+    written/round-trips as True when that real download happened, not
+    for CSV, and not just because ProcessingConfig() was constructed.
     """
 
     def test_section_written_when_raw_export_happened(self, tmp_path):
@@ -433,12 +434,46 @@ class TestRawExportRoundTrip:
         cfg.to_ini(str(p))
         assert "[RawExport]" not in p.read_text()
 
+    def test_all_fields_written(self, tmp_path):
+        cfg = ProcessingConfig(
+            isRawExportOptions=True,
+            raw_include_fixed_leader=False,
+            raw_include_variable_leader=False,
+            raw_include_velocity=True,
+            raw_include_echo=False,
+            raw_include_correlation=True,
+            raw_include_percent_good=False,
+        )
+        p = tmp_path / "config.ini"
+        cfg.to_ini(str(p))
+        text = p.read_text()
+        assert "include_fixed_leader = False" in text
+        assert "include_variable_leader = False" in text
+        assert "include_velocity = True" in text
+        assert "include_echo = False" in text
+        assert "include_correlation = True" in text
+        assert "include_percent_good = False" in text
+
     def test_round_trip(self, tmp_path):
-        cfg = ProcessingConfig(isRawExportOptions=True)
+        cfg = ProcessingConfig(
+            isRawExportOptions=True,
+            raw_include_fixed_leader=False,
+            raw_include_variable_leader=False,
+            raw_include_velocity=False,
+            raw_include_echo=True,
+            raw_include_correlation=False,
+            raw_include_percent_good=True,
+        )
         p = tmp_path / "config.ini"
         cfg.to_ini(str(p))
         rt = ProcessingConfig.from_ini(str(p))
         assert rt.isRawExportOptions is True
+        assert rt.raw_include_fixed_leader is False
+        assert rt.raw_include_variable_leader is False
+        assert rt.raw_include_velocity is False
+        assert rt.raw_include_echo is True
+        assert rt.raw_include_correlation is False
+        assert rt.raw_include_percent_good is True
 
     def test_round_trip_of_unexported_config(self, tmp_path):
         cfg = ProcessingConfig()
@@ -453,9 +488,25 @@ class TestRawExportRoundTrip:
         p.write_text("[QCTest]\nqc_test = True\n")
         cfg = ProcessingConfig.from_ini(str(p))
         assert cfg.isRawExportOptions is False
+        assert cfg.raw_include_velocity is True
 
     def test_fresh_config_defaults_israwexportoptions_false(self):
         assert ProcessingConfig().isRawExportOptions is False
+
+    def test_fresh_config_defaults_raw_includes_to_entire_dataset(self):
+        """
+        The per-component defaults are all True, so save_raw_netcdf=True
+        alone (no explicit raw_include_*, no stored config) still saves
+        the entire raw dataset - preserving the original simple-boolean
+        behavior as the fallback.
+        """
+        cfg = ProcessingConfig()
+        assert cfg.raw_include_fixed_leader is True
+        assert cfg.raw_include_variable_leader is True
+        assert cfg.raw_include_velocity is True
+        assert cfg.raw_include_echo is True
+        assert cfg.raw_include_correlation is True
+        assert cfg.raw_include_percent_good is True
 
 
 # ===========================================================================

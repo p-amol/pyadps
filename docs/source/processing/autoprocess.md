@@ -23,7 +23,8 @@ result = autoprocess(config_file_or_object, **options)
 | `save_velocity_only` | `False` | Shorthand for `include_velocity=True` with every other `include_*` `False`. Kept for backward compatibility; prefer `include_*` below for anything more specific |
 | `include_velocity`, `include_echo`, `include_correlation`, `include_percent_good`, `include_mask` | `None` | Which components to save — the same choice as the Write File page's "Select Data Components to Export". `None` falls back to the config's stored `[ExportOptions]` (what was last exported via that page), if present; otherwise the entire dataset is saved (the original behavior of this function) |
 | `apply_mask` | `None` | If `True`, masked cells become `NaN` in Velocity only — never in Echo Intensity/Correlation/Percent Good (see `get_export_dataset`). `None` falls back to the config's stored choice, or `True` |
-| `save_raw_netcdf` | `None` | If `True` (and `save_netcdf` is `True`), also save the entire raw (unprocessed) dataset as NetCDF — the same output as the Download Raw File page's "Entire Data Set" option — alongside the processed output. `None` falls back to whether that page's entire-dataset NetCDF download actually happened for this config.ini (`[RawExport]`); otherwise `False` |
+| `save_raw_netcdf` | `None` | If `True` (and `save_netcdf` is `True`), also save the raw (unprocessed) dataset as NetCDF alongside the processed output. `None` falls back to whether a raw NetCDF download actually happened for this config.ini (`[RawExport]`); otherwise `False` |
+| `raw_include_fixed_leader`, `raw_include_variable_leader`, `raw_include_velocity`, `raw_include_echo`, `raw_include_correlation`, `raw_include_percent_good` | `None` | Which raw components to include when `save_raw_netcdf` is `True` — the same choice as the Download Raw File page's component checkboxes (checking all six there is its "Entire Data Set" option). `None` falls back to the config's stored `[RawExport]` selection, if present, or `True` (entire dataset) otherwise |
 | `output_dir` | `None` | Output directory; defaults to same directory as input file |
 | `output_filename` | `None` | Output filename; auto-generated if not specified (see filename patterns below) |
 | `velocity_units` | `None` | Output units: `'mm/s'`, `'cm/s'`, or `'m/s'`. `None` falls back to the config's stored choice, or `'cm/s'` |
@@ -60,6 +61,12 @@ result = autoprocess('config.ini', save_netcdf=True,
 
 # Also save the entire raw dataset alongside the processed output
 result = autoprocess('config.ini', save_netcdf=True, save_raw_netcdf=True)
+
+# Save only Velocity + Correlation from the raw dataset
+result = autoprocess(
+    'config.ini', save_netcdf=True, save_raw_netcdf=True,
+    raw_include_velocity=True, raw_include_correlation=True,
+)
 ```
 
 ## Programmatic Use
@@ -94,10 +101,15 @@ The `pyadps-auto` CLI wraps this function for non-interactive reprocessing
 pyadps-auto config.ini --include-echo --include-mask --output-dir processed/
 pyadps-auto config.ini --velocity-only --velocity-units m/s
 pyadps-auto config.ini --save-raw-netcdf
+pyadps-auto config.ini --save-raw-netcdf --raw-include-velocity --raw-include-correlation
 ```
 
 Run `pyadps-auto --help` for the full flag list — it mirrors the `include_*`,
-`apply_mask`, `save_raw_netcdf`, and `velocity_units` parameters above.
+`apply_mask`, `save_raw_netcdf`, `raw_include_*`, and `velocity_units`
+parameters above. Note the `--raw-include-*` flags can only turn a
+component *on*; to select a specific subset that excludes some component
+from the config's stored default, edit `[RawExport]` in the config.ini
+directly instead.
 
 ## Non-Obvious Behaviors
 
@@ -112,8 +124,16 @@ File page will, by default, reproduce that same combination here — no
 actually has an `[ExportOptions]` section (i.e. it was saved after a real
 export); older configs, or ones where nothing was ever exported, fall
 through to the original full-dataset behavior. Any explicit `include_*`/
-`apply_mask`/`velocity_units`/`save_raw_netcdf` argument always overrides
-whatever the config stores.
+`apply_mask`/`velocity_units`/`save_raw_netcdf`/`raw_include_*` argument
+always overrides whatever the config stores.
+
+**Raw component selection works the same way, independently.** A
+`config.ini` saved after downloading, say, just Velocity + Correlation as
+raw NetCDF on the Download Raw File page will reproduce that exact subset
+when `save_raw_netcdf` ends up `True` (`[RawExport]` section) — not the
+entire raw dataset. Only an actual NetCDF download on that page sets this;
+a CSV download, or no download at all, leaves it unset and `save_raw_netcdf`
+defaults to `False` as before.
 
 **Auto-generated filenames** depend on which components ended up included:
 

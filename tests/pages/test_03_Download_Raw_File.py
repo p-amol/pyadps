@@ -46,6 +46,11 @@ import pytest
 import xarray as xr
 from streamlit.testing.v1 import AppTest
 
+# Captured before inject_pyadps_mock() replaces sys.modules['pyadps'] with a
+# stub - the real submodule has no pyadps-internal dependencies (just
+# xarray), so it's wired into that stub as-is rather than re-mocked.
+from pyadps.io import raw_export as _real_raw_export
+
 # ---------------------------------------------------------------------------
 # Path helpers
 # ---------------------------------------------------------------------------
@@ -367,17 +372,31 @@ def inject_pyadps_mock():
     _orig = {
         "pyadps": sys.modules.get("pyadps"),
         "pyadps.processing": sys.modules.get("pyadps.processing"),
+        "pyadps.io": sys.modules.get("pyadps.io"),
+        "pyadps.io.raw_export": sys.modules.get("pyadps.io.raw_export"),
     }
 
     mock_pyadps = types.ModuleType("pyadps")
+    mock_pyadps.__path__ = []
     mock_pyadps.read = MagicMock()
     mock_pyadps.read_header = MagicMock()
 
     mock_proc = types.ModuleType("pyadps.processing")
     mock_proc.ProcessedDataset = MagicMock()
 
+    # pyadps.io.raw_export is imported by the page for real (create_subset_
+    # dataset()/write_netcdf() delegate to it) - wire in the genuine
+    # submodule rather than mocking it, so subsetting behaves correctly in
+    # these tests too.
+    mock_io = types.ModuleType("pyadps.io")
+    mock_io.__path__ = []
+    mock_io.raw_export = _real_raw_export
+    mock_pyadps.io = mock_io
+
     sys.modules["pyadps"] = mock_pyadps
     sys.modules["pyadps.processing"] = mock_proc
+    sys.modules["pyadps.io"] = mock_io
+    sys.modules["pyadps.io.raw_export"] = _real_raw_export
 
     yield
 
@@ -1106,7 +1125,7 @@ class TestGenerateNetcdf:
         """
         Downloading the entire raw dataset as NetCDF must record it on
         processor.config, so autoprocess() can reproduce it later (see
-        ProcessingConfig.isRawExportOptions).
+        ProcessingConfig.isRawExportOptions and raw_include_*).
         """
         mock_proc = MagicMock()
         mock_proc.config.isRawExportOptions = False
@@ -1121,20 +1140,63 @@ class TestGenerateNetcdf:
         btn.click().run()
         assert not at.exception
         assert mock_proc.config.isRawExportOptions is True
+        assert mock_proc.config.raw_include_fixed_leader is True
+        assert mock_proc.config.raw_include_variable_leader is True
+        assert mock_proc.config.raw_include_velocity is True
+        assert mock_proc.config.raw_include_echo is True
+        assert mock_proc.config.raw_include_correlation is True
+        assert mock_proc.config.raw_include_percent_good is True
 
-    def test_partial_selection_does_not_stamp_israwexportoptions(self, real_ds):
+    def test_partial_selection_stamps_exact_components(self, real_ds):
         """
-        Downloading only a subset (not "Entire Data Set") must NOT stamp
-        isRawExportOptions - autoprocess()'s raw export has no component
-        picker, so reproducing "entire dataset" wouldn't match what was
-        actually downloaded here.
+        Downloading only a subset (not "Entire Data Set") must still stamp
+        isRawExportOptions - but with the *exact* components that were
+        actually downloaded, not a claim of "entire dataset" (autoprocess()
+        now has its own raw component picker, mirroring this page, so it
+        can reproduce any specific subset).
         """
         mock_proc = MagicMock()
         mock_proc.config.isRawExportOptions = False
         at = self._loaded_with_real_ds(real_ds, processor=mock_proc)
         at = self._check_velocity_and_generate(at)
         assert not at.exception
-        assert mock_proc.config.isRawExportOptions is False
+        assert mock_proc.config.isRawExportOptions is True
+        assert mock_proc.config.raw_include_velocity is True
+        assert mock_proc.config.raw_include_fixed_leader is False
+        assert mock_proc.config.raw_include_variable_leader is False
+        assert mock_proc.config.raw_include_echo is False
+        assert mock_proc.config.raw_include_correlation is False
+        assert mock_proc.config.raw_include_percent_good is False
+
+    def test_second_generation_overwrites_stale_stamp(self, real_ds):
+        """
+        A later, different-subset download must overwrite what an earlier
+        download in the same session stamped - not leave it stale.
+        """
+        mock_proc = MagicMock()
+        mock_proc.config.isRawExportOptions = False
+        at = self._loaded_with_real_ds(real_ds, processor=mock_proc)
+
+        # First: entire dataset
+        entire_cb = next((c for c in at.checkbox if "entire" in c.label.lower()), None)
+        if entire_cb is None:
+            pytest.skip("Entire Dataset checkbox not found")
+        entire_cb.check().run()
+        btn = next((b for b in at.button if "generate" in b.label.lower()), None)
+        if btn is None:
+            pytest.skip("Generate button not found")
+        btn.click().run()
+        assert mock_proc.config.raw_include_echo is True
+
+        # Then: uncheck entire dataset, select only velocity
+        entire_cb = next((c for c in at.checkbox if "entire" in c.label.lower()), None)
+        if entire_cb is None:
+            pytest.skip("Entire Dataset checkbox not found")
+        entire_cb.uncheck().run()
+        at = self._check_velocity_and_generate(at)
+        assert not at.exception
+        assert mock_proc.config.raw_include_velocity is True
+        assert mock_proc.config.raw_include_echo is False
 
     def test_generate_no_vars_selectable_no_crash(self):
         """When no vars exist Generate is disabled — page renders without crash."""

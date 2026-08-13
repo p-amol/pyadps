@@ -14,6 +14,8 @@ import pandas as pd
 import streamlit as st
 import xarray as xr
 
+from pyadps.io.raw_export import drop_internal_attrs, subset_raw_dataset
+
 # Load default attribute definitions from shared config
 _ATTR_JSON = os.path.join(os.path.dirname(__file__), "..", "default_attributes.json")
 with open(_ATTR_JSON) as _f:
@@ -94,6 +96,11 @@ def create_subset_dataset(
     """
     Create a subset of the dataset based on selected components.
 
+    Thin page-local wrapper around ``pyadps.io.raw_export.
+    subset_raw_dataset()`` (shared with ``autoprocess()``'s raw-dataset
+    export, so both stay in sync) that adapts its "raises ValueError"
+    contract to this page's "show a warning and return None" convention.
+
     Parameters
     ----------
     include_fixed_leader : bool
@@ -114,52 +121,19 @@ def create_subset_dataset(
     xr.Dataset | None
         Subset dataset containing only selected variables, or None if nothing selected
     """
-    variables_to_include = []
-
-    # Fixed Leader variables
-    if include_fixed_leader:
-        for var in fl_fields:
-            if var in ds.data_vars:
-                variables_to_include.append(var)
-
-    # Variable Leader variables
-    if include_variable_leader:
-        for var in vl_fields:
-            if var in ds.data_vars:
-                variables_to_include.append(var)
-
-    # Primary data arrays
-    if include_velocity and "velocity" in ds.data_vars:
-        variables_to_include.append("velocity")
-
-    if include_echo and "echo_intensity" in ds.data_vars:
-        variables_to_include.append("echo_intensity")
-
-    if include_correlation and "correlation" in ds.data_vars:
-        variables_to_include.append("correlation")
-
-    if include_percent_good and "percent_good" in ds.data_vars:
-        variables_to_include.append("percent_good")
-
-    # Remove duplicates while preserving order
-    variables_to_include = list(dict.fromkeys(variables_to_include))
-
-    if not variables_to_include:
+    try:
+        return subset_raw_dataset(
+            ds,
+            include_fixed_leader=include_fixed_leader,
+            include_variable_leader=include_variable_leader,
+            include_velocity=include_velocity,
+            include_echo=include_echo,
+            include_correlation=include_correlation,
+            include_percent_good=include_percent_good,
+        )
+    except ValueError:
         st.warning("No variables selected for export.")
         return None
-
-    # Create subset dataset
-    subset_ds = ds[variables_to_include].copy()
-
-    # Copy over coordinates
-    for coord in ds.coords:
-        if coord not in subset_ds.coords:
-            subset_ds = subset_ds.assign_coords({coord: ds.coords[coord]})
-
-    # Copy over global attributes
-    subset_ds.attrs = ds.attrs.copy()
-
-    return subset_ds
 
 
 def add_user_attributes(dataset: xr.Dataset) -> xr.Dataset:
@@ -234,15 +208,7 @@ def write_netcdf(
                 ds_out["time_original"].attrs["long_name"] = "Original time values"
 
     # Drop internal/metadata attributes that shouldn't be in the output file
-    attrs_to_drop = [
-        "pyadps_component",
-        "components",
-        "fixed_leader_variables",
-        "variable_leader_variables",
-    ]
-    for attr in attrs_to_drop:
-        if attr in ds_out.attrs:
-            del ds_out.attrs[attr]
+    ds_out = drop_internal_attrs(ds_out)
 
     # Create temporary file
     temp_dir = tempfile.mkdtemp()
@@ -592,13 +558,21 @@ if st.button("🔄 Generate NetCDF File", type="primary", disabled=not any_selec
                         mime="application/x-netcdf",
                     )
 
-                # Record that the *entire* raw dataset was downloaded as
-                # NetCDF, so autoprocess() can reproduce it later - only
-                # when it truly is the entire dataset (autoprocess()'s raw
-                # export has no component picker, so a partial subset here
-                # wouldn't match what it would reproduce).
-                if entire_dataset and proc is not None:
+                # Record exactly which components were downloaded, so
+                # autoprocess() can reproduce this later (config.ini's
+                # [RawExport] section) - same components, whether "Entire
+                # Data Set" or an individual selection. Always re-stamped
+                # on every successful generation (not just entire-dataset)
+                # so it reflects the most recent download, not a stale
+                # selection from earlier in the session.
+                if proc is not None:
                     proc.config.isRawExportOptions = True
+                    proc.config.raw_include_fixed_leader = include_fl
+                    proc.config.raw_include_variable_leader = include_vl
+                    proc.config.raw_include_velocity = include_velocity
+                    proc.config.raw_include_echo = include_echo
+                    proc.config.raw_include_correlation = include_correlation
+                    proc.config.raw_include_percent_good = include_pgood
 
 # =============================================================================
 # CSV DOWNLOAD SECTION

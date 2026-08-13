@@ -90,6 +90,12 @@ def mock_config():
     config.export_apply_mask = True
     config.export_velocity_units = "cm/s"
     config.isRawExportOptions = False
+    config.raw_include_fixed_leader = True
+    config.raw_include_variable_leader = True
+    config.raw_include_velocity = True
+    config.raw_include_echo = True
+    config.raw_include_correlation = True
+    config.raw_include_percent_good = True
     return config
 
 
@@ -807,6 +813,92 @@ class TestAutoprocessRawNetcdf:
                 "variable_leader_variables",
             ):
                 assert attr not in ds.attrs
+
+    @_requires_demo_binary
+    def test_explicit_component_subset(self, temp_dir):
+        """
+        raw_include_* mirrors the Download Raw File page's component
+        picker - selecting a specific subset here must not silently save
+        the entire dataset instead.
+        """
+        cfg = ProcessingConfig()
+        cfg_path = temp_dir / "cfg.ini"
+        cfg.to_ini(str(cfg_path))
+
+        autoprocess(
+            str(cfg_path),
+            binary_file_path=str(_DEMO_BINARY),
+            save_netcdf=True,
+            save_raw_netcdf=True,
+            raw_include_fixed_leader=False,
+            raw_include_variable_leader=False,
+            raw_include_velocity=True,
+            raw_include_echo=False,
+            raw_include_correlation=True,
+            raw_include_percent_good=False,
+            output_dir=temp_dir,
+            print_summary=False,
+        )
+        with xr.open_dataset(temp_dir / "demo_RAW_DATA.nc") as ds:
+            assert set(ds.data_vars) == {"velocity", "correlation"}
+
+    @_requires_demo_binary
+    def test_config_raw_include_auto_applies_exact_subset(self, temp_dir):
+        """
+        A config.ini saved after downloading a specific subset (not the
+        entire dataset) on the Download Raw File page must reproduce that
+        exact subset automatically, not the entire dataset.
+        """
+        cfg = ProcessingConfig(
+            isRawExportOptions=True,
+            raw_include_fixed_leader=False,
+            raw_include_variable_leader=False,
+            raw_include_velocity=False,
+            raw_include_echo=True,
+            raw_include_correlation=False,
+            raw_include_percent_good=True,
+        )
+        cfg_path = temp_dir / "cfg.ini"
+        cfg.to_ini(str(cfg_path))
+
+        autoprocess(
+            str(cfg_path),
+            binary_file_path=str(_DEMO_BINARY),
+            save_netcdf=True,
+            output_dir=temp_dir,
+            print_summary=False,
+        )
+        with xr.open_dataset(temp_dir / "demo_RAW_DATA.nc") as ds:
+            assert set(ds.data_vars) == {"echo_intensity", "percent_good"}
+
+    @_requires_demo_binary
+    def test_explicit_component_overrides_config(self, temp_dir):
+        cfg = ProcessingConfig(
+            isRawExportOptions=True,
+            raw_include_fixed_leader=False,
+            raw_include_variable_leader=False,
+            raw_include_velocity=True,
+            raw_include_echo=True,
+            raw_include_correlation=False,
+            raw_include_percent_good=False,
+        )
+        cfg_path = temp_dir / "cfg.ini"
+        cfg.to_ini(str(cfg_path))
+
+        autoprocess(
+            str(cfg_path),
+            binary_file_path=str(_DEMO_BINARY),
+            save_netcdf=True,
+            raw_include_velocity=False,
+            raw_include_correlation=True,
+            output_dir=temp_dir,
+            print_summary=False,
+        )
+        with xr.open_dataset(temp_dir / "demo_RAW_DATA.nc") as ds:
+            # velocity explicitly overridden to False, correlation
+            # explicitly overridden to True; echo left as config's stored
+            # True (not overridden, so it should still be present).
+            assert set(ds.data_vars) == {"echo_intensity", "correlation"}
 
 
 if __name__ == "__main__":

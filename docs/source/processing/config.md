@@ -135,7 +135,12 @@ apply_mask = True
 velocity_units = cm/s
 
 [RawExport]
-save_raw_netcdf = True
+include_fixed_leader = True
+include_variable_leader = True
+include_velocity = True
+include_echo = True
+include_correlation = False
+include_percent_good = False
 ```
 
 ```{note}
@@ -143,14 +148,12 @@ save_raw_netcdf = True
 `apply_config()` never reads them, so they don't affect processing. They
 exist so `autoprocess()` (and the Add-Ons → Auto Processing tool) can
 reproduce what was last exported: `pyadps_version` records which version
-did the processing; `[ExportOptions]` records which components were
-selected in Export Data on the Write File page (only written if an export
-actually happened); `[RawExport]` records whether the *entire* raw
-dataset was downloaded as NetCDF from the Download Raw File page (only
-written if that specific download happened - a partial component
-selection there doesn't set it, since `autoprocess()`'s raw-dataset option
-has no component picker of its own). See {doc}`autoprocess` for how these
-get used.
+did the processing; `[ExportOptions]` records which processed components
+were selected in Export Data on the Write File page (only written if an
+export actually happened); `[RawExport]` records which raw components
+were downloaded as NetCDF from the Download Raw File page - the same
+checkboxes as that page, only written if a real NetCDF download happened
+there (not CSV). See {doc}`autoprocess` for how these get used.
 ```
 
 ## Usage with ProcessedDataset

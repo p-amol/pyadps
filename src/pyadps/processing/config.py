@@ -285,12 +285,20 @@ class ProcessingConfig:
     # ========================
     # RAW EXPORT
     # ========================
-    # Whether the *entire* raw (unprocessed) dataset was downloaded as
-    # NetCDF from the Download Raw File page (not a component subset, and
-    # not the CSV format). Same provenance gating as isExportOptions above:
-    # only True when that actually happened, so autoprocess() only
-    # reproduces it when there's something real to reproduce.
+    # Which raw (unprocessed) components were downloaded as NetCDF from
+    # the Download Raw File page (not the CSV format). Same provenance
+    # gating as isExportOptions above: only True when that actually
+    # happened, so autoprocess() only reproduces it when there's
+    # something real to reproduce. Defaults to True (matching the page's
+    # "Entire Data Set" being the common case) so save_raw_netcdf=True
+    # alone, with nothing else specified, still saves everything.
     isRawExportOptions: bool = False
+    raw_include_fixed_leader: bool = True
+    raw_include_variable_leader: bool = True
+    raw_include_velocity: bool = True
+    raw_include_echo: bool = True
+    raw_include_correlation: bool = True
+    raw_include_percent_good: bool = True
 
     @classmethod
     def from_ini(cls, filepath: str) -> "ProcessingConfig":
@@ -627,6 +635,24 @@ class ProcessingConfig:
         # ========================
         if "RawExport" in config:
             kwargs["isRawExportOptions"] = True
+            kwargs["raw_include_fixed_leader"] = config.getboolean(
+                "RawExport", "include_fixed_leader", fallback=True
+            )
+            kwargs["raw_include_variable_leader"] = config.getboolean(
+                "RawExport", "include_variable_leader", fallback=True
+            )
+            kwargs["raw_include_velocity"] = config.getboolean(
+                "RawExport", "include_velocity", fallback=True
+            )
+            kwargs["raw_include_echo"] = config.getboolean(
+                "RawExport", "include_echo", fallback=True
+            )
+            kwargs["raw_include_correlation"] = config.getboolean(
+                "RawExport", "include_correlation", fallback=True
+            )
+            kwargs["raw_include_percent_good"] = config.getboolean(
+                "RawExport", "include_percent_good", fallback=True
+            )
 
         return cls(**kwargs)
 
@@ -807,12 +833,17 @@ class ProcessingConfig:
         # ========================
         # RAW EXPORT
         # ========================
-        # Same gating as ExportOptions above - only written when the entire
-        # raw dataset was actually downloaded as NetCDF (not a subset, not
-        # CSV) from the Download Raw File page.
+        # Same gating as ExportOptions above - only written when a raw
+        # NetCDF (not CSV) was actually downloaded from the Download Raw
+        # File page, for whatever component combination that was.
         if self.isRawExportOptions:
             config["RawExport"] = {
-                "save_raw_netcdf": str(self.isRawExportOptions),
+                "include_fixed_leader": str(self.raw_include_fixed_leader),
+                "include_variable_leader": str(self.raw_include_variable_leader),
+                "include_velocity": str(self.raw_include_velocity),
+                "include_echo": str(self.raw_include_echo),
+                "include_correlation": str(self.raw_include_correlation),
+                "include_percent_good": str(self.raw_include_percent_good),
             }
 
         return config

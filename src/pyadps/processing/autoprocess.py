@@ -29,6 +29,7 @@ from typing import Optional, Union
 
 import xarray as xr
 
+from ..io.raw_export import drop_internal_attrs, subset_raw_dataset
 from .config import ProcessingConfig
 from .core import ProcessedDataset
 
@@ -45,6 +46,12 @@ def autoprocess(
     include_mask: Optional[bool] = None,
     apply_mask: Optional[bool] = None,
     save_raw_netcdf: Optional[bool] = None,
+    raw_include_fixed_leader: Optional[bool] = None,
+    raw_include_variable_leader: Optional[bool] = None,
+    raw_include_velocity: Optional[bool] = None,
+    raw_include_echo: Optional[bool] = None,
+    raw_include_correlation: Optional[bool] = None,
+    raw_include_percent_good: Optional[bool] = None,
     output_dir: Optional[Union[str, Path]] = None,
     output_filename: Optional[str] = None,
     velocity_units: Optional[str] = None,
@@ -83,13 +90,18 @@ def autoprocess(
         ``get_export_dataset``). None falls back to the config's stored
         choice, or True if there isn't one.
     save_raw_netcdf : bool, optional
-        If True (and save_netcdf is True), also save the entire raw
-        (unprocessed) dataset as NetCDF - the same output as the Download
-        Raw File page's "Entire Data Set" option - alongside the
-        processed output, as ``<input_stem>_RAW_DATA.nc``. None falls
-        back to whether that page's entire-dataset NetCDF download was
-        actually used for this config.ini (``[RawExport]`` section);
-        False otherwise, the original behavior of this function.
+        If True (and save_netcdf is True), also save the raw
+        (unprocessed) dataset as NetCDF alongside the processed output,
+        as ``<input_stem>_RAW_DATA.nc``. None falls back to whether a raw
+        NetCDF download actually happened for this config.ini
+        (``[RawExport]`` section); False otherwise, the original
+        behavior of this function.
+    raw_include_fixed_leader, raw_include_variable_leader, raw_include_velocity, raw_include_echo, raw_include_correlation, raw_include_percent_good : bool, optional
+        Which raw components to include when save_raw_netcdf is True -
+        the same choice as the Download Raw File page's component
+        checkboxes (checking all six there is its "Entire Data Set"
+        option). None falls back to the config's stored ``[RawExport]``
+        selection, if present, or True (entire dataset) otherwise.
     output_dir : str or Path, optional
         Directory for output files. Defaults to same directory as input.
     output_filename : str, optional
@@ -316,25 +328,54 @@ def autoprocess(
         if print_summary:
             print(f"Output saved to: {output_path}")
 
-        # Optionally also save the entire raw (unprocessed) dataset -
-        # the same output as the Download Raw File page's "Entire Data
-        # Set" NetCDF option - alongside the processed output above.
+        # Optionally also save the raw (unprocessed) dataset - the same
+        # output as the Download Raw File page's component checkboxes -
+        # alongside the processed output above.
         _save_raw_netcdf = (
             config.isRawExportOptions if save_raw_netcdf is None else save_raw_netcdf
         )
         if _save_raw_netcdf:
+            _raw_include_fixed_leader = (
+                config.raw_include_fixed_leader
+                if raw_include_fixed_leader is None
+                else raw_include_fixed_leader
+            )
+            _raw_include_variable_leader = (
+                config.raw_include_variable_leader
+                if raw_include_variable_leader is None
+                else raw_include_variable_leader
+            )
+            _raw_include_velocity = (
+                config.raw_include_velocity
+                if raw_include_velocity is None
+                else raw_include_velocity
+            )
+            _raw_include_echo = (
+                config.raw_include_echo if raw_include_echo is None else raw_include_echo
+            )
+            _raw_include_correlation = (
+                config.raw_include_correlation
+                if raw_include_correlation is None
+                else raw_include_correlation
+            )
+            _raw_include_percent_good = (
+                config.raw_include_percent_good
+                if raw_include_percent_good is None
+                else raw_include_percent_good
+            )
+
             raw_output_path = output_dir / (binary_file_path.stem + "_RAW_DATA.nc")
-            raw_ds_out = ProcessedDataset._drop_ambiguous_axis_coords(ds).copy()
-            # Same internal/metadata attrs the Download Raw File page drops
-            # from its own output - not meaningful once the file is
-            # standalone.
-            for attr in [
-                "pyadps_component",
-                "components",
-                "fixed_leader_variables",
-                "variable_leader_variables",
-            ]:
-                raw_ds_out.attrs.pop(attr, None)
+            raw_subset = subset_raw_dataset(
+                ds,
+                include_fixed_leader=_raw_include_fixed_leader,
+                include_variable_leader=_raw_include_variable_leader,
+                include_velocity=_raw_include_velocity,
+                include_echo=_raw_include_echo,
+                include_correlation=_raw_include_correlation,
+                include_percent_good=_raw_include_percent_good,
+            )
+            raw_ds_out = ProcessedDataset._drop_ambiguous_axis_coords(raw_subset)
+            raw_ds_out = drop_internal_attrs(raw_ds_out)
             raw_ds_out.to_netcdf(raw_output_path)
 
             if print_summary:
@@ -457,11 +498,60 @@ def main() -> None:
         dest="save_raw_netcdf",
         action="store_true",
         default=None,
-        help="Also save the entire raw (unprocessed) dataset as "
-        "'<input>_RAW_DATA.nc' alongside the processed output - the same "
-        "output as the Download Raw File page's 'Entire Data Set' NetCDF "
-        "option. Defaults to whether that page's entire-dataset NetCDF "
-        "download was actually used for this config.ini, or False.",
+        help="Also save the raw (unprocessed) dataset as "
+        "'<input>_RAW_DATA.nc' alongside the processed output. Which "
+        "components (see --raw-include-* below) defaults to whether a "
+        "raw NetCDF download actually happened for this config.ini, or "
+        "the entire dataset otherwise.",
+    )
+    parser.add_argument(
+        "--raw-include-fixed-leader",
+        dest="raw_include_fixed_leader",
+        action="store_true",
+        default=None,
+        help="Include Fixed Leader variables in the raw dataset (requires "
+        "--save-raw-netcdf). Defaults to the config.ini's stored choice, "
+        "or True (entire dataset).",
+    )
+    parser.add_argument(
+        "--raw-include-variable-leader",
+        dest="raw_include_variable_leader",
+        action="store_true",
+        default=None,
+        help="Include Variable Leader variables in the raw dataset. Same "
+        "default rule as --raw-include-fixed-leader.",
+    )
+    parser.add_argument(
+        "--raw-include-velocity",
+        dest="raw_include_velocity",
+        action="store_true",
+        default=None,
+        help="Include velocity in the raw dataset. Same default rule as "
+        "--raw-include-fixed-leader.",
+    )
+    parser.add_argument(
+        "--raw-include-echo",
+        dest="raw_include_echo",
+        action="store_true",
+        default=None,
+        help="Include echo intensity in the raw dataset. Same default "
+        "rule as --raw-include-fixed-leader.",
+    )
+    parser.add_argument(
+        "--raw-include-correlation",
+        dest="raw_include_correlation",
+        action="store_true",
+        default=None,
+        help="Include correlation in the raw dataset. Same default rule "
+        "as --raw-include-fixed-leader.",
+    )
+    parser.add_argument(
+        "--raw-include-percent-good",
+        dest="raw_include_percent_good",
+        action="store_true",
+        default=None,
+        help="Include percent good in the raw dataset. Same default rule "
+        "as --raw-include-fixed-leader.",
     )
     parser.add_argument(
         "--no-depth-ascending",
@@ -490,6 +580,12 @@ def main() -> None:
         include_mask=args.include_mask,
         apply_mask=args.apply_mask,
         save_raw_netcdf=args.save_raw_netcdf,
+        raw_include_fixed_leader=args.raw_include_fixed_leader,
+        raw_include_variable_leader=args.raw_include_variable_leader,
+        raw_include_velocity=args.raw_include_velocity,
+        raw_include_echo=args.raw_include_echo,
+        raw_include_correlation=args.raw_include_correlation,
+        raw_include_percent_good=args.raw_include_percent_good,
         output_dir=args.output_dir,
         output_filename=args.output_filename,
         velocity_units=args.velocity_units,

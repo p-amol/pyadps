@@ -6,6 +6,59 @@ All notable changes to `pyadps` are documented in this file. The format is based
 
 ## [Unreleased]
 
+### Added
+
+- `autoprocess()` and the Add-Ons "Auto Processing" page can now reproduce the exact
+  component selection last used on the Write File page (Velocity/Echo Intensity/
+  Correlation/Percent Good/QC Mask, mask application, velocity units) via a new
+  `[ExportOptions]` section in `config.ini`, instead of only supporting "entire
+  dataset" or "velocity only"
+- `autoprocess()`/Add-Ons can also regenerate the raw (unprocessed) NetCDF alongside
+  the processed output (`save_raw_netcdf`), reproducing the Download Raw File page's
+  component picker (fixed leader, variable leader, velocity, echo intensity,
+  correlation, percent good) via a new `[RawExport]` section in `config.ini`
+- QC Mask is now a selectable export component in its own right (`include_mask` /
+  the "QC Mask" checkbox on the Write File page), so masked cells can be inspected
+  without forcing the mask onto Velocity
+- `config.ini`'s `[FileSettings]` records the `pyadps_version` that processed the
+  file, refreshed on every read and reprocess
+- New CLI flags on `pyadps-auto` mirroring all of the above
+  (`--include-echo`/`--include-correlation`/`--include-percent-good`/
+  `--include-mask`, `--save-raw-netcdf`, `--raw-include-*`)
+
+### Fixed
+
+- Exporting multiple components together (e.g. Velocity + Echo Intensity) still
+  triggered Ferret's "Unspecified or unsupported ordering of axes" warning after the
+  1.0.2 fix, and Signal Quality processing could silently wipe coordinate attributes
+  due to an xarray in-place mutation. NetCDF exports now carry correct CF axis
+  metadata and raw-file provenance (`filename`, `adcp_data_format`) regardless of
+  which components are included
+- The QC mask was being applied to Echo Intensity, Correlation, and Percent Good on
+  export, silently replacing valid per-beam diagnostic readings with `NaN` whenever
+  Velocity failed QC for an unrelated reason. The mask is now applied to Velocity
+  only; it can still be exported as its own variable (see "Added")
+- **Several Signal Quality checks did not actually mask the data they claimed to
+  flag.** `error_velocity_check`, `percent_good_check`, and `false_target_detection`
+  wrote their flags only to the mask's beam-index-3 "combined" summary slot, but the
+  NetCDF/CSV export path only ever reads mask beam-indices 0-2 to mask Velocity's
+  U/V/W components — so these three checks correctly reported flagged cells in the
+  QC statistics, but had **no effect on the actual exported/masked velocity data**.
+  Separately, `correlation_check` masked only the single beam-position that failed,
+  rather than the whole depth cell. All four now collapse a failing check to
+  whole-cell masking across all four beam positions, matching
+  `echo_intensity_check`'s existing behavior and the underlying physics: once
+  beam data is combined into Earth-coordinate U/V/W, a single bad beam invalidates
+  the whole cell's solution, not just one beam-position of it
+- Raw NetCDF downloads from the Download Raw File page recorded `isRawExportOptions`
+  as permanently `True` once set, even after a later download selected a different,
+  partial component subset — `config.ini` now always reflects the most recent
+  download
+- The Read File page footer showed a hardcoded, stale `"pyadps v1.0.0"` string
+  instead of the installed version
+- `pyadps_version` in `config.ini` stayed frozen at the original read's version after
+  reprocessing with a different pyadps install
+
 ## [1.0.2] - 2026-08-10
 
 ### Added

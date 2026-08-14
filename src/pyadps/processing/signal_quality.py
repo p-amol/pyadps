@@ -98,7 +98,10 @@ def correlation_check(
     """
     Perform correlation strength quality control check.
 
-    Flags cells where the correlation count is below the cutoff.
+    Flags depth cells where correlation falls below the cutoff. When any beam
+    fails the check, the entire depth cell is masked across all beams, because
+    post-collection data is in Earth coordinates and individual beams cannot
+    be selectively dropped.
 
     Parameters
     ----------
@@ -125,18 +128,34 @@ def correlation_check(
     mask = _get_mask_or_create(ds)
     correlation = ds["correlation"]
 
+    if "beam" not in correlation.dims:
+        logger.warning("Correlation has no beam dimension")
+        return ds
+
     # Flag values < cutoff
-    flag = correlation < cutoff
+    below = correlation < cutoff
 
-    # Exclude known-bad beam from the flag
-    if beam_ignore is not None and 0 <= beam_ignore <= 3:
-        if "beam" in flag.coords:
-            is_ignored = flag["beam"] == beam_ignore
-            flag = flag & (~is_ignored)
-            logger.info(f"Correlation check: ignoring beam {beam_ignore}")
+    # Exclude known-bad beam from the count
+    if beam_ignore is not None:
+        if 0 <= beam_ignore < correlation.sizes["beam"]:
+            beam_coords = correlation.coords["beam"].values
+            keep_beams = [b for b in beam_coords if b != beam_coords[beam_ignore]]
+            below = below.sel(beam=keep_beams)
+            logger.debug(f"Correlation check: ignoring beam {beam_ignore}")
+        else:
+            logger.warning(
+                f"beam_ignore={beam_ignore} out of range, ignoring parameter"
+            )
 
-    # Update mask
-    mask_updated = xr.where(flag, 1, mask).astype(np.int8)
+    # Count beams below threshold at each (cell, time) point
+    n_failing = below.sum(dim="beam")
+
+    # Mask if any remaining beam fails
+    cell_flag = n_failing >= 1
+
+    # Mask the full depth cell across all beams. Transpose restores (beam, cell, time)
+    # order — xr.where with a (cell, time) condition reorders dims to (cell, time, beam).
+    mask_updated = xr.where(cell_flag, 1, mask).transpose(*mask.dims).astype(np.int8)
     mask_updated.attrs = mask.attrs.copy()
 
     ds_out = ds.copy(deep=True)
@@ -144,7 +163,7 @@ def correlation_check(
 
     newly_flagged = int((mask_updated == 1).sum()) - int((mask == 1).sum())
     logger.info(
-        f"Correlation check applied: cutoff={cutoff}, "
+        f"Correlation check applied: cutoff={cutoff}, beam_ignore={beam_ignore}, "
         f"newly flagged cells: {newly_flagged}"
     )
 

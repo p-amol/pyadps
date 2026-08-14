@@ -194,27 +194,22 @@ class TestCorrelationCheck:
         assert result["mask"].sum() == 0
 
     def test_flags_below_threshold(self, basic_dataset):
-        """Test flagging values below threshold."""
-        # Set some values below threshold
+        """Test flagging when any beam is below threshold."""
         basic_dataset["correlation"].values[0, :3, :5] = 30
         result = correlation_check(basic_dataset, cutoff=64)
-
-        # Should flag beam 0, cells 0-2, times 0-4 = 3 * 5 = 15 cells
         assert result["mask"].sum() > 0
-        # Check specific cells are flagged
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 1
+        # Entire cell is masked across all beams when any beam fails
+        assert result["mask"].isel(cell=0, time=0).values.all()
 
     def test_flags_at_threshold_boundary(self, basic_dataset):
-        """Test behavior at exact threshold value."""
-        basic_dataset["correlation"].values[0, 0, 0] = 64  # Exactly at threshold
-        basic_dataset["correlation"].values[0, 0, 1] = 63  # Below threshold
+        """Test behavior at exact threshold value (not flagged) vs one below."""
+        basic_dataset["correlation"].values[0, 0, 0] = 64  # At threshold — not flagged
+        basic_dataset["correlation"].values[0, 0, 1] = 63  # Below — flagged
 
         result = correlation_check(basic_dataset, cutoff=64)
 
-        # 64 should NOT be flagged (>= cutoff passes)
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 0
-        # 63 should be flagged
-        assert result["mask"].isel(beam=0, cell=0, time=1).values == 1
+        assert result["mask"].isel(cell=0, time=0).values.sum() == 0
+        assert result["mask"].isel(cell=0, time=1).values.all()
 
     def test_custom_threshold(self, basic_dataset):
         """Test with custom threshold."""
@@ -223,11 +218,11 @@ class TestCorrelationCheck:
 
         # With cutoff=80, value 85 should pass
         result = correlation_check(basic_dataset, cutoff=80)
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 0
+        assert result["mask"].isel(cell=0, time=0).values.sum() == 0
 
-        # With cutoff=90, value 85 should fail
+        # With cutoff=90, value 85 should fail — whole cell masked
         result = correlation_check(basic_dataset, cutoff=90)
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 1
+        assert result["mask"].isel(cell=0, time=0).values.all()
 
     def test_creates_mask_if_missing(self, dataset_no_mask):
         """Test that mask is created if not present."""
@@ -249,46 +244,35 @@ class TestCorrelationCheck:
         # Should return dataset unchanged
         assert "mask" in result.data_vars
 
-    def test_beam_ignore_excludes_beam(self, basic_dataset):
-        """Test beam_ignore excludes the specified beam from the flag."""
-        # Set low correlation on beam 2
-        basic_dataset["correlation"].values[2, :, :] = 30
+    def test_beam_ignore_excludes_from_count(self, basic_dataset):
+        """beam_ignore removes that beam; remaining beams determine flag."""
+        # Only beam 1 fails — with beam_ignore=1 it should not be flagged
+        basic_dataset["correlation"].values[1, :, :] = 30
 
-        # Without beam_ignore, should flag beam 2
-        result_normal = correlation_check(basic_dataset, cutoff=64)
-        flagged_normal = result_normal["mask"].sum().values
+        result_no_ignore = correlation_check(basic_dataset, cutoff=64)
+        result_ignored = correlation_check(basic_dataset, cutoff=64, beam_ignore=1)
 
-        # With beam 2 ignored, should not flag beam 2
-        result_ignored = correlation_check(
-            basic_dataset, cutoff=64, beam_ignore=2
-        )
-        flagged_ignored = result_ignored["mask"].sum().values
-
-        assert flagged_ignored < flagged_normal
+        assert result_no_ignore["mask"].sum() > 0
+        assert result_ignored["mask"].sum() == 0
 
     def test_invalid_beam_ignore_is_ignored(self, basic_dataset):
         """Test an out-of-range beam_ignore is ignored."""
-        basic_dataset["correlation"].values[0, :, :] = 30
+        basic_dataset["correlation"].values[0, 0, 0] = 30
 
         # beam_ignore=5 is invalid (only 0-3 valid)
-        result = correlation_check(
-            basic_dataset, cutoff=64, beam_ignore=5
-        )
-        # Should still flag beam 0
-        assert result["mask"].isel(beam=0).sum() > 0
+        result = correlation_check(basic_dataset, cutoff=64, beam_ignore=5)
+        # Should still flag the cell (all beams) at that position
+        assert result["mask"].isel(cell=0, time=0).values.all()
 
-    def test_flags_all_beams_independently(self, basic_dataset):
-        """Test that each beam is checked independently."""
-        # Set different beams with low correlation
-        basic_dataset["correlation"].values[0, 0, 0] = 30
-        basic_dataset["correlation"].values[1, 1, 1] = 30
-        basic_dataset["correlation"].values[2, 2, 2] = 30
-
+    def test_all_beams_masked_when_any_fails(self, basic_dataset):
+        """When one beam fails, all beams at that cell/time are masked."""
+        # Only beam 2 is below threshold at (cell=1, time=2)
+        basic_dataset["correlation"].values[2, 1, 2] = 30
         result = correlation_check(basic_dataset, cutoff=64)
-
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 1
-        assert result["mask"].isel(beam=1, cell=1, time=1).values == 1
-        assert result["mask"].isel(beam=2, cell=2, time=2).values == 1
+        # All four beams at (cell=1, time=2) must be masked
+        assert result["mask"].isel(cell=1, time=2).values.all()
+        # Other cells untouched
+        assert result["mask"].isel(cell=0, time=0).values.sum() == 0
 
 
 # ============================================================================

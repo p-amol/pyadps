@@ -280,7 +280,11 @@ def error_velocity_check(
     """
     Perform error velocity quality control check.
 
-    Flags combined signal quality (Beam 3) if error velocity exceeds cutoff.
+    Flags depth cells where absolute error velocity (Beam 3) exceeds cutoff.
+    When the check fails, the entire depth cell is masked across all beams,
+    because post-collection data is in Earth coordinates and a high error
+    velocity indicates an unreliable combined u/v/w solution, not an issue
+    isolated to one component.
 
     Parameters
     ----------
@@ -313,12 +317,9 @@ def error_velocity_check(
     # Flag values > cutoff
     flag = error_vel > cutoff
 
-    # Update Combined Mask (Beam 3) only
-    flag_3d = xr.zeros_like(mask, dtype=bool)
-    if mask.sizes["beam"] > 3:
-        flag_3d.loc[dict(beam=mask.coords["beam"].values[3])] = flag
-
-    mask_updated = xr.where(flag_3d, 1, mask).astype(np.int8)
+    # Mask the full depth cell across all beams. Transpose restores (beam, cell, time)
+    # order — xr.where with a (cell, time) condition reorders dims to (cell, time, beam).
+    mask_updated = xr.where(flag, 1, mask).transpose(*mask.dims).astype(np.int8)
     mask_updated.attrs = mask.attrs.copy()
 
     ds_out = ds.copy(deep=True)
@@ -373,6 +374,11 @@ def percent_good_check(
     The threebeam=True mode (default) follows RDI's recommendation to accept
     data where either 3 or 4 beams produced a valid solution. This is more
     permissive than requiring all 4 beams (threebeam=False).
+
+    When the combined percent-good value fails the check, the entire depth
+    cell is masked across all beams, because post-collection data is in
+    Earth coordinates and a low percent-good value indicates an unreliable
+    combined u/v/w solution, not an issue isolated to one component.
     """
     _validate_threshold("percent_good", cutoff)
 
@@ -423,12 +429,9 @@ def percent_good_check(
 
     flag = pgood_combined < cutoff
 
-    # Update Combined Mask (Beam 3)
-    flag_3d = xr.zeros_like(mask, dtype=bool)
-    if mask.sizes["beam"] > 3:
-        flag_3d.loc[dict(beam=mask.coords["beam"].values[3])] = flag
-
-    mask_updated = xr.where(flag_3d, 1, mask).astype(np.int8)
+    # Mask the full depth cell across all beams. Transpose restores (beam, cell, time)
+    # order — xr.where with a (cell, time) condition reorders dims to (cell, time, beam).
+    mask_updated = xr.where(flag, 1, mask).transpose(*mask.dims).astype(np.int8)
     mask_updated.attrs = mask.attrs.copy()
 
     ds_out = ds.copy(deep=True)
@@ -566,12 +569,9 @@ def false_target_detection(
     # end of cell x, so cell x+1 velocity is contaminated by the same target.
     flag = flag | flag.shift({"cell": 1}, fill_value=False)
 
-    # Update Combined Mask (Beam 3)
-    flag_3d = xr.zeros_like(mask, dtype=bool)
-    if mask.sizes["beam"] > 3:
-        flag_3d.loc[dict(beam=mask.coords["beam"].values[3])] = flag
-
-    mask_updated = xr.where(flag_3d, 1, mask).astype(np.int8)
+    # Mask the full depth cell across all beams. Transpose restores (beam, cell, time)
+    # order — xr.where with a (cell, time) condition reorders dims to (cell, time, beam).
+    mask_updated = xr.where(flag, 1, mask).transpose(*mask.dims).astype(np.int8)
     mask_updated.attrs = mask.attrs.copy()
 
     ds_out = ds.copy(deep=True)

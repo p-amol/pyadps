@@ -426,10 +426,9 @@ class TestErrorVelocityCheck:
         basic_dataset["velocity"].values[3, :, :5] = 3000
         result = error_velocity_check(basic_dataset, cutoff=2000)
 
-        # Should flag beam 3 only
+        # Whole cell is masked across all beams, not just beam 3
         assert result["mask"].isel(beam=3).sum() > 0
-        # Other beams should not be affected
-        assert result["mask"].isel(beam=0).sum() == 0
+        assert result["mask"].isel(beam=0).sum() > 0
 
     def test_uses_absolute_value(self, basic_dataset):
         """Test that absolute value is used for comparison."""
@@ -464,18 +463,17 @@ class TestErrorVelocityCheck:
         result = error_velocity_check(basic_dataset, cutoff=1000)
         assert result["mask"].sum() > 0
 
-    def test_only_flags_beam_3(self, basic_dataset):
-        """Test that only beam 3 (combined mask) is flagged."""
-        # Set high values on all beams
-        basic_dataset["velocity"].values[:, 0, 0] = 5000
+    def test_all_beams_masked_when_error_velocity_fails(self, basic_dataset):
+        """A failing error-velocity check masks the whole cell, all beams."""
+        # Set high error velocity (beam 3) at one cell/time only
+        basic_dataset["velocity"].values[3, 0, 0] = 5000
 
         result = error_velocity_check(basic_dataset, cutoff=2000)
 
-        # Only beam 3 should be flagged
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 0
-        assert result["mask"].isel(beam=1, cell=0, time=0).values == 0
-        assert result["mask"].isel(beam=2, cell=0, time=0).values == 0
+        # All four beams at that cell/time must be masked
+        assert result["mask"].isel(cell=0, time=0).values.all()
+        # Other cells untouched
+        assert result["mask"].isel(cell=1, time=0).values.sum() == 0
 
     def test_creates_mask_if_missing(self, dataset_no_mask):
         """Test that mask is created if not present."""
@@ -695,19 +693,18 @@ class TestPercentGoodCheck:
         )
         assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
 
-    def test_only_flags_beam_3(self, basic_dataset):
-        """Test that only beam 3 (combined mask) is flagged."""
+    def test_all_beams_masked_when_percent_good_fails(self, basic_dataset):
+        """A failing percent-good check masks the whole cell, all beams."""
         # Set PG1=10, PG4=10, sum=20 < 50
         basic_dataset["percent_good"].values[0, 0, 0] = 10  # PG1
         basic_dataset["percent_good"].values[3, 0, 0] = 10  # PG4
 
         result = percent_good_check(basic_dataset, cutoff=50)
 
-        # Only beam 3 should be flagged
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 0
-        assert result["mask"].isel(beam=1, cell=0, time=0).values == 0
-        assert result["mask"].isel(beam=2, cell=0, time=0).values == 0
+        # All four beams at that cell/time must be masked
+        assert result["mask"].isel(cell=0, time=0).values.all()
+        # Other cells untouched
+        assert result["mask"].isel(cell=1, time=0).values.sum() == 0
 
     def test_creates_mask_if_missing(self, dataset_no_mask):
         """Test that mask is created if not present."""
@@ -829,20 +826,18 @@ class TestFalseTargetDetection:
         result = false_target_detection(basic_dataset, cutoff=5)
         assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
 
-    def test_only_flags_beam_3(self, basic_dataset):
-        """Test that only beam 3 (combined mask) is flagged."""
-        # Set one beam very high, others at 80
-        # max - min = 200 - 80 = 120
+    def test_all_beams_masked_when_false_target_detected(self, basic_dataset):
+        """A detected false target masks the whole cell, all beams."""
+        # One beam very high, others at 80: max - min = 200 - 80 = 120
         basic_dataset["echo_intensity"].values[:, 0, 0] = 80
         basic_dataset["echo_intensity"].values[0, 0, 0] = 200
 
         result = false_target_detection(basic_dataset, cutoff=50)
 
-        # Only beam 3 should be flagged
-        assert result["mask"].isel(beam=3, cell=0, time=0).values == 1
-        assert result["mask"].isel(beam=0, cell=0, time=0).values == 0
-        assert result["mask"].isel(beam=1, cell=0, time=0).values == 0
-        assert result["mask"].isel(beam=2, cell=0, time=0).values == 0
+        # All four beams at that cell/time must be masked
+        assert result["mask"].isel(cell=0, time=0).values.all()
+        # Cell 2 (not adjacent to the flagged cell 0) untouched
+        assert result["mask"].isel(cell=2, time=0).values.sum() == 0
 
     def test_creates_mask_if_missing(self, dataset_no_mask):
         """Test that mask is created if not present."""

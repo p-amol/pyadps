@@ -491,8 +491,19 @@ def _call_autoprocess(
     include_mask=False,
     apply_mask=True,
     velocity_units="cm/s",
+    use_config_raw_settings=True,
+    save_raw_netcdf=False,
+    raw_entire_dataset=True,
+    raw_include_fixed_leader=True,
+    raw_include_variable_leader=True,
+    raw_include_velocity=True,
+    raw_include_echo=True,
+    raw_include_correlation=True,
+    raw_include_percent_good=True,
     click_process=True,
     output_exists=False,
+    raw_output_exists=None,
+    session_state=None,
 ):
     """
     Call render_autoprocess_tool() with all st widgets mocked.
@@ -501,9 +512,21 @@ def _call_autoprocess(
     (not call order), since render_autoprocess_tool() only renders the
     include_*/apply_mask/velocity_units widgets when
     use_config_export_settings is False - a fixed-position side_effect
-    list would desync depending on that branch.
+    list would desync depending on that branch. The raw-component
+    checkboxes reuse some of the same labels (Velocity, Echo Intensity,
+    Correlation, Percent Good) as the processed-export ones, so those are
+    disambiguated by their explicit `key=` instead of label text.
+
+    session_state: pass the same plain dict across two calls to simulate
+    a Streamlit rerun (e.g. clicking a download button) that carries over
+    st.session_state from a prior run - render_autoprocess_tool() uses it
+    (dict-style access only) to persist results across such reruns, so a
+    real Streamlit ScriptRunContext isn't needed here, just a plain dict.
     """
     import streamlit as st
+
+    if session_state is None:
+        session_state = {}
 
     binary = _fake_binary()
     config = _fake_config()
@@ -523,9 +546,24 @@ def _call_autoprocess(
         "Percent Good": include_percent_good,
         "QC Mask": include_mask,
         "Apply QC mask to exported data": apply_mask,
+        "Use raw export settings from config.ini": use_config_raw_settings,
+        "Also save the raw (unprocessed) dataset": save_raw_netcdf,
+    }
+
+    checkbox_values_by_key = {
+        "raw_entire_dataset": raw_entire_dataset,
+        "raw_include_fixed_leader": raw_include_fixed_leader,
+        "raw_include_variable_leader": raw_include_variable_leader,
+        "raw_include_velocity": raw_include_velocity,
+        "raw_include_echo": raw_include_echo,
+        "raw_include_correlation": raw_include_correlation,
+        "raw_include_percent_good": raw_include_percent_good,
     }
 
     def _checkbox_side_effect(label, *args, **kwargs):
+        key = kwargs.get("key")
+        if key in checkbox_values_by_key:
+            return checkbox_values_by_key[key]
         return checkbox_values[label]
 
     st_p = {
@@ -537,6 +575,7 @@ def _call_autoprocess(
         "success": MagicMock(),
         "expander": MagicMock(return_value=_make_ctx()),
         "subheader": MagicMock(),
+        "divider": MagicMock(),
         "checkbox": MagicMock(side_effect=_checkbox_side_effect),
         "selectbox": MagicMock(return_value=velocity_units),
         "button": MagicMock(return_value=click_process),
@@ -550,6 +589,7 @@ def _call_autoprocess(
 
     with contextlib.ExitStack() as stack:
         stack.enter_context(patch.dict(sys.modules, mocks))
+        stack.enter_context(patch.object(st, "session_state", session_state))
         for attr, mock in st_p.items():
             if hasattr(st, attr):
                 stack.enter_context(patch.object(st, attr, mock))
@@ -561,7 +601,24 @@ def _call_autoprocess(
             stack.enter_context(
                 patch("pathlib.Path.glob", return_value=[Path("fake_output.nc")])
             )
-            stack.enter_context(patch("pathlib.Path.exists", return_value=True))
+            if raw_output_exists is None:
+                stack.enter_context(patch("pathlib.Path.exists", return_value=True))
+            else:
+                # Distinguish the raw-file path from the processed-file
+                # path so a test can assert only one download button
+                # renders even though both share the "output_exists"
+                # simulation above.
+                stack.enter_context(
+                    patch.object(
+                        Path,
+                        "exists",
+                        lambda self: (
+                            raw_output_exists
+                            if self.name.endswith("_RAW_DATA.nc")
+                            else True
+                        ),
+                    )
+                )
             stack.enter_context(
                 patch(
                     "builtins.open",
@@ -787,6 +844,197 @@ class TestAutoProcessButton:
         mod, mocks = page
         p = _call_autoprocess(mod, mocks, save_netcdf=True, output_exists=True)
         p["download_button"].assert_called()
+
+    def test_config_raw_settings_used_by_default(self, page):
+        """
+        When use_config_raw_settings is left checked, none of the raw
+        widgets render - autoprocess() gets None for save_raw_netcdf and
+        every raw_include_*, so it falls back to whatever the uploaded
+        config.ini's [RawExport] section (if any) specifies.
+        """
+        mod, mocks = page
+        _call_autoprocess(mod, mocks, use_config_raw_settings=True)
+        _, kwargs = mocks["pyadps.processing.autoprocess"].autoprocess.call_args
+        assert kwargs["save_raw_netcdf"] is None
+        assert kwargs["raw_include_fixed_leader"] is None
+        assert kwargs["raw_include_variable_leader"] is None
+        assert kwargs["raw_include_velocity"] is None
+        assert kwargs["raw_include_echo"] is None
+        assert kwargs["raw_include_correlation"] is None
+        assert kwargs["raw_include_percent_good"] is None
+
+    def test_raw_component_selection_passed_to_autoprocess(self, page):
+        mod, mocks = page
+        _call_autoprocess(
+            mod,
+            mocks,
+            use_config_raw_settings=False,
+            save_raw_netcdf=True,
+            raw_entire_dataset=False,
+            raw_include_fixed_leader=True,
+            raw_include_variable_leader=False,
+            raw_include_velocity=True,
+            raw_include_echo=False,
+            raw_include_correlation=True,
+            raw_include_percent_good=False,
+        )
+        _, kwargs = mocks["pyadps.processing.autoprocess"].autoprocess.call_args
+        assert kwargs["save_raw_netcdf"] is True
+        assert kwargs["raw_include_fixed_leader"] is True
+        assert kwargs["raw_include_variable_leader"] is False
+        assert kwargs["raw_include_velocity"] is True
+        assert kwargs["raw_include_echo"] is False
+        assert kwargs["raw_include_correlation"] is True
+        assert kwargs["raw_include_percent_good"] is False
+
+    def test_raw_entire_dataset_forces_all_raw_components_true(self, page):
+        """The 'Entire Raw Data Set' checkbox overrides individual picks,
+        matching the Download Raw File page's own behavior."""
+        mod, mocks = page
+        _call_autoprocess(
+            mod,
+            mocks,
+            use_config_raw_settings=False,
+            save_raw_netcdf=True,
+            raw_entire_dataset=True,
+            raw_include_fixed_leader=False,
+            raw_include_variable_leader=False,
+            raw_include_velocity=False,
+            raw_include_echo=False,
+            raw_include_correlation=False,
+            raw_include_percent_good=False,
+        )
+        _, kwargs = mocks["pyadps.processing.autoprocess"].autoprocess.call_args
+        assert kwargs["raw_include_fixed_leader"] is True
+        assert kwargs["raw_include_variable_leader"] is True
+        assert kwargs["raw_include_velocity"] is True
+        assert kwargs["raw_include_echo"] is True
+        assert kwargs["raw_include_correlation"] is True
+        assert kwargs["raw_include_percent_good"] is True
+
+    def test_no_save_raw_netcdf_when_config_raw_settings_unchecked_and_off(self, page):
+        mod, mocks = page
+        _call_autoprocess(
+            mod,
+            mocks,
+            use_config_raw_settings=False,
+            save_raw_netcdf=False,
+        )
+        _, kwargs = mocks["pyadps.processing.autoprocess"].autoprocess.call_args
+        assert kwargs["save_raw_netcdf"] is False
+        assert kwargs["raw_include_velocity"] is None
+
+    def test_raw_netcdf_output_download_button_shown(self, page):
+        """Both the processed and raw NetCDF download buttons render when
+        both files exist on disk - this is the button previously missing
+        for the raw file even though autoprocess() had already written it."""
+        mod, mocks = page
+        p = _call_autoprocess(
+            mod,
+            mocks,
+            save_netcdf=True,
+            output_exists=True,
+            raw_output_exists=True,
+        )
+        labels = [c.kwargs.get("label") for c in p["download_button"].call_args_list]
+        assert "📥 Download Processed NetCDF" in labels
+        assert "📥 Download Raw NetCDF" in labels
+
+    def test_raw_netcdf_download_button_absent_when_not_written(self, page):
+        """Only the processed-file button renders when autoprocess() didn't
+        end up writing a raw NetCDF (e.g. save_raw_netcdf resolved False)."""
+        mod, mocks = page
+        p = _call_autoprocess(
+            mod,
+            mocks,
+            save_netcdf=True,
+            output_exists=True,
+            raw_output_exists=False,
+        )
+        labels = [c.kwargs.get("label") for c in p["download_button"].call_args_list]
+        assert "📥 Download Processed NetCDF" in labels
+        assert "📥 Download Raw NetCDF" not in labels
+
+    def test_results_survive_rerun_without_reprocessing(self, page):
+        """
+        Regression test: clicking either download button triggers a
+        Streamlit rerun where st.button("Process Data") returns False
+        again (it only returns True on the exact click). Before the
+        session_state fix, that rerun skipped the whole results block,
+        making the *other* download button unreachable without
+        reprocessing from scratch. Simulate that rerun here by calling
+        render_autoprocess_tool() twice with click_process=False on the
+        second call but a shared session_state carried over from the
+        first (successful) run.
+        """
+        mod, mocks = page
+        shared_state = {}
+
+        # First run: user clicks "Process Data".
+        _call_autoprocess(
+            mod,
+            mocks,
+            save_netcdf=True,
+            output_exists=True,
+            raw_output_exists=True,
+            click_process=True,
+            session_state=shared_state,
+        )
+        assert "autoprocess_last_result" in shared_state
+
+        # Second run: simulates the rerun triggered by clicking a download
+        # button - "Process Data" was NOT clicked this time.
+        p2 = _call_autoprocess(
+            mod,
+            mocks,
+            save_netcdf=True,
+            output_exists=True,
+            raw_output_exists=True,
+            click_process=False,
+            session_state=shared_state,
+        )
+
+        p2["success"].assert_called()
+        labels = [c.kwargs.get("label") for c in p2["download_button"].call_args_list]
+        assert "📥 Download Processed NetCDF" in labels
+        assert "📥 Download Raw NetCDF" in labels
+
+    def test_no_stale_results_shown_before_first_process(self, page):
+        mod, mocks = page
+        p = _call_autoprocess(mod, mocks, click_process=False, session_state={})
+        success_calls = [str(c) for c in p["success"].call_args_list]
+        assert not any("Processing completed" in c for c in success_calls)
+        p["download_button"].assert_not_called()
+
+    def test_failed_run_clears_stale_results_from_session_state(self, page):
+        """A failed run must not leave a stale autoprocess_last_result
+        around from an earlier successful run - otherwise the summary and
+        download buttons for data that no longer matches the current
+        upload would keep showing."""
+        mod, mocks = page
+        shared_state = {}
+
+        _call_autoprocess(
+            mod,
+            mocks,
+            save_netcdf=True,
+            output_exists=True,
+            click_process=True,
+            session_state=shared_state,
+        )
+        assert "autoprocess_last_result" in shared_state
+
+        def _raise(*a, **kw):
+            raise ValueError("bad config")
+
+        _call_autoprocess(
+            mod,
+            mocks,
+            autoprocess_fn=_raise,
+            click_process=True,
+            session_state=shared_state,
+        )
+        assert "autoprocess_last_result" not in shared_state
 
     def test_depth_dim_in_result_sizes(self, page):
         mod, mocks = page
@@ -1183,7 +1431,7 @@ class TestCoverageGaps:
             "success": MagicMock(),
             "expander": MagicMock(return_value=_make_ctx()),
             "subheader": MagicMock(),
-            "checkbox": MagicMock(side_effect=[True, True]),
+            "checkbox": MagicMock(side_effect=[True, True, True]),
             "selectbox": MagicMock(return_value="cm/s"),
             "button": MagicMock(return_value=False),
             "spinner": MagicMock(return_value=_make_ctx()),
@@ -1198,6 +1446,7 @@ class TestCoverageGaps:
         with contextlib.ExitStack() as stack:
             stack.enter_context(patch.dict(sys.modules, mocks))
             stack.enter_context(patch.object(mod, "parse_config_to_dict", bad_parse))
+            stack.enter_context(patch.object(st, "session_state", {}))
             for attr, mock in st_p.items():
                 if hasattr(st, attr):
                     stack.enter_context(patch.object(st, attr, mock))
@@ -1234,7 +1483,7 @@ class TestCoverageGaps:
             "success": MagicMock(),
             "expander": MagicMock(return_value=_make_ctx()),
             "subheader": MagicMock(),
-            "checkbox": MagicMock(side_effect=[True, True]),
+            "checkbox": MagicMock(side_effect=[True, True, True]),
             "selectbox": MagicMock(return_value="cm/s"),
             "button": MagicMock(return_value=True),
             "spinner": MagicMock(return_value=_make_ctx()),
@@ -1248,6 +1497,7 @@ class TestCoverageGaps:
 
         with contextlib.ExitStack() as stack:
             stack.enter_context(patch.dict(sys.modules, mocks))
+            stack.enter_context(patch.object(st, "session_state", {}))
             for attr, mock in st_p.items():
                 if hasattr(st, attr):
                     stack.enter_context(patch.object(st, attr, mock))
@@ -1287,7 +1537,7 @@ class TestCoverageGaps:
             "success": MagicMock(),
             "expander": MagicMock(return_value=_make_ctx()),
             "subheader": MagicMock(),
-            "checkbox": MagicMock(side_effect=[True, True]),
+            "checkbox": MagicMock(side_effect=[True, True, True]),
             "selectbox": MagicMock(return_value="cm/s"),
             "button": MagicMock(return_value=True),
             "spinner": MagicMock(return_value=_make_ctx()),
@@ -1301,6 +1551,7 @@ class TestCoverageGaps:
 
         with contextlib.ExitStack() as stack:
             stack.enter_context(patch.dict(sys.modules, mocks))
+            stack.enter_context(patch.object(st, "session_state", {}))
             for attr, mock in st_p.items():
                 if hasattr(st, attr):
                     stack.enter_context(patch.object(st, attr, mock))

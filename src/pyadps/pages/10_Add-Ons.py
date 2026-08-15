@@ -235,6 +235,86 @@ def render_autoprocess_tool():
                     help="Units for velocity output",
                 )
 
+        st.divider()
+        st.subheader("Raw Data Export (Optional)")
+
+        use_config_raw_settings = st.checkbox(
+            "Use raw export settings from config.ini",
+            value=True,
+            help="If this config.ini was saved after a raw NetCDF download on "
+            "the Download Raw File page, reproduce that same download "
+            "automatically (writing <input>_RAW_DATA.nc alongside the "
+            "processed output). Uncheck to choose explicitly for this run. "
+            "If the config predates this feature (no [RawExport] section), "
+            "nothing is saved unless enabled below.",
+        )
+
+        save_raw_netcdf = None
+        raw_include_fixed_leader = raw_include_variable_leader = None
+        raw_include_velocity = raw_include_echo = None
+        raw_include_correlation = raw_include_percent_good = None
+
+        if not use_config_raw_settings:
+            save_raw_netcdf = st.checkbox(
+                "Also save the raw (unprocessed) dataset",
+                value=False,
+                help="Writes <input>_RAW_DATA.nc alongside the processed output.",
+            )
+
+            if save_raw_netcdf:
+                st.write("Select Raw Data Components")
+                entire_raw_dataset = st.checkbox(
+                    "📦 **Entire Raw Data Set**", value=True, key="raw_entire_dataset"
+                )
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    raw_include_fixed_leader = st.checkbox(
+                        "Fixed Leader",
+                        value=entire_raw_dataset,
+                        disabled=entire_raw_dataset,
+                        key="raw_include_fixed_leader",
+                    )
+                    raw_include_variable_leader = st.checkbox(
+                        "Variable Leader",
+                        value=entire_raw_dataset,
+                        disabled=entire_raw_dataset,
+                        key="raw_include_variable_leader",
+                    )
+                    raw_include_velocity = st.checkbox(
+                        "Velocity",
+                        value=entire_raw_dataset,
+                        disabled=entire_raw_dataset,
+                        key="raw_include_velocity",
+                    )
+                with col2:
+                    raw_include_echo = st.checkbox(
+                        "Echo Intensity",
+                        value=entire_raw_dataset,
+                        disabled=entire_raw_dataset,
+                        key="raw_include_echo",
+                    )
+                    raw_include_correlation = st.checkbox(
+                        "Correlation",
+                        value=entire_raw_dataset,
+                        disabled=entire_raw_dataset,
+                        key="raw_include_correlation",
+                    )
+                    raw_include_percent_good = st.checkbox(
+                        "Percent Good",
+                        value=entire_raw_dataset,
+                        disabled=entire_raw_dataset,
+                        key="raw_include_percent_good",
+                    )
+
+                if entire_raw_dataset:
+                    raw_include_fixed_leader = True
+                    raw_include_variable_leader = True
+                    raw_include_velocity = True
+                    raw_include_echo = True
+                    raw_include_correlation = True
+                    raw_include_percent_good = True
+
         # Process button
         if st.button("🚀 Process Data", type="primary", use_container_width=True):
             # Save files to temp directory
@@ -263,69 +343,47 @@ def render_autoprocess_tool():
                             include_mask=include_mask,
                             apply_mask=apply_mask,
                             velocity_units=velocity_units,
+                            save_raw_netcdf=save_raw_netcdf,
+                            raw_include_fixed_leader=raw_include_fixed_leader,
+                            raw_include_variable_leader=raw_include_variable_leader,
+                            raw_include_velocity=raw_include_velocity,
+                            raw_include_echo=raw_include_echo,
+                            raw_include_correlation=raw_include_correlation,
+                            raw_include_percent_good=raw_include_percent_good,
                             print_summary=True,
                         )
 
-                    # Display output
                     console_output = buffer.getvalue()
-                    if console_output:
-                        st.text_area(
-                            "Processing Log",
-                            value=console_output,
-                            height=200,
-                        )
 
-                st.success("✅ Processing completed successfully!")
-
-                # Display result summary
-                st.subheader("Result Summary")
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    n_time = result.sizes.get("time", 0)
-                    st.metric("Ensembles", f"{n_time:,}")
-
-                with col2:
-                    n_cells = result.sizes.get("cell", result.sizes.get("depth", 0))
-                    st.metric("Depth Cells", n_cells)
-
-                with col3:
-                    if "mask" in result.data_vars:
-                        mask = result["mask"].values
-                        masked_pct = (mask == 1).mean() * 100
-                        st.metric("Data Masked", f"{masked_pct:.1f}%")
-                    else:
-                        st.metric("Data Masked", "N/A")
-
-                # Provide download if NetCDF was saved. autoprocess() picks
-                # the output filename/suffix itself based on which
-                # components ended up included (entire dataset, velocity
-                # only, or any other combination) - so look for whatever it
-                # actually wrote rather than re-deriving the same choice
-                # here and risking the two falling out of sync.
-                if save_netcdf:
-                    candidates = sorted(
-                        Path(binary_path).parent.glob(
-                            f"{Path(binary_path).stem}*.nc"
-                        )
-                    )
-                    output_path = candidates[0] if candidates else None
-
-                    if output_path is not None and output_path.exists():
-                        output_filename = output_path.name
-                        with open(output_path, "rb") as f:
-                            st.download_button(
-                                label="📥 Download Processed NetCDF",
-                                data=f.read(),
-                                file_name=output_filename,
-                                mime="application/x-netcdf",
-                            )
+                # Persist everything needed to re-render the summary/download
+                # buttons below across reruns. Every Streamlit button click -
+                # including clicking one of the download buttons themselves -
+                # reruns the whole script, and st.button() only returns True
+                # on the exact run it was clicked; without this, clicking one
+                # download button would make this whole block not execute
+                # again, taking the *other* download button down with it and
+                # requiring a full reprocess just to get the second file.
+                st.session_state["autoprocess_last_result"] = {
+                    "console_output": console_output,
+                    "n_time": result.sizes.get("time", 0),
+                    "n_cells": result.sizes.get("cell", result.sizes.get("depth", 0)),
+                    "masked_pct": (
+                        float((result["mask"].values == 1).mean() * 100)
+                        if "mask" in result.data_vars
+                        else None
+                    ),
+                    "binary_path": binary_path,
+                    "save_netcdf": save_netcdf,
+                }
 
             except FileNotFoundError as e:
+                st.session_state.pop("autoprocess_last_result", None)
                 st.error(f"❌ File not found: {e}")
             except ValueError as e:
+                st.session_state.pop("autoprocess_last_result", None)
                 st.error(f"❌ Configuration error: {e}")
             except Exception as e:
+                st.session_state.pop("autoprocess_last_result", None)
                 st.error(f"❌ Processing error: {e}")
                 st.exception(e)
 
@@ -335,6 +393,80 @@ def render_autoprocess_tool():
                     os.unlink(config_temp.name)
                 except Exception:
                     pass
+
+        # Render the most recent successful run's summary/downloads. This
+        # runs on every rerun (not just the one where "Process Data" was
+        # clicked) so it survives clicking either download button below -
+        # see the comment above where autoprocess_last_result is stored.
+        last_result = st.session_state.get("autoprocess_last_result")
+        if last_result is not None:
+            if last_result["console_output"]:
+                st.text_area(
+                    "Processing Log",
+                    value=last_result["console_output"],
+                    height=200,
+                )
+
+            st.success("✅ Processing completed successfully!")
+
+            # Display result summary
+            st.subheader("Result Summary")
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("Ensembles", f"{last_result['n_time']:,}")
+
+            with col2:
+                st.metric("Depth Cells", last_result["n_cells"])
+
+            with col3:
+                if last_result["masked_pct"] is not None:
+                    st.metric("Data Masked", f"{last_result['masked_pct']:.1f}%")
+                else:
+                    st.metric("Data Masked", "N/A")
+
+            # Provide download if NetCDF was saved. autoprocess() picks
+            # the output filename/suffix itself based on which
+            # components ended up included (entire dataset, velocity
+            # only, or any other combination) - so look for whatever it
+            # actually wrote rather than re-deriving the same choice
+            # here and risking the two falling out of sync. The raw
+            # dataset (if saved) always uses a fixed "_RAW_DATA.nc"
+            # suffix and is excluded here so it isn't mistaken for the
+            # processed output when both exist side by side.
+            if last_result["save_netcdf"]:
+                stem = Path(last_result["binary_path"]).stem
+                parent = Path(last_result["binary_path"]).parent
+
+                processed_candidates = sorted(
+                    p
+                    for p in parent.glob(f"{stem}*.nc")
+                    if not p.name.endswith("_RAW_DATA.nc")
+                )
+                output_path = (
+                    processed_candidates[0] if processed_candidates else None
+                )
+
+                if output_path is not None and output_path.exists():
+                    with open(output_path, "rb") as f:
+                        st.download_button(
+                            label="📥 Download Processed NetCDF",
+                            data=f.read(),
+                            file_name=output_path.name,
+                            mime="application/x-netcdf",
+                            key="download_processed_netcdf",
+                        )
+
+                raw_output_path = parent / f"{stem}_RAW_DATA.nc"
+                if raw_output_path.exists():
+                    with open(raw_output_path, "rb") as f:
+                        st.download_button(
+                            label="📥 Download Raw NetCDF",
+                            data=f.read(),
+                            file_name=raw_output_path.name,
+                            mime="application/x-netcdf",
+                            key="download_raw_netcdf",
+                        )
 
     else:
         st.info(

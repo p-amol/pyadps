@@ -410,6 +410,13 @@ mask settings the config.ini was last exported with on the Write File
 page; "Use export settings from config.ini" can be unchecked to choose a
 different combination for this run instead.
 
+Optionally, the tool can also regenerate the raw (unprocessed) dataset as
+its own NetCDF file alongside the processed output — reproducing whichever
+components were last downloaded via the Download Raw File page, or an
+explicit selection if "Use raw export settings from config.ini" is
+unchecked. Both files get their own download button once processing
+finishes.
+
 ```{image} ../_static/images/webapp/10_addons_autoprocess.png
 :alt: Add-Ons — Auto Processing tab
 :width: 100%

@@ -4534,6 +4534,42 @@ class TestApplyConfigVelocityForwarding:
         )
         assert kw["flatline_cutoff"] == pytest.approx(0.8)
 
+    # ---- depth trim -------------------------------------------------------
+
+    def test_trim_depths_forwarded(self, sample_dataset):
+        kw = self._call_kwargs(
+            sample_dataset,
+            _all_disabled_config(
+                isVelocityTest=True,
+                isDepthTrimCheck_VT=True,
+                depth_trim_values_VT=[12.0, 16.0],
+            ),
+        )
+        assert kw["trim_depths"] == [12.0, 16.0]
+
+    def test_trim_depths_apply_all_variables_forwarded(self, sample_dataset):
+        kw = self._call_kwargs(
+            sample_dataset,
+            _all_disabled_config(
+                isVelocityTest=True,
+                isDepthTrimCheck_VT=True,
+                depth_trim_values_VT=[12.0],
+                depth_trim_apply_all_vars_VT=True,
+            ),
+        )
+        assert kw["trim_depths_apply_all_variables"] is True
+
+    def test_trim_depths_none_when_disabled(self, sample_dataset):
+        kw = self._call_kwargs(
+            sample_dataset,
+            _all_disabled_config(
+                isVelocityTest=True,
+                isDepthTrimCheck_VT=False,
+                depth_trim_values_VT=[12.0],
+            ),
+        )
+        assert kw["trim_depths"] is None
+
 
 # ============================================================================
 # CONFIGURATION TESTS  (side effects and contract)

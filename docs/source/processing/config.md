@@ -82,6 +82,9 @@ to run. Individual checks within the stage have their own enable flags.
 | `despike_kernel_VT` | 5 | Despike window size |
 | `despike_cutoff_VT` | 3.0 | Despike threshold (σ) |
 | `isFlatlineCheck_VT` | `False` | Enable flatline detection |
+| `isDepthTrimCheck_VT` | `False` | Enable depth trim (post-regrid boundary-layer masking) |
+| `depth_trim_values_VT` | `[]` | Depth values (m) to mask across every ensemble |
+| `depth_trim_apply_all_vars_VT` | `False` | If `True`, also masks echo/correlation/percent good at those depths, not just velocity |
 
 ## INI File Format
 

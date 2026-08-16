@@ -306,6 +306,10 @@ def _full_ss(proc: MagicMock, **overrides) -> Dict[str, Any]:
         "apply_flatline": False,
         "flatline_kernel": 4,
         "flatline_cutoff": 1.0,
+        # Depth trim
+        "apply_trim_depths": False,
+        "trim_depths_selected": [],
+        "trim_depths_apply_all_vars": False,
     }
     base.update(overrides)
     return base
@@ -1272,7 +1276,7 @@ class TestPageFunctionsDirectly:
             patch.object(st, "error"),
             patch.object(st, "header"),
             patch.object(st, "write"),
-            patch.object(st, "tabs", return_value=[MagicMock() for _ in range(6)]),
+            patch.object(st, "tabs", return_value=[MagicMock() for _ in range(7)]),
             patch.object(
                 st,
                 "form",
@@ -1612,7 +1616,7 @@ class TestPlottingFunctions:
             patch.object(st, "write"),
             patch.object(st, "plotly_chart"),  # prevent actual rendering
             patch.object(st, "warning"),
-            patch.object(st, "tabs", return_value=[MagicMock() for _ in range(6)]),
+            patch.object(st, "tabs", return_value=[MagicMock() for _ in range(7)]),
             patch.object(
                 st,
                 "form",
@@ -1975,7 +1979,7 @@ class TestCoverageGaps:
                     __exit__=MagicMock(return_value=False),
                 ),
             ),
-            patch.object(st, "tabs", return_value=[MagicMock() for _ in range(6)]),
+            patch.object(st, "tabs", return_value=[MagicMock() for _ in range(7)]),
             patch.dict(
                 "streamlit.session_state",
                 {
@@ -2704,7 +2708,7 @@ class TestDefinitiveCoverage:
                     __exit__=MagicMock(return_value=False),
                 ),
             ),
-            patch.object(st, "tabs", return_value=[MagicMock() for _ in range(6)]),
+            patch.object(st, "tabs", return_value=[MagicMock() for _ in range(7)]),
             patch.dict("streamlit.session_state", ss, clear=False),
         ):
             try:

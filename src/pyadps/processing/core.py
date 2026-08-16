@@ -928,6 +928,9 @@ class ProcessedDataset:
         flatline: bool = False,
         flatline_kernel: int = 4,
         flatline_cutoff: float = 1.0,
+        # Depth trim (post-regrid boundary-layer masking)
+        trim_depths: Optional[List[float]] = None,
+        trim_depths_apply_all_variables: bool = False,
     ) -> ProcessedDataset:
         """
         Apply velocity checks (STEP 5 of 6).
@@ -968,6 +971,15 @@ class ProcessedDataset:
             Kernel size for flatline detection.
         flatline_cutoff : float, default 1.0
             Flatline tolerance in mm/s.
+        trim_depths : list of float, optional
+            Depth values (matched exactly) to mask across every ensemble -
+            for boundary-layer contamination (e.g. surface backscatter) that
+            survives cut_bins_side_lobe()'s geometric cutoff. Requires a
+            regridded dataset (a 'depth' dimension); None/empty = skip.
+        trim_depths_apply_all_variables : bool, default False
+            If True, also masks echo_intensity/correlation/percent_good at
+            the selected depths, not just velocity - see
+            VelocityCheckRunner.trim_depths() for when that's appropriate.
 
         Returns
         -------
@@ -1001,6 +1013,7 @@ class ProcessedDataset:
                 magnetic_correction,
                 despike,
                 flatline,
+                bool(trim_depths),
             ]
         )
 
@@ -1040,6 +1053,14 @@ class ProcessedDataset:
             runner.flatline(
                 kernel_size=flatline_kernel,
                 cutoff=flatline_cutoff,
+            )
+
+        # Depth trim (manual boundary-layer masking - applied last, as a
+        # targeted override on top of the automated per-component checks)
+        if trim_depths:
+            runner.trim_depths(
+                depths=trim_depths,
+                apply_to_all_variables=trim_depths_apply_all_variables,
             )
 
         # Commit changes
@@ -1084,6 +1105,10 @@ class ProcessedDataset:
         self.config.isFlatlineCheck_VT = flatline
         self.config.flatline_kernel_VT = flatline_kernel
         self.config.flatline_cutoff_VT = flatline_cutoff
+        # Depth trim
+        self.config.isDepthTrimCheck_VT = bool(trim_depths)
+        self.config.depth_trim_values_VT = list(trim_depths) if trim_depths else []
+        self.config.depth_trim_apply_all_vars_VT = trim_depths_apply_all_variables
         # ----------------------------------------------------------------------
 
         return self
@@ -1517,6 +1542,10 @@ class ProcessedDataset:
                 flatline=config.isFlatlineCheck_VT,
                 flatline_kernel=config.flatline_kernel_VT,
                 flatline_cutoff=config.flatline_cutoff_VT,
+                trim_depths=config.depth_trim_values_VT
+                if config.isDepthTrimCheck_VT
+                else None,
+                trim_depths_apply_all_variables=config.depth_trim_apply_all_vars_VT,
             )
 
         # ------------------------------------------------------------------

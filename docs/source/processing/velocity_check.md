@@ -24,6 +24,7 @@ All methods return `self` for chaining.
 | `threshold(cutoff_u=2500, cutoff_v=2500, cutoff_w=500)` | mm/s | Flag cells exceeding per-component velocity limits |
 | `despike(kernel_size=13, cutoff=3.0)` | σ=3 | Flag transient spikes using a median-filter approach |
 | `flatline(kernel_size=4, cutoff=1.0)` | 1 mm/s | Flag constant-value segments (frozen sensor) |
+| `trim_depths(depths, apply_to_all_variables=False)` | — | Manually mask specific depth bins across every ensemble (requires a regridded dataset) |
 
 ### Control and Output Methods
 
@@ -80,6 +81,26 @@ restrictive than the horizontal defaults of 2500 mm/s.
 
 **Beam 3 is a combined flag.** After every check, beam 3 in the mask is set to the
 OR of beams 0, 1, and 2 — a cell is flagged in beam 3 if any velocity component fails.
+
+**`trim_depths()` requires a regridded dataset.** It operates on the `depth`
+coordinate produced by `regrid()` (see {doc}`profile_operation`), not the
+native `cell` index — it raises `ValueError` if the dataset hasn't been
+regridded yet. It exists because `cut_bins_side_lobe()`'s geometric cutoff
+is computed from `transducer_depth`, which drifts over a deployment, so a
+boundary depth bin can end up only *partially* masked even when the
+underlying contamination (e.g. surface backscatter) is present throughout —
+this lets you manually finish the job after visually confirming which
+depths are actually affected.
+
+**`trim_depths()` masks velocity only by default**, matching every other
+check in this module — `apply_to_all_variables=True` also masks
+echo_intensity/correlation/percent good at the selected depths, appropriate
+only once you've confirmed the raw diagnostic itself is contaminated, not
+just assumed it.
+
+```python
+runner.trim_depths(depths=[12.0], apply_to_all_variables=False)
+```
 
 ## See Also
 

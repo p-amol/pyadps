@@ -324,16 +324,28 @@ Apply velocity-specific quality control and magnetic declination correction.
 | Velocity Thresholds | Set per-component cutoffs (U, V, W) |
 | Despike Data | Median-filter spike detection |
 | Flatline Detection | Detect frozen/stuck sensor values |
+| Depth Trim | Manually mask boundary-layer depth cells after regridding |
 | Preview | View mask impact before committing |
 | Save & Reset | Commit or undo changes |
 
 ```{tip}
-This is the final check on the velocity data itself. All four steps are
+This is the final check on the velocity data itself. All five checks are
 independently optional — apply whichever apply to your deployment, in any
 combination. Magnetic Declination uses the deployment's latitude/longitude
 — auto-filled here if you entered it on the Download Raw File page.
 Velocity Thresholds, Despike, and Flatline Detection then catch
 out-of-range values, spikes, and frozen/stuck readings respectively.
+```
+
+```{note}
+**Depth Trim** only appears once the dataset has been regridded (Page 7 —
+Profile Operations). It's a manual safety net for boundary-layer
+contamination (e.g. surface backscatter) that survives side-lobe cutting's
+geometric cutoff — compare a candidate boundary depth cell against its
+clean neighbors (speed and echo intensity time series), then check off
+which depth(s) to mask. By default only velocity is masked; there's an
+option to also mask echo intensity/correlation/percent good if you've
+confirmed the raw diagnostic itself is contaminated.
 ```
 
 ---

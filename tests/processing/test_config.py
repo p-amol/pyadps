@@ -147,6 +147,9 @@ class TestProcessingConfigDefaults:
         assert cfg.isFlatlineCheck_VT is False
         assert cfg.flatline_kernel_VT == 5
         assert cfg.flatline_cutoff_VT == 3.0
+        assert cfg.isDepthTrimCheck_VT is False
+        assert cfg.depth_trim_values_VT == []
+        assert cfg.depth_trim_apply_all_vars_VT is False
 
     def test_default_attributes_empty_dict(self):
         cfg = ProcessingConfig()
@@ -751,6 +754,9 @@ class TestFromIni:
             "flatline = True\n"
             "flatline_kernel_size = 9\n"
             "flatline_cutoff = 4.0\n"
+            "depth_trim = True\n"
+            "depth_trim_values = [12.0, 16.0]\n"
+            "depth_trim_apply_all_variables = True\n"
         )
         cfg = ProcessingConfig.from_ini(str(p))
         assert cfg.isVelocityTest is True
@@ -771,6 +777,20 @@ class TestFromIni:
         assert cfg.isFlatlineCheck_VT is True
         assert cfg.flatline_kernel_VT == 9
         assert cfg.flatline_cutoff_VT == 4.0
+        assert cfg.isDepthTrimCheck_VT is True
+        assert cfg.depth_trim_values_VT == [12.0, 16.0]
+        assert cfg.depth_trim_apply_all_vars_VT is True
+
+    def test_depth_trim_values_malformed_json_falls_back_to_empty(self, tmp_path):
+        p = tmp_path / "cfg.ini"
+        p.write_text(
+            "[VelocityTest]\n"
+            "velocity_test = True\n"
+            "depth_trim = True\n"
+            "depth_trim_values = not-json\n"
+        )
+        cfg = ProcessingConfig.from_ini(str(p))
+        assert cfg.depth_trim_values_VT == []
 
     def test_attributes_section_json(self, tmp_path):
         attrs = {"cruise": "C001", "depth": 42}
@@ -958,6 +978,9 @@ class TestRoundTrip:
             isFlatlineCheck_VT=True,
             flatline_kernel_VT=7,
             flatline_cutoff_VT=5.0,
+            isDepthTrimCheck_VT=True,
+            depth_trim_values_VT=[12.0, 16.0],
+            depth_trim_apply_all_vars_VT=True,
         )
         rt = self._roundtrip(cfg, tmp_path)
         assert rt.magnet_lat_VT == 23.5
@@ -966,6 +989,9 @@ class TestRoundTrip:
         assert rt.maxuvel_VT == 3500.0
         assert rt.despike_kernel_VT == 9
         assert rt.flatline_cutoff_VT == 5.0
+        assert rt.isDepthTrimCheck_VT is True
+        assert rt.depth_trim_values_VT == [12.0, 16.0]
+        assert rt.depth_trim_apply_all_vars_VT is True
 
     def test_attributes_roundtrip(self, tmp_path):
         cfg = ProcessingConfig(
@@ -1073,6 +1099,16 @@ class TestValidate:
         cfg = ProcessingConfig(isCutoffCheck_VT=True, maxwvel_VT=0.0)
         issues = cfg.validate()
         assert any("w" in i.lower() or "vertical" in i.lower() for i in issues)
+
+    def test_depth_trim_enabled_without_values_invalid(self):
+        cfg = ProcessingConfig(isDepthTrimCheck_VT=True, depth_trim_values_VT=[])
+        issues = cfg.validate()
+        assert any("depth trim" in i.lower() for i in issues)
+
+    def test_depth_trim_enabled_with_values_valid(self):
+        cfg = ProcessingConfig(isDepthTrimCheck_VT=True, depth_trim_values_VT=[12.0])
+        issues = cfg.validate()
+        assert not any("depth trim" in i.lower() for i in issues)
 
     def test_multiple_issues_returned(self):
         cfg = ProcessingConfig(

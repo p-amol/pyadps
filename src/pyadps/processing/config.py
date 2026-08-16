@@ -258,6 +258,12 @@ class ProcessingConfig:
     flatline_kernel_VT: int = 5
     flatline_cutoff_VT: float = 3.0
 
+    # Depth trim (post-regrid boundary-layer masking, e.g. surface backscatter
+    # that survives cut_bins_side_lobe()'s geometric cutoff)
+    isDepthTrimCheck_VT: bool = False
+    depth_trim_values_VT: list = field(default_factory=list)
+    depth_trim_apply_all_vars_VT: bool = False
+
     # ========================
     # OUTPUT ATTRIBUTES
     # ========================
@@ -589,6 +595,21 @@ class ProcessingConfig:
                 "VelocityTest", "flatline_cutoff", fallback=3.0
             )
 
+            # Depth trim
+            kwargs["isDepthTrimCheck_VT"] = config.getboolean(
+                "VelocityTest", "depth_trim", fallback=False
+            )
+            raw_depth_trim = config.get(
+                "VelocityTest", "depth_trim_values", fallback="[]"
+            )
+            try:
+                kwargs["depth_trim_values_VT"] = json.loads(raw_depth_trim)
+            except (json.JSONDecodeError, TypeError):
+                kwargs["depth_trim_values_VT"] = []
+            kwargs["depth_trim_apply_all_vars_VT"] = config.getboolean(
+                "VelocityTest", "depth_trim_apply_all_variables", fallback=False
+            )
+
         # ========================
         # ATTRIBUTES
         # ========================
@@ -797,6 +818,10 @@ class ProcessingConfig:
             "flatline": str(self.isFlatlineCheck_VT),
             "flatline_kernel_size": str(self.flatline_kernel_VT),
             "flatline_cutoff": str(self.flatline_cutoff_VT),
+            # Depth trim
+            "depth_trim": str(self.isDepthTrimCheck_VT),
+            "depth_trim_values": json.dumps(self.depth_trim_values_VT),
+            "depth_trim_apply_all_variables": str(self.depth_trim_apply_all_vars_VT),
         }
 
         # ========================
@@ -1098,6 +1123,9 @@ class ProcessingConfig:
                 issues.append(f"Max V velocity must be positive, got {self.maxvvel_VT}")
             if self.maxwvel_VT <= 0:
                 issues.append(f"Max W velocity must be positive, got {self.maxwvel_VT}")
+
+        if self.isDepthTrimCheck_VT and not self.depth_trim_values_VT:
+            issues.append("Depth trim enabled but no depth values provided")
 
         return issues
 

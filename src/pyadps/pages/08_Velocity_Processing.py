@@ -641,6 +641,109 @@ def plot_flatline_timeseries(
     st.plotly_chart(fig, use_container_width=True)
 
 
+def plot_depth_trim_comparison(
+    velocity_data: np.ndarray,
+    depth_coord: np.ndarray,
+    echo_data: np.ndarray | None,
+    selected_depths: list,
+    ens_start: int,
+    ens_end: int,
+) -> None:
+    """
+    Plot speed and echo intensity time series for up to three depth cells,
+    to visually compare a candidate boundary cell against clean neighbors.
+
+    velocity_data : (beam, depth, time) array
+    echo_data : (beam, depth, time) array, or None if not available
+    """
+    x_axis = np.arange(ens_start, ens_end)
+    colors = ["#2a78d6", "#eb6834", "#1baf7a"]
+
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        subplot_titles=("Speed (u, v magnitude)", "Echo Intensity (beam average)"),
+    )
+
+    for i, depth in enumerate(selected_depths):
+        depth_idx = int(np.argmin(np.abs(depth_coord - depth)))
+        color = colors[i % len(colors)]
+
+        u = velocity_data[0, depth_idx, ens_start:ens_end].astype(float)
+        v = velocity_data[1, depth_idx, ens_start:ens_end].astype(float)
+        u[u == -32768] = np.nan
+        v[v == -32768] = np.nan
+        speed = np.sqrt(u**2 + v**2)
+
+        fig.add_trace(
+            go.Scatter(
+                x=x_axis,
+                y=speed,
+                mode="lines",
+                name=f"{depth:g} m",
+                line=dict(color=color, width=1.5),
+                legendgroup=f"depth{i}",
+            ),
+            row=1,
+            col=1,
+        )
+
+        if echo_data is not None:
+            echo = echo_data[:, depth_idx, ens_start:ens_end].astype(float)
+            echo[echo == -32768] = np.nan
+            echo_mean = np.nanmean(echo, axis=0)
+            fig.add_trace(
+                go.Scatter(
+                    x=x_axis,
+                    y=echo_mean,
+                    mode="lines",
+                    name=f"{depth:g} m",
+                    line=dict(color=color, width=1.5),
+                    legendgroup=f"depth{i}",
+                    showlegend=False,
+                ),
+                row=2,
+                col=1,
+            )
+
+    fig.update_xaxes(title_text="Ensemble", row=2, col=1)
+    fig.update_yaxes(title_text="mm/s", row=1, col=1)
+    fig.update_yaxes(title_text="counts", row=2, col=1)
+    fig.update_layout(
+        height=550,
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="right", x=1),
+        hovermode="x unified",
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _default_trim_depths(direction: str) -> list:
+    """
+    Suggest the boundary depth cell (from the given direction) plus the
+    next two cells, based on the first depth level with any valid velocity.
+
+    direction : "Shallow" or "Deep"
+    """
+    if "depth" not in ds.dims or "mask" not in ds.data_vars:
+        return []
+
+    depths = ds["depth"].values
+    mask = ds["mask"].values  # (beam, depth, time)
+    combined = mask[3] if mask.shape[0] > 3 else mask[0]  # (depth, time)
+    valid_any = (combined == 0).any(axis=1)  # any valid ensemble at this depth
+
+    order = np.argsort(depths) if direction == "Shallow" else np.argsort(depths)[::-1]
+    ordered_depths = depths[order]
+    ordered_valid = valid_any[order]
+
+    valid_idx = np.where(ordered_valid)[0]
+    start = int(valid_idx[0]) if len(valid_idx) else 0
+    return [float(d) for d in ordered_depths[start : start + 3]]
+
+
 # =============================================================================
 # SESSION STATE INITIALIZATION
 # =============================================================================
@@ -681,6 +784,11 @@ if not st.session_state.velocity_initialized:
     st.session_state.apply_flatline = False
     st.session_state.flatline_kernel = 4
     st.session_state.flatline_cutoff = 1.0
+
+    # Depth trim settings
+    st.session_state.apply_trim_depths = False
+    st.session_state.trim_depths_selected = []
+    st.session_state.trim_depths_apply_all_vars = False
 
     st.session_state.velocity_initialized = True
 
@@ -726,18 +834,22 @@ def _reset_velocity_tests():
     st.session_state.velocity_preview_stats = None
     st.session_state.apply_magnetic = False
     st.session_state.magnetic_declination = None
+    st.session_state.apply_trim_depths = False
+    st.session_state.trim_depths_selected = []
+    st.session_state.trim_depths_apply_all_vars = False
 
 
 # =============================================================================
 # TABS
 # =============================================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
     [
         "Magnetic Declination",
         "Velocity Thresholds",
         "Despike Data",
         "Flatline Detection",
+        "Depth Trim",
         "Preview",
         "Save & Reset",
     ]
@@ -1226,10 +1338,150 @@ with tab4:
 
 
 # =============================================================================
-# TAB 5: PREVIEW
+# TAB 5: DEPTH TRIM
 # =============================================================================
 
 with tab5:
+    st.header("Depth Trim", divider="blue")
+
+    st.write("""
+    After regridding, a boundary depth bin can end up only *partially*
+    masked by side-lobe cutting - some ensembles' geometric cutoff falls
+    just above it, some just below, since the cutoff depends on transducer
+    depth, which drifts over a deployment. Compare a candidate boundary
+    cell against its clean neighbors below (speed and echo intensity),
+    then manually mask whichever cell(s) look contaminated.
+    """)
+
+    if "depth" not in ds.dims:
+        st.info(
+            "ℹ️ This tool requires data regridded to a regular depth grid. "
+            "This dataset is still on its native irregular cell grid - run "
+            "**Regrid** on the **Profile Operations** page first."
+        )
+        st.session_state.apply_trim_depths = False
+        st.session_state.apply_trim_depths_cb = False
+    else:
+        st.session_state.apply_trim_depths = st.checkbox(
+            "Apply depth trim",
+            value=st.session_state.apply_trim_depths,
+            key="apply_trim_depths_cb",
+        )
+
+        if st.session_state.apply_trim_depths:
+            depth_values = sorted(ds["depth"].values.tolist())
+
+            direction = st.radio(
+                "Boundary",
+                options=["Shallow", "Deep"],
+                horizontal=True,
+                key="trim_depths_direction",
+                help="Which end of the profile to inspect. Determines the "
+                "suggested default cells below - you can still pick any "
+                "three depths regardless.",
+            )
+
+            default_depths = _default_trim_depths(direction)
+            fallback = (
+                depth_values if direction == "Shallow" else list(reversed(depth_values))
+            )
+            while len(default_depths) < 3 and len(fallback) > len(default_depths):
+                candidate = fallback[len(default_depths)]
+                if candidate not in default_depths:
+                    default_depths.append(candidate)
+
+            st.write("**Select three depth cells to compare:**")
+            cols = st.columns(3)
+            selected_depths = []
+            mask_flags = []
+            for i, col in enumerate(cols):
+                with col:
+                    default_val = (
+                        default_depths[i] if i < len(default_depths) else depth_values[0]
+                    )
+                    depth_choice = st.selectbox(
+                        f"Cell {i + 1}",
+                        options=depth_values,
+                        index=depth_values.index(default_val),
+                        key=f"trim_depths_cell_{i}",
+                        format_func=lambda d: f"{d:g} m",
+                    )
+                    selected_depths.append(depth_choice)
+                    mask_flags.append(
+                        st.checkbox(
+                            "Mask this depth",
+                            value=(i == 0),
+                            key=f"trim_depths_mask_{i}",
+                        )
+                    )
+
+            if len(set(selected_depths)) != 3:
+                st.warning("Select three distinct depth cells to compare.")
+
+            n_ensembles = get_total_ensembles()
+            default_end = min(1000, n_ensembles)
+            trim_ens_range = st.slider(
+                "Ensemble Range",
+                min_value=0,
+                max_value=n_ensembles,
+                value=(0, default_end),
+                key="trim_depths_ens_range",
+            )
+
+            if "velocity" in ds.data_vars:
+                echo_var_name = (
+                    "echo_intensity"
+                    if "echo_intensity" in ds.data_vars
+                    else ("echo" if "echo" in ds.data_vars else None)
+                )
+                plot_depth_trim_comparison(
+                    velocity_data=ds["velocity"].values,
+                    depth_coord=ds["depth"].values,
+                    echo_data=ds[echo_var_name].values if echo_var_name else None,
+                    selected_depths=selected_depths,
+                    ens_start=trim_ens_range[0],
+                    ens_end=trim_ens_range[1],
+                )
+                st.caption(
+                    "🔍 Compare the selected depths - a contaminated boundary "
+                    "cell typically shows elevated/erratic echo intensity and "
+                    "noisier speed than its clean neighbors."
+                )
+            else:
+                st.info("No velocity data available for visualization.")
+
+            st.divider()
+            st.session_state.trim_depths_apply_all_vars = st.checkbox(
+                "Also mask echo intensity / correlation / percent good at these depths",
+                value=st.session_state.trim_depths_apply_all_vars,
+                help="By default only velocity is masked - echo/correlation/"
+                "percent good keep their raw diagnostic values. Enable this "
+                "only once you've visually confirmed the raw diagnostic "
+                "itself is contaminated (e.g. elevated echo intensity), not "
+                "just assumed it.",
+                key="trim_depths_apply_all_cb",
+            )
+
+            st.session_state.trim_depths_selected = [
+                d for d, flagged in zip(selected_depths, mask_flags) if flagged
+            ]
+
+            if st.session_state.trim_depths_selected:
+                st.success(
+                    "Will mask: "
+                    + ", ".join(
+                        f"{d:g} m" for d in st.session_state.trim_depths_selected
+                    )
+                )
+            else:
+                st.warning("No depths checked to mask - check at least one above.")
+
+
+# =============================================================================
+# TAB 6: PREVIEW
+# =============================================================================
+
+with tab6:
     st.header("Preview Processing", divider="blue")
 
     st.write("""
@@ -1244,6 +1496,13 @@ with tab5:
         ["Velocity Threshold", "True" if st.session_state.apply_threshold else "False"],
         ["Despike Filter", "True" if st.session_state.apply_despike else "False"],
         ["Flatline Detection", "True" if st.session_state.apply_flatline else "False"],
+        [
+            "Depth Trim",
+            "True"
+            if st.session_state.apply_trim_depths
+            and st.session_state.trim_depths_selected
+            else "False",
+        ],
     ]
     settings_df = pd.DataFrame(settings_data, columns=["Test", "Enabled"])
     styled_settings = settings_df.style.map(status_color_map, subset=["Enabled"])
@@ -1269,6 +1528,14 @@ with tab5:
         st.write(
             f"- Magnetic declination: {st.session_state.magnetic_declination:.3f}°"
         )
+    if st.session_state.apply_trim_depths and st.session_state.trim_depths_selected:
+        depths_str = ", ".join(f"{d:g} m" for d in st.session_state.trim_depths_selected)
+        all_vars_str = (
+            " (all variables)"
+            if st.session_state.trim_depths_apply_all_vars
+            else " (velocity only)"
+        )
+        st.write(f"- Depth trim: {depths_str}{all_vars_str}")
 
     st.divider()
 
@@ -1313,6 +1580,13 @@ with tab5:
                     runner.flatline(
                         kernel_size=st.session_state.flatline_kernel,
                         cutoff=st.session_state.flatline_cutoff,
+                    )
+
+                # Apply depth trim (if enabled and at least one depth checked)
+                if st.session_state.apply_trim_depths and st.session_state.trim_depths_selected:
+                    runner.trim_depths(
+                        depths=st.session_state.trim_depths_selected,
+                        apply_to_all_variables=st.session_state.trim_depths_apply_all_vars,
                     )
 
                 # Commit to staging processor
@@ -1432,10 +1706,10 @@ with tab5:
 
 
 # =============================================================================
-# TAB 6: SAVE & RESET
+# TAB 7: SAVE & RESET
 # =============================================================================
 
-with tab6:
+with tab7:
     st.header("Save & Reset Data", divider="blue")
 
     col_save, col_reset = st.columns([1, 1])
@@ -1465,6 +1739,13 @@ with tab6:
                 "Flatline Detection",
                 "True" if st.session_state.apply_flatline else "False",
             ],
+            [
+                "Depth Trim",
+                "True"
+                if st.session_state.apply_trim_depths
+                and st.session_state.trim_depths_selected
+                else "False",
+            ],
         ]
         settings_df = pd.DataFrame(settings_data, columns=["Test", "Enabled"])
         styled_settings = settings_df.style.map(status_color_map, subset=["Enabled"])
@@ -1489,6 +1770,10 @@ with tab6:
                     flatline=st.session_state.apply_flatline,
                     flatline_kernel=st.session_state.flatline_kernel,
                     flatline_cutoff=st.session_state.flatline_cutoff,
+                    trim_depths=st.session_state.trim_depths_selected
+                    if st.session_state.apply_trim_depths
+                    else None,
+                    trim_depths_apply_all_variables=st.session_state.trim_depths_apply_all_vars,
                 )
 
                 st.session_state.velocity_applied = True
@@ -1517,6 +1802,13 @@ with tab6:
                     [
                         "Flatline Detection",
                         "True" if st.session_state.apply_flatline else "False",
+                    ],
+                    [
+                        "Depth Trim",
+                        "True"
+                        if st.session_state.apply_trim_depths
+                        and st.session_state.trim_depths_selected
+                        else "False",
                     ],
                 ]
                 summary_df = pd.DataFrame(summary_data, columns=["Test", "Status"])
@@ -1615,6 +1907,9 @@ with st.sidebar:
     st.write(f"- Threshold: {'✅' if st.session_state.apply_threshold else '❌'}")
     st.write(f"- Despike: {'✅' if st.session_state.apply_despike else '❌'}")
     st.write(f"- Flatline: {'✅' if st.session_state.apply_flatline else '❌'}")
+    st.write(
+        f"- Depth Trim: {'✅' if st.session_state.apply_trim_depths and st.session_state.trim_depths_selected else '❌'}"
+    )
 
     if st.session_state.apply_threshold:
         st.write("---")
@@ -1630,6 +1925,12 @@ with st.sidebar:
         st.write("---")
         st.write("**Magnetic Declination:**")
         st.write(f"- Declination: {st.session_state.magnetic_declination:.3f}°")
+
+    if st.session_state.apply_trim_depths and st.session_state.trim_depths_selected:
+        st.write("---")
+        st.write("**Depth Trim:**")
+        for d in st.session_state.trim_depths_selected:
+            st.write(f"- {d:g} m")
 
     st.write("---")
     st.write("**Processing Log:**")

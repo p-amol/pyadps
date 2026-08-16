@@ -635,6 +635,99 @@ def flatline_check(
     return ds_out
 
 
+def trim_depths(
+    ds: xr.Dataset,
+    depths: list[float],
+    apply_to_all_variables: bool = False,
+) -> xr.Dataset:
+    """
+    Mask specific depth bins across every ensemble on a regridded dataset.
+
+    cut_bins_side_lobe()'s geometric cutoff is computed from
+    transducer_depth, which drifts over a deployment - so a boundary depth
+    bin can end up only partially masked (valid for some ensembles,
+    invalid for others) even when the underlying contamination (e.g.
+    surface backscatter) is present throughout. This lets a user manually
+    mask specific depth bins after visually confirming they're
+    contaminated - typically by comparing time series against clean
+    neighboring depths - regardless of what the geometric cutoff decided.
+
+    Despite the name, this works at either end of the profile - "surface"
+    names the typical use case (the shallow boundary), not a directional
+    restriction; the same function handles a contaminated deep/bottom bin.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Regridded dataset (must have a 'depth' dimension - run regrid()
+        first). Has no effect on cell-indexed, pre-regrid data.
+    depths : list of float
+        Depth values (matched exactly, same units as ds['depth']) to mask
+        across every ensemble.
+    apply_to_all_variables : bool, default False
+        If False (default), only velocity is masked - echo_intensity/
+        correlation/percent_good keep their raw diagnostic values, the same
+        convention every other check in this pipeline follows. Set True
+        only once you've independently confirmed the raw diagnostic itself
+        is contaminated (e.g. elevated echo intensity from surface
+        backscatter) at the selected depths, rather than assuming it.
+
+    Returns
+    -------
+    xr.Dataset
+        New dataset with updated mask (and NaN'd data at the selected
+        depths). Original is not modified.
+
+    Raises
+    ------
+    ValueError
+        If ds has no 'depth' dimension, depths is empty, or a requested
+        depth value doesn't match any existing depth coordinate.
+    """
+    if "depth" not in ds.dims:
+        raise ValueError(
+            "trim_depths() requires a regridded dataset (a 'depth' "
+            "dimension) - run regrid() first."
+        )
+    if not depths:
+        raise ValueError("depths must contain at least one value.")
+
+    depth_coord = ds["depth"].values
+    depth_flag_np = np.zeros_like(depth_coord, dtype=bool)
+    missing = []
+    for d in depths:
+        matches = np.isclose(depth_coord, d)
+        if not matches.any():
+            missing.append(d)
+        depth_flag_np |= matches
+    if missing:
+        raise ValueError(
+            f"Depth value(s) not found in dataset's depth coordinate: {missing}"
+        )
+    depth_flag = xr.DataArray(depth_flag_np, dims=["depth"], coords={"depth": ds["depth"]})
+
+    mask = _get_mask_or_create(ds)
+    mask_updated = xr.where(depth_flag, 1, mask).transpose(*mask.dims).astype(np.int8)
+    mask_updated.attrs = mask.attrs.copy()
+
+    ds_out = ds.copy(deep=True)
+    ds_out["mask"] = mask_updated
+
+    if apply_to_all_variables:
+        for var_name in ("echo_intensity", "echo", "correlation", "percent_good", "pg"):
+            if var_name in ds_out.data_vars and "depth" in ds_out[var_name].dims:
+                ds_out[var_name] = ds_out[var_name].where(~depth_flag)
+
+    newly_flagged = int((mask_updated == 1).sum()) - int((mask == 1).sum())
+    logger.info(
+        f"Surface trim applied: depths={sorted(set(np.round(depth_coord[depth_flag_np], 4).tolist()))}, "
+        f"apply_to_all_variables={apply_to_all_variables}, "
+        f"newly flagged cells: {newly_flagged}"
+    )
+
+    return ds_out
+
+
 # ============================================================================
 # RUNNER CLASS
 # ============================================================================
@@ -941,6 +1034,44 @@ class VelocityCheckRunner:
             threshold=(kernel_size, cutoff),
             kernel_size=kernel_size,
             cutoff=cutoff,
+        )
+
+    def trim_depths(
+        self,
+        depths: list[float],
+        apply_to_all_variables: bool = False,
+    ) -> VelocityCheckRunner:
+        """
+        Mask specific depth bins across every ensemble - for boundary-layer
+        contamination that survives regrid()'s side-lobe-derived mask
+        because the geometric cutoff doesn't perfectly track where the
+        data is actually degraded. See ``trim_depths()`` (module-level)
+        for the full explanation.
+
+        Requires a regridded dataset (has a 'depth' dimension) - this is
+        the one check in this class that only makes sense after
+        Profile Operations' regrid step has already run.
+
+        Parameters
+        ----------
+        depths : list of float
+            Depth values to mask across every ensemble.
+        apply_to_all_variables : bool, default False
+            If True, also masks echo_intensity/correlation/percent_good at
+            the selected depths, not just velocity - see ``trim_depths()``
+            for when that's appropriate.
+
+        Returns
+        -------
+        VelocityCheckRunner
+            Self for method chaining.
+        """
+        return self._record_check(
+            "Depth Trim",
+            trim_depths,
+            threshold=None,
+            depths=depths,
+            apply_to_all_variables=apply_to_all_variables,
         )
 
     # ========================================================================

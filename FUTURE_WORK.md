@@ -7,7 +7,7 @@ delete it from here.
 
 ## Processing
 
-### Manual surface/boundary-layer trim after regridding (`trim_surface`)
+### Manual surface/boundary-layer trim after regridding (`trim_depths`)
 
 Regridded data can retain a shallow (or deep) boundary depth bin that's only
 *partially* masked by `cut_bins_side_lobe()` — some ensembles' geometric
@@ -18,7 +18,7 @@ contaminated: verified on a real file (`GD15A000.000`) that the ensembles the
 formula kept as "valid" at the boundary bin had *higher* echo intensity
 (more contaminated) than the ones it rejected.
 
-Proposed: a new function/QC step, `trim_surface`, that lets the user
+Proposed: a new function/QC step, `trim_depths`, that lets the user
 visually compare a candidate boundary depth cell against its clean
 neighbors (time series of speed + echo intensity/correlation) and manually
 mask it out.

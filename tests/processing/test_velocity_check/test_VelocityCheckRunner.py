@@ -156,6 +156,34 @@ def dataset_with_pre_masked():
     return xr.Dataset({"velocity": velocity, "mask": mask})
 
 
+@pytest.fixture
+def regridded_dataset():
+    """Create a regridded (depth-indexed) dataset for trim_depths() tests."""
+    n_beams = 4
+    depths = np.array([0.0, 4.0, 8.0, 12.0, 16.0, 20.0])
+    n_time = 20
+
+    coords = {"beam": np.arange(n_beams), "depth": depths, "time": np.arange(n_time)}
+
+    velocity = xr.DataArray(
+        data=np.full((n_beams, len(depths), n_time), 100.0, dtype=np.float32),
+        dims=["beam", "depth", "time"],
+        coords=coords,
+    )
+    echo = xr.DataArray(
+        data=np.full((n_beams, len(depths), n_time), 80.0, dtype=np.float32),
+        dims=["beam", "depth", "time"],
+        coords=coords,
+    )
+    mask = xr.DataArray(
+        data=np.zeros((n_beams, len(depths), n_time), dtype=np.int8),
+        dims=["beam", "depth", "time"],
+        coords=coords,
+    )
+
+    return xr.Dataset({"velocity": velocity, "echo_intensity": echo, "mask": mask})
+
+
 # ============================================================================
 # TEST: Initialization
 # ============================================================================
@@ -352,6 +380,55 @@ class TestFlatlineMethod:
 
         # Flatline at (1, 4, 35:45) should be flagged
         assert mask[1, 4, 35:45].sum() > 0
+
+
+class TestTrimSurfaceMethod:
+    """Tests for trim_depths() method."""
+
+    def test_trim_depths_returns_self(self, regridded_dataset):
+        runner = VelocityCheckRunner(regridded_dataset)
+        result = runner.trim_depths(depths=[12.0])
+
+        assert result is runner
+
+    def test_trim_depths_masks_selected_depth(self, regridded_dataset):
+        runner = VelocityCheckRunner(regridded_dataset)
+        runner.trim_depths(depths=[12.0])
+
+        mask = runner.dataset["mask"]
+        assert bool((mask.sel(depth=12.0) == 1).all())
+        assert bool((mask.sel(depth=16.0) == 0).all())
+
+    def test_trim_depths_records_statistics(self, regridded_dataset):
+        runner = VelocityCheckRunner(regridded_dataset)
+        runner.trim_depths(depths=[12.0])
+
+        stat = runner.statistics[0]
+        assert stat.check_name == "Depth Trim"
+        assert stat.cells_newly_masked > 0
+
+    def test_trim_depths_default_leaves_echo_intensity(self, regridded_dataset):
+        runner = VelocityCheckRunner(regridded_dataset)
+        runner.trim_depths(depths=[12.0])
+
+        echo = runner.dataset["echo_intensity"].sel(depth=12.0).values
+        assert not np.any(np.isnan(echo))
+
+    def test_trim_depths_apply_to_all_variables_masks_echo_intensity(
+        self, regridded_dataset
+    ):
+        runner = VelocityCheckRunner(regridded_dataset)
+        runner.trim_depths(depths=[12.0], apply_to_all_variables=True)
+
+        echo = runner.dataset["echo_intensity"].sel(depth=12.0).values
+        assert np.all(np.isnan(echo))
+
+    def test_trim_depths_chains_with_other_checks(self, regridded_dataset):
+        runner = VelocityCheckRunner(regridded_dataset)
+        result = runner.threshold().trim_depths(depths=[12.0]).flatline()
+
+        assert result is runner
+        assert len(runner.statistics) == 3
 
 
 class TestMagneticCorrectionMethod:

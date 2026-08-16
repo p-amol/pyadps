@@ -24,6 +24,7 @@ from pyadps.processing.velocity_check import (
     velocity_threshold_check,
     despike_check,
     flatline_check,
+    trim_depths,
     update_combined_mask,
     _get_mask_or_create,
     _validate_threshold,
@@ -241,6 +242,53 @@ def dataset_with_missing_values():
     )
 
     return xr.Dataset({"velocity": velocity, "mask": mask})
+
+
+@pytest.fixture
+def regridded_dataset():
+    """Create a regridded (depth-indexed) dataset with velocity and the
+    three raw diagnostics, for trim_depths() tests."""
+    n_beams = 4
+    n_depths = 6
+    n_time = 20
+
+    depths = np.array([0.0, 4.0, 8.0, 12.0, 16.0, 20.0])
+
+    velocity = xr.DataArray(
+        data=np.full((n_beams, n_depths, n_time), 100.0, dtype=np.float32),
+        dims=["beam", "depth", "time"],
+        coords={"beam": np.arange(n_beams), "depth": depths, "time": np.arange(n_time)},
+    )
+    echo = xr.DataArray(
+        data=np.full((n_beams, n_depths, n_time), 80.0, dtype=np.float32),
+        dims=["beam", "depth", "time"],
+        coords=velocity.coords,
+    )
+    correlation = xr.DataArray(
+        data=np.full((n_beams, n_depths, n_time), 120.0, dtype=np.float32),
+        dims=["beam", "depth", "time"],
+        coords=velocity.coords,
+    )
+    percent_good = xr.DataArray(
+        data=np.full((n_beams, n_depths, n_time), 90.0, dtype=np.float32),
+        dims=["beam", "depth", "time"],
+        coords=velocity.coords,
+    )
+    mask = xr.DataArray(
+        data=np.zeros((n_beams, n_depths, n_time), dtype=np.int8),
+        dims=["beam", "depth", "time"],
+        coords=velocity.coords,
+    )
+
+    return xr.Dataset(
+        {
+            "velocity": velocity,
+            "echo_intensity": echo,
+            "correlation": correlation,
+            "percent_good": percent_good,
+            "mask": mask,
+        }
+    )
 
 
 # ============================================================================
@@ -742,6 +790,112 @@ class TestFlatlineCheck:
         """Default parameters should match module constants."""
         assert DEFAULT_FLATLINE_KERNEL == 4
         assert DEFAULT_FLATLINE_CUTOFF == 1.0
+
+
+# ============================================================================
+# TEST: trim_depths
+# ============================================================================
+
+
+class TestTrimSurface:
+    """Tests for trim_depths function."""
+
+    def test_returns_dataset(self, regridded_dataset):
+        result = trim_depths(regridded_dataset, depths=[12.0])
+        assert isinstance(result, xr.Dataset)
+
+    def test_requires_depth_dimension(self, sample_dataset):
+        """sample_dataset uses 'cell', not 'depth' - pre-regrid data."""
+        with pytest.raises(ValueError, match="requires a regridded dataset"):
+            trim_depths(sample_dataset, depths=[12.0])
+
+    def test_empty_depths_raises(self, regridded_dataset):
+        with pytest.raises(ValueError, match="at least one value"):
+            trim_depths(regridded_dataset, depths=[])
+
+    def test_unknown_depth_raises(self, regridded_dataset):
+        with pytest.raises(ValueError, match="not found"):
+            trim_depths(regridded_dataset, depths=[999.0])
+
+    def test_masks_selected_depth_all_beams(self, regridded_dataset):
+        result = trim_depths(regridded_dataset, depths=[12.0])
+        mask = result["mask"]
+        assert bool((mask.sel(depth=12.0) == 1).all())
+
+    def test_does_not_mask_other_depths(self, regridded_dataset):
+        result = trim_depths(regridded_dataset, depths=[12.0])
+        mask = result["mask"]
+        for d in [0.0, 4.0, 8.0, 16.0, 20.0]:
+            assert bool((mask.sel(depth=d) == 0).all())
+
+    def test_multiple_depths(self, regridded_dataset):
+        result = trim_depths(regridded_dataset, depths=[12.0, 16.0])
+        mask = result["mask"]
+        assert bool((mask.sel(depth=12.0) == 1).all())
+        assert bool((mask.sel(depth=16.0) == 1).all())
+        assert bool((mask.sel(depth=20.0) == 0).all())
+
+    def test_preserves_existing_mask(self, regridded_dataset):
+        """A pre-existing flag elsewhere in the mask must survive."""
+        regridded_dataset["mask"].loc[dict(depth=20.0)] = 1
+        result = trim_depths(regridded_dataset, depths=[12.0])
+        mask = result["mask"]
+        assert bool((mask.sel(depth=12.0) == 1).all())
+        assert bool((mask.sel(depth=20.0) == 1).all())
+
+    def test_default_does_not_touch_echo_intensity(self, regridded_dataset):
+        result = trim_depths(regridded_dataset, depths=[12.0])
+        original = regridded_dataset["echo_intensity"].sel(depth=12.0).values
+        after = result["echo_intensity"].sel(depth=12.0).values
+        np.testing.assert_array_equal(original, after)
+
+    def test_default_does_not_touch_correlation_or_percent_good(self, regridded_dataset):
+        result = trim_depths(regridded_dataset, depths=[12.0])
+        for var_name in ["correlation", "percent_good"]:
+            original = regridded_dataset[var_name].sel(depth=12.0).values
+            after = result[var_name].sel(depth=12.0).values
+            np.testing.assert_array_equal(original, after)
+
+    def test_apply_to_all_variables_masks_echo_intensity(self, regridded_dataset):
+        result = trim_depths(
+            regridded_dataset, depths=[12.0], apply_to_all_variables=True
+        )
+        echo = result["echo_intensity"].sel(depth=12.0).values
+        assert np.all(np.isnan(echo))
+
+    def test_apply_to_all_variables_masks_correlation_and_percent_good(
+        self, regridded_dataset
+    ):
+        result = trim_depths(
+            regridded_dataset, depths=[12.0], apply_to_all_variables=True
+        )
+        for var_name in ["correlation", "percent_good"]:
+            values = result[var_name].sel(depth=12.0).values
+            assert np.all(np.isnan(values))
+
+    def test_apply_to_all_variables_does_not_touch_other_depths(self, regridded_dataset):
+        result = trim_depths(
+            regridded_dataset, depths=[12.0], apply_to_all_variables=True
+        )
+        echo_16 = result["echo_intensity"].sel(depth=16.0).values
+        assert not np.any(np.isnan(echo_16))
+
+    def test_does_not_mask_velocity_data_values(self, regridded_dataset):
+        """trim_depths only updates 'mask' - matching every other check in
+        this pipeline, velocity's raw values aren't NaN'd until export
+        (apply_mask=True), not immediately by this function."""
+        result = trim_depths(regridded_dataset, depths=[12.0])
+        velocity = result["velocity"].sel(depth=12.0).values
+        assert not np.any(np.isnan(velocity))
+
+    def test_original_not_modified(self, regridded_dataset):
+        original_mask = regridded_dataset["mask"].values.copy()
+        trim_depths(regridded_dataset, depths=[12.0])
+        np.testing.assert_array_equal(regridded_dataset["mask"].values, original_mask)
+
+    def test_nearby_but_not_exact_depth_does_not_match(self, regridded_dataset):
+        with pytest.raises(ValueError, match="not found"):
+            trim_depths(regridded_dataset, depths=[12.5])
 
 
 # ============================================================================

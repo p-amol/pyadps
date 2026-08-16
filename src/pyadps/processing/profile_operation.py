@@ -556,12 +556,18 @@ def regrid(
     to (beam, depth, time). After regridding, cell-based masks are no longer valid.
 
     Mask Handling Strategy:
-    1. BEFORE regridding: Apply mask to data (masked cells â†’ np.nan)
+    1. BEFORE regridding: Apply mask to velocity only (masked cells -> np.nan)
     2. DURING regridding: Interpolate data (masked regions preserved as np.nan)
     3. AFTER regridding: Recreate binary mask from np.nan locations in velocity
 
-    All invalid/masked data is represented as np.nan after regridding for
-    consistency across all variables (velocity, correlation, echo, etc.).
+    Only velocity is masked before regridding. echo_intensity, correlation,
+    and percent_good are raw, physical-beam diagnostics - the mask (QC
+    checks + side-lobe cutoff) is velocity-derived, so applying it to them
+    would destroy the exact readings that explain why a cell was flagged.
+    They still go to np.nan wherever regridding itself has no data for a
+    given ensemble at a given depth (outside that ensemble's own valid
+    range, or the variable's own native missing-value gaps) - that's
+    regridding coverage, not masking.
 
     Parameters
     ----------
@@ -831,8 +837,9 @@ def regrid(
 
         # Handle 2D and 3D variables
         if var.ndim == 2:
-            # Apply mask if exists (use combined mask beam 3 for 2D data)
-            if has_mask and mask_values is not None:
+            # Apply mask only to velocity - see the 3D branch below for why
+            # echo_intensity/correlation/percent_good are exempted.
+            if var_name == "velocity" and has_mask and mask_values is not None:
                 # Use beam 3 (combined) for 2D variables
                 combined_mask = (
                     mask_values[3, :, :]
@@ -869,8 +876,17 @@ def regrid(
                 # Count NaNs before mask application
                 nan_before = np.isnan(beam_data).sum()
 
-                # Apply beam-specific mask if exists
-                if has_mask and mask_values is not None:
+                # Apply beam-specific mask only to velocity. The mask (QC
+                # flags + side-lobe cutoff) is velocity-derived; echo
+                # intensity/correlation/percent good are raw, physical-beam
+                # diagnostics that should only go missing here because
+                # regridding has no data to interpolate at that depth for a
+                # given ensemble (their own np.nan pattern from the missing-
+                # value replacement above), never because a QC/side-lobe
+                # check flagged velocity - otherwise the exact diagnostic
+                # values that would explain *why* a cell was flagged are
+                # destroyed before they ever reach export.
+                if var_name == "velocity" and has_mask and mask_values is not None:
                     beam_mask = (
                         mask_values[b, :, :]
                         if b < mask_values.shape[0]

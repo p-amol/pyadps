@@ -338,6 +338,34 @@ class TestRegridMaskHandling:
         masked_velocity = velocity[mask == 1]
         assert np.all(np.isnan(masked_velocity))
 
+    def test_mask_not_applied_to_echo_intensity(self, dataset_with_mask):
+        """echo_intensity is a raw, physical-beam diagnostic - the
+        velocity-derived mask (QC checks + side-lobe cutoff) must not
+        blank it out, or the values explaining *why* a cell was flagged
+        would be destroyed before ever reaching export."""
+        result = regrid(dataset_with_mask)
+
+        velocity = result["velocity"].values
+        echo = result["echo_intensity"].values
+        mask = result["mask"].values
+
+        # Cells where velocity was masked (NaN) should still have real
+        # echo_intensity values, since echo isn't masked at all.
+        velocity_masked = np.isnan(velocity)
+        assert np.any(velocity_masked)
+        assert np.all(~np.isnan(echo[velocity_masked]))
+
+    def test_mask_not_applied_to_correlation_and_percent_good(self, dataset_with_mask):
+        """Same guarantee as echo_intensity for the other physical-beam
+        diagnostics."""
+        result = regrid(dataset_with_mask)
+
+        velocity_masked = np.isnan(result["velocity"].values)
+        assert np.any(velocity_masked)
+        for var_name in ["correlation", "percent_good"]:
+            values = result[var_name].values
+            assert np.all(~np.isnan(values[velocity_masked]))
+
 
 # ============================================================================
 # TESTS: Missing Value Handling

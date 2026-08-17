@@ -1993,6 +1993,64 @@ class TestPlottingFunctions:
                 component_label="U (East)",
             )
 
+    def _make_boundary_depth_arrays(self):
+        """(velocity, echo, correlation, depth_coord) where depth 0 (the
+        boundary depth) has every beam invalid for the first 5 ensembles -
+        the normal case at the edge of a profile, where no beam has a
+        valid ping for some ensembles."""
+        n_beams, n_depths, n_time = 4, 3, 20
+        rng = np.random.default_rng(0)
+        velocity = (rng.standard_normal((n_beams, n_depths, n_time)) * 300).astype(
+            np.int16
+        )
+        echo = rng.integers(50, 200, (n_beams, n_depths, n_time)).astype(np.float64)
+        correlation = rng.integers(50, 200, (n_beams, n_depths, n_time)).astype(
+            np.float64
+        )
+        velocity = velocity.astype(np.int16)
+        velocity[:, 0, :5] = -32768
+        echo[:, 0, :5] = -32768
+        correlation[:, 0, :5] = -32768
+        depth_coord = np.array([0.0, 4.0, 8.0])
+        return velocity, echo, correlation, depth_coord
+
+    def test_render_depth_trim_stats_no_empty_slice_warning(
+        self, page_module, recwarn
+    ):
+        """A boundary depth with some all-fill-value ensembles (no beam has
+        a valid ping) must not raise 'Mean of empty slice' - this is the
+        expected case at the edge of a profile, not something to warn
+        about. Regression test: reported as a live RuntimeWarning against
+        a real deployment."""
+        velocity, echo, correlation, depth_coord = self._make_boundary_depth_arrays()
+        with (
+            patch("streamlit.plotly_chart"),
+            patch("streamlit.dataframe"),
+            patch("streamlit.caption"),
+        ):
+            page_module.render_depth_trim_stats(
+                velocity_data=velocity,
+                depth_coord=depth_coord,
+                echo_data=echo,
+                correlation_data=correlation,
+                selected_depths=[0.0, 4.0, 8.0],
+            )
+        assert not any("Mean of empty slice" in str(w.message) for w in recwarn.list)
+
+    def test_plot_depth_trim_comparison_no_empty_slice_warning(
+        self, page_module, recwarn
+    ):
+        velocity, echo, _correlation, depth_coord = self._make_boundary_depth_arrays()
+        with patch("streamlit.plotly_chart"):
+            page_module.plot_depth_trim_comparison(
+                velocity_data=velocity,
+                depth_coord=depth_coord,
+                echo_data=echo,
+                selected_depths=[0.0, 4.0, 8.0],
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
+            )
+        assert not any("Mean of empty slice" in str(w.message) for w in recwarn.list)
+
 
 # ===========================================================================
 # CLASS 11 — Edge cases and alternate dataset shapes

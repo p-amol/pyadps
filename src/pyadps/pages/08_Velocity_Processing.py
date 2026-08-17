@@ -19,6 +19,8 @@ Architecture:
 - All processing is tracked through the processor's reports
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -650,6 +652,19 @@ def plot_flatline_timeseries(
     st.plotly_chart(fig, use_container_width=True)
 
 
+def _beam_mean_ignore_empty(arr: np.ndarray) -> np.ndarray:
+    """
+    np.nanmean(arr, axis=0) without the benign "Mean of empty slice"
+    RuntimeWarning for columns where every beam is NaN - expected at
+    boundary depths, where some ensembles have no valid beam at all.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="Mean of empty slice", category=RuntimeWarning
+        )
+        return np.nanmean(arr, axis=0)
+
+
 def plot_depth_trim_comparison(
     velocity_data: np.ndarray,
     depth_coord: np.ndarray,
@@ -705,7 +720,7 @@ def plot_depth_trim_comparison(
         if echo_data is not None:
             echo = echo_data[:, depth_idx, :].astype(float)
             echo[echo == -32768] = np.nan
-            echo_mean = np.nanmean(echo, axis=0)
+            echo_mean = _beam_mean_ignore_empty(echo)
             fig.add_trace(
                 go.Scatter(
                     x=x_axis,
@@ -768,16 +783,18 @@ def render_depth_trim_stats(
         if echo_data is not None:
             echo = echo_data[:, depth_idx, :].astype(float)
             echo[echo == -32768] = np.nan
-            echo_mean_per_ens = np.nanmean(echo, axis=0)
-            row["Echo mean"] = np.nanmean(echo_mean_per_ens)
-            row["Echo std"] = np.nanstd(echo_mean_per_ens)
+            echo_mean_per_ens = _beam_mean_ignore_empty(echo)
+            has_echo = np.any(~np.isnan(echo_mean_per_ens))
+            row["Echo mean"] = np.nanmean(echo_mean_per_ens) if has_echo else np.nan
+            row["Echo std"] = np.nanstd(echo_mean_per_ens) if has_echo else np.nan
 
         if correlation_data is not None:
             corr = correlation_data[:, depth_idx, :].astype(float)
             corr[corr == -32768] = np.nan
-            corr_mean_per_ens = np.nanmean(corr, axis=0)
-            row["Correlation mean"] = np.nanmean(corr_mean_per_ens)
-            row["Correlation std"] = np.nanstd(corr_mean_per_ens)
+            corr_mean_per_ens = _beam_mean_ignore_empty(corr)
+            has_corr = np.any(~np.isnan(corr_mean_per_ens))
+            row["Correlation mean"] = np.nanmean(corr_mean_per_ens) if has_corr else np.nan
+            row["Correlation std"] = np.nanstd(corr_mean_per_ens) if has_corr else np.nan
 
         rows.append(row)
 

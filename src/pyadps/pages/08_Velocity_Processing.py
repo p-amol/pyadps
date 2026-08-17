@@ -720,6 +720,67 @@ def plot_depth_trim_comparison(
     st.plotly_chart(fig, use_container_width=True)
 
 
+def render_depth_trim_stats(
+    velocity_data: np.ndarray,
+    depth_coord: np.ndarray,
+    echo_data: np.ndarray | None,
+    correlation_data: np.ndarray | None,
+    selected_depths: list,
+) -> None:
+    """
+    Show mean/std statistics for speed, echo intensity, and correlation at
+    each selected depth, over the *entire* deployment (not just the chart's
+    ensemble-range window) - a contaminated boundary cell typically shows
+    elevated/erratic echo intensity and depressed correlation compared to
+    its clean neighbors, and this is easiest to see decisively across the
+    whole record rather than one window.
+
+    velocity_data, echo_data, correlation_data : (beam, depth, time) arrays
+    """
+    rows = []
+    for depth in selected_depths:
+        depth_idx = int(np.argmin(np.abs(depth_coord - depth)))
+
+        u = velocity_data[0, depth_idx, :].astype(float)
+        v = velocity_data[1, depth_idx, :].astype(float)
+        u[u == -32768] = np.nan
+        v[v == -32768] = np.nan
+        speed = np.sqrt(u**2 + v**2)
+
+        row = {
+            "Depth": f"{depth:g} m",
+            "Speed mean (mm/s)": np.nanmean(speed) if np.any(~np.isnan(speed)) else np.nan,
+            "Speed std": np.nanstd(speed) if np.any(~np.isnan(speed)) else np.nan,
+        }
+
+        if echo_data is not None:
+            echo = echo_data[:, depth_idx, :].astype(float)
+            echo[echo == -32768] = np.nan
+            echo_mean_per_ens = np.nanmean(echo, axis=0)
+            row["Echo mean"] = np.nanmean(echo_mean_per_ens)
+            row["Echo std"] = np.nanstd(echo_mean_per_ens)
+
+        if correlation_data is not None:
+            corr = correlation_data[:, depth_idx, :].astype(float)
+            corr[corr == -32768] = np.nan
+            corr_mean_per_ens = np.nanmean(corr, axis=0)
+            row["Correlation mean"] = np.nanmean(corr_mean_per_ens)
+            row["Correlation std"] = np.nanstd(corr_mean_per_ens)
+
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    numeric_cols = [c for c in df.columns if c != "Depth"]
+    df[numeric_cols] = df[numeric_cols].round(1)
+    st.dataframe(df, hide_index=True, use_container_width=True)
+    st.caption(
+        "Full-deployment statistics (all ensembles, not just the chart's "
+        "ensemble range above). Elevated echo, depressed correlation, and "
+        "higher speed variance at one cell relative to the others is the "
+        "signature of boundary-layer contamination."
+    )
+
+
 def _default_trim_depths(direction: str) -> list:
     """
     Suggest the boundary depth cell (from the given direction) plus the
@@ -811,6 +872,15 @@ The processing in this page applies quality control checks specifically to veloc
 Velocity checks validate the measured current velocities to identify unreliable data.
 """)
 
+st.warning(
+    "⚠️ **Run these checks after regridding** (Profile Operations → Regrid). "
+    "Before regridding, the same cell *index* corresponds to a different "
+    "physical depth in every ensemble, since it varies with transducer "
+    "depth - so despike/flatline/threshold checks (and comparisons on this "
+    "page) would be analyzing a mix of unrelated depths instead of a "
+    "single depth cell's time series."
+)
+
 # Get velocity labels based on coordinate system
 u_label, v_label, w_label = get_velocity_labels()
 
@@ -846,10 +916,10 @@ def _reset_velocity_tests():
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
     [
         "Magnetic Declination",
+        "Depth Trim",
         "Velocity Thresholds",
         "Despike Data",
         "Flatline Detection",
-        "Depth Trim",
         "Preview",
         "Save & Reset",
     ]
@@ -1022,10 +1092,10 @@ with tab1:
 
 
 # =============================================================================
-# TAB 2: VELOCITY THRESHOLDS
+# TAB 3: VELOCITY THRESHOLDS
 # =============================================================================
 
-with tab2:
+with tab3:
     st.header("Velocity Thresholds", divider="blue")
 
     st.write("""
@@ -1098,10 +1168,10 @@ with tab2:
 
 
 # =============================================================================
-# TAB 3: DESPIKE DATA
+# TAB 4: DESPIKE DATA
 # =============================================================================
 
-with tab3:
+with tab4:
     st.header("Despike Data", divider="blue")
 
     st.write("""
@@ -1221,10 +1291,10 @@ with tab3:
 
 
 # =============================================================================
-# TAB 4: FLATLINE DETECTION
+# TAB 5: FLATLINE DETECTION
 # =============================================================================
 
-with tab4:
+with tab5:
     st.header("Flatline Detection", divider="blue")
 
     st.write("""
@@ -1338,10 +1408,10 @@ with tab4:
 
 
 # =============================================================================
-# TAB 5: DEPTH TRIM
+# TAB 2: DEPTH TRIM
 # =============================================================================
 
-with tab5:
+with tab2:
     st.header("Depth Trim", divider="blue")
 
     st.write("""
@@ -1349,8 +1419,9 @@ with tab5:
     masked by side-lobe cutting - some ensembles' geometric cutoff falls
     just above it, some just below, since the cutoff depends on transducer
     depth, which drifts over a deployment. Compare a candidate boundary
-    cell against its clean neighbors below (speed and echo intensity),
-    then manually mask whichever cell(s) look contaminated.
+    cell against its clean neighbors below (speed and echo intensity), pick
+    the boundary depth, and every cell from there to the edge of the
+    profile gets masked.
     """)
 
     if "depth" not in ds.dims:
@@ -1362,6 +1433,121 @@ with tab5:
         st.session_state.apply_trim_depths = False
         st.session_state.apply_trim_depths_cb = False
     else:
+        # Everything below is always shown - exploring the comparison chart
+        # doesn't require committing to anything. "Apply depth trim" (at
+        # the bottom) is the only thing that decides whether the depths
+        # shown here actually get staged for masking.
+        depth_values = sorted(ds["depth"].values.tolist())
+
+        direction = st.radio(
+            "Boundary",
+            options=["Shallow", "Deep"],
+            horizontal=True,
+            key="trim_depths_direction",
+            help="Which end of the profile to inspect. Determines the "
+            "suggested default cells below - you can still pick any "
+            "three depths regardless.",
+        )
+
+        default_depths = _default_trim_depths(direction)
+        fallback = (
+            depth_values if direction == "Shallow" else list(reversed(depth_values))
+        )
+        for candidate in fallback:
+            if len(default_depths) >= 3:
+                break
+            if candidate not in default_depths:
+                default_depths.append(candidate)
+
+        st.write("**Select three depth cells to compare:**")
+        st.caption(
+            "Cell 1 is the boundary - masking applies to it and every "
+            "cell beyond it toward the edge of the profile. Cells 2 and "
+            "3 are clean reference neighbors, for comparison only."
+        )
+        cols = st.columns(3)
+        selected_depths = []
+        for i, col in enumerate(cols):
+            with col:
+                default_val = (
+                    default_depths[i] if i < len(default_depths) else depth_values[0]
+                )
+                depth_choice = st.selectbox(
+                    f"Cell {i + 1}" + (" (boundary)" if i == 0 else ""),
+                    options=depth_values,
+                    index=depth_values.index(default_val),
+                    key=f"trim_depths_cell_{i}",
+                    format_func=lambda d: f"{d:g} m",
+                )
+                selected_depths.append(depth_choice)
+
+        if len(set(selected_depths)) != 3:
+            st.warning("Select three distinct depth cells to compare.")
+
+        boundary_depth = selected_depths[0]
+        if direction == "Shallow":
+            depths_to_mask = [d for d in depth_values if d <= boundary_depth]
+        else:
+            depths_to_mask = [d for d in depth_values if d >= boundary_depth]
+
+        n_ensembles = get_total_ensembles()
+        default_end = min(1000, n_ensembles)
+        trim_ens_range = st.slider(
+            "Ensemble Range",
+            min_value=0,
+            max_value=n_ensembles,
+            value=(0, default_end),
+            key="trim_depths_ens_range",
+        )
+
+        if "velocity" in ds.data_vars:
+            echo_var_name = (
+                "echo_intensity"
+                if "echo_intensity" in ds.data_vars
+                else ("echo" if "echo" in ds.data_vars else None)
+            )
+            correlation_var_name = "correlation" if "correlation" in ds.data_vars else None
+
+            plot_depth_trim_comparison(
+                velocity_data=ds["velocity"].values,
+                depth_coord=ds["depth"].values,
+                echo_data=ds[echo_var_name].values if echo_var_name else None,
+                selected_depths=selected_depths,
+                ens_start=trim_ens_range[0],
+                ens_end=trim_ens_range[1],
+            )
+            st.caption(
+                "🔍 Compare the selected depths - a contaminated boundary "
+                "cell typically shows elevated/erratic echo intensity and "
+                "noisier speed than its clean neighbors."
+            )
+
+            st.write("**📊 Summary statistics:**")
+            render_depth_trim_stats(
+                velocity_data=ds["velocity"].values,
+                depth_coord=ds["depth"].values,
+                echo_data=ds[echo_var_name].values if echo_var_name else None,
+                correlation_data=ds[correlation_var_name].values
+                if correlation_var_name
+                else None,
+                selected_depths=selected_depths,
+            )
+        else:
+            st.info("No velocity data available for visualization.")
+
+        st.divider()
+
+        st.session_state.trim_depths_apply_all_vars = st.checkbox(
+            "Also mask echo intensity / correlation / percent good at these depths",
+            value=st.session_state.trim_depths_apply_all_vars,
+            help="By default only velocity is masked - echo/correlation/"
+            "percent good keep their raw diagnostic values. Enable this "
+            "only once you've visually confirmed the raw diagnostic "
+            "itself is contaminated (e.g. elevated echo intensity), not "
+            "just assumed it.",
+            key="trim_depths_apply_all_cb",
+        )
+
         st.session_state.apply_trim_depths = st.checkbox(
             "Apply depth trim",
             value=st.session_state.apply_trim_depths,
@@ -1369,112 +1555,15 @@ with tab5:
         )
 
         if st.session_state.apply_trim_depths:
-            depth_values = sorted(ds["depth"].values.tolist())
-
-            direction = st.radio(
-                "Boundary",
-                options=["Shallow", "Deep"],
-                horizontal=True,
-                key="trim_depths_direction",
-                help="Which end of the profile to inspect. Determines the "
-                "suggested default cells below - you can still pick any "
-                "three depths regardless.",
+            st.session_state.trim_depths_selected = depths_to_mask
+            comparator = "≤" if direction == "Shallow" else "≥"
+            st.success(
+                f"Will mask {len(depths_to_mask)} depth bin(s) "
+                f"({comparator} {boundary_depth:g} m): "
+                + ", ".join(f"{d:g} m" for d in depths_to_mask)
             )
-
-            default_depths = _default_trim_depths(direction)
-            fallback = (
-                depth_values if direction == "Shallow" else list(reversed(depth_values))
-            )
-            while len(default_depths) < 3 and len(fallback) > len(default_depths):
-                candidate = fallback[len(default_depths)]
-                if candidate not in default_depths:
-                    default_depths.append(candidate)
-
-            st.write("**Select three depth cells to compare:**")
-            cols = st.columns(3)
-            selected_depths = []
-            mask_flags = []
-            for i, col in enumerate(cols):
-                with col:
-                    default_val = (
-                        default_depths[i] if i < len(default_depths) else depth_values[0]
-                    )
-                    depth_choice = st.selectbox(
-                        f"Cell {i + 1}",
-                        options=depth_values,
-                        index=depth_values.index(default_val),
-                        key=f"trim_depths_cell_{i}",
-                        format_func=lambda d: f"{d:g} m",
-                    )
-                    selected_depths.append(depth_choice)
-                    mask_flags.append(
-                        st.checkbox(
-                            "Mask this depth",
-                            value=(i == 0),
-                            key=f"trim_depths_mask_{i}",
-                        )
-                    )
-
-            if len(set(selected_depths)) != 3:
-                st.warning("Select three distinct depth cells to compare.")
-
-            n_ensembles = get_total_ensembles()
-            default_end = min(1000, n_ensembles)
-            trim_ens_range = st.slider(
-                "Ensemble Range",
-                min_value=0,
-                max_value=n_ensembles,
-                value=(0, default_end),
-                key="trim_depths_ens_range",
-            )
-
-            if "velocity" in ds.data_vars:
-                echo_var_name = (
-                    "echo_intensity"
-                    if "echo_intensity" in ds.data_vars
-                    else ("echo" if "echo" in ds.data_vars else None)
-                )
-                plot_depth_trim_comparison(
-                    velocity_data=ds["velocity"].values,
-                    depth_coord=ds["depth"].values,
-                    echo_data=ds[echo_var_name].values if echo_var_name else None,
-                    selected_depths=selected_depths,
-                    ens_start=trim_ens_range[0],
-                    ens_end=trim_ens_range[1],
-                )
-                st.caption(
-                    "🔍 Compare the selected depths - a contaminated boundary "
-                    "cell typically shows elevated/erratic echo intensity and "
-                    "noisier speed than its clean neighbors."
-                )
-            else:
-                st.info("No velocity data available for visualization.")
-
-            st.divider()
-            st.session_state.trim_depths_apply_all_vars = st.checkbox(
-                "Also mask echo intensity / correlation / percent good at these depths",
-                value=st.session_state.trim_depths_apply_all_vars,
-                help="By default only velocity is masked - echo/correlation/"
-                "percent good keep their raw diagnostic values. Enable this "
-                "only once you've visually confirmed the raw diagnostic "
-                "itself is contaminated (e.g. elevated echo intensity), not "
-                "just assumed it.",
-                key="trim_depths_apply_all_cb",
-            )
-
-            st.session_state.trim_depths_selected = [
-                d for d, flagged in zip(selected_depths, mask_flags) if flagged
-            ]
-
-            if st.session_state.trim_depths_selected:
-                st.success(
-                    "Will mask: "
-                    + ", ".join(
-                        f"{d:g} m" for d in st.session_state.trim_depths_selected
-                    )
-                )
-            else:
-                st.warning("No depths checked to mask - check at least one above.")
+        else:
+            st.session_state.trim_depths_selected = []
 
 
 # =============================================================================

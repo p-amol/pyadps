@@ -321,31 +321,45 @@ Apply velocity-specific quality control and magnetic declination correction.
 | Tab | Description |
 |-----|-------------|
 | Magnetic Declination | Apply declination correction to U/V components |
+| Depth Trim | Manually mask boundary-layer depth cells after regridding |
 | Velocity Thresholds | Set per-component cutoffs (U, V, W) |
 | Despike Data | Median-filter spike detection |
 | Flatline Detection | Detect frozen/stuck sensor values |
-| Depth Trim | Manually mask boundary-layer depth cells after regridding |
 | Preview | View mask impact before committing |
 | Save & Reset | Commit or undo changes |
+
+```{warning}
+Run these checks after regridding (Page 7 — Profile Operations → Regrid).
+Before regridding, the same cell *index* corresponds to a different
+physical depth in every ensemble, since it varies with transducer depth —
+so despike/flatline/threshold checks (and the Depth Trim comparison) would
+be analyzing a mix of unrelated depths instead of a single depth cell's
+time series.
+```
 
 ```{tip}
 This is the final check on the velocity data itself. All five checks are
 independently optional — apply whichever apply to your deployment, in any
-combination. Magnetic Declination uses the deployment's latitude/longitude
-— auto-filled here if you entered it on the Download Raw File page.
-Velocity Thresholds, Despike, and Flatline Detection then catch
+combination, and they run in tab order (Magnetic Declination, Depth Trim,
+Velocity Thresholds, Despike, Flatline) whether triggered from the page or
+from a saved `config.ini`. Magnetic Declination uses the deployment's
+latitude/longitude — auto-filled here if you entered it on the Download Raw
+File page. Velocity Thresholds, Despike, and Flatline Detection then catch
 out-of-range values, spikes, and frozen/stuck readings respectively.
 ```
 
 ```{note}
-**Depth Trim** only appears once the dataset has been regridded (Page 7 —
-Profile Operations). It's a manual safety net for boundary-layer
-contamination (e.g. surface backscatter) that survives side-lobe cutting's
-geometric cutoff — compare a candidate boundary depth cell against its
-clean neighbors (speed and echo intensity time series), then check off
-which depth(s) to mask. By default only velocity is masked; there's an
-option to also mask echo intensity/correlation/percent good if you've
-confirmed the raw diagnostic itself is contaminated.
+**Depth Trim**'s comparison chart and cell picker are always visible once
+the dataset has been regridded (Page 7 — Profile Operations) — exploring
+them doesn't require committing to anything. It's a manual safety net for
+boundary-layer contamination (e.g. surface backscatter) that survives
+side-lobe cutting's geometric cutoff: pick a boundary depth cell (Cell 1)
+after comparing it against two clean neighbor cells (speed and echo
+intensity time series, plus a summary statistics table), and every depth
+from there to the edge of the profile is masked once "Apply depth trim" is
+checked. By default only velocity is masked; there's an option to also
+mask echo intensity/correlation/percent good if you've confirmed the raw
+diagnostic itself is contaminated.
 ```
 
 ---

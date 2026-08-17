@@ -909,10 +909,6 @@ class ProcessedDataset:
 
     def apply_velocity_check(
         self,
-        # Velocity threshold (None = skip)
-        cutoff_u: Optional[float] = None,
-        cutoff_v: Optional[float] = None,
-        cutoff_w: Optional[float] = None,
         # Magnetic correction
         magnetic_correction: bool = False,
         declination: Optional[float] = None,
@@ -920,6 +916,13 @@ class ProcessedDataset:
         lat: Optional[float] = None,
         lon: Optional[float] = None,
         year: Optional[float] = None,
+        # Depth trim (post-regrid boundary-layer masking)
+        trim_depths: Optional[List[float]] = None,
+        trim_depths_apply_all_variables: bool = False,
+        # Velocity threshold (None = skip)
+        cutoff_u: Optional[float] = None,
+        cutoff_v: Optional[float] = None,
+        cutoff_w: Optional[float] = None,
         # Despike
         despike: bool = False,
         despike_kernel: int = 13,
@@ -928,9 +931,6 @@ class ProcessedDataset:
         flatline: bool = False,
         flatline_kernel: int = 4,
         flatline_cutoff: float = 1.0,
-        # Depth trim (post-regrid boundary-layer masking)
-        trim_depths: Optional[List[float]] = None,
-        trim_depths_apply_all_variables: bool = False,
     ) -> ProcessedDataset:
         """
         Apply velocity checks (STEP 5 of 6).
@@ -938,14 +938,11 @@ class ProcessedDataset:
         Validates velocity data through threshold checks, magnetic correction,
         despiking, and flatline detection. Uses VelocityCheckRunner for processing.
 
+        Checks run in this order: magnetic correction, depth trim, threshold,
+        despike, flatline - matching the Velocity Processing page's tab order.
+
         Parameters
         ----------
-        cutoff_u : float, optional
-            U (East) velocity magnitude cutoff in mm/s. None = skip.
-        cutoff_v : float, optional
-            V (North) velocity magnitude cutoff in mm/s. None = skip.
-        cutoff_w : float, optional
-            W (Vertical) velocity magnitude cutoff in mm/s. None = skip.
         magnetic_correction : bool, default False
             Enable magnetic declination correction.
         declination : float, optional
@@ -959,6 +956,21 @@ class ProcessedDataset:
             Longitude for declination calculation.
         year : float, optional
             Year for declination calculation.
+        trim_depths : list of float, optional
+            Depth values (matched exactly) to mask across every ensemble -
+            for boundary-layer contamination (e.g. surface backscatter) that
+            survives cut_bins_side_lobe()'s geometric cutoff. Requires a
+            regridded dataset (a 'depth' dimension); None/empty = skip.
+        trim_depths_apply_all_variables : bool, default False
+            If True, also masks echo_intensity/correlation/percent_good at
+            the selected depths, not just velocity - see
+            VelocityCheckRunner.trim_depths() for when that's appropriate.
+        cutoff_u : float, optional
+            U (East) velocity magnitude cutoff in mm/s. None = skip.
+        cutoff_v : float, optional
+            V (North) velocity magnitude cutoff in mm/s. None = skip.
+        cutoff_w : float, optional
+            W (Vertical) velocity magnitude cutoff in mm/s. None = skip.
         despike : bool, default False
             Enable despike filter.
         despike_kernel : int, default 13
@@ -971,15 +983,6 @@ class ProcessedDataset:
             Kernel size for flatline detection.
         flatline_cutoff : float, default 1.0
             Flatline tolerance in mm/s.
-        trim_depths : list of float, optional
-            Depth values (matched exactly) to mask across every ensemble -
-            for boundary-layer contamination (e.g. surface backscatter) that
-            survives cut_bins_side_lobe()'s geometric cutoff. Requires a
-            regridded dataset (a 'depth' dimension); None/empty = skip.
-        trim_depths_apply_all_variables : bool, default False
-            If True, also masks echo_intensity/correlation/percent_good at
-            the selected depths, not just velocity - see
-            VelocityCheckRunner.trim_depths() for when that's appropriate.
 
         Returns
         -------
@@ -1007,13 +1010,13 @@ class ProcessedDataset:
         # Check if anything to do
         has_operations = any(
             [
+                magnetic_correction,
+                bool(trim_depths),
                 cutoff_u is not None,
                 cutoff_v is not None,
                 cutoff_w is not None,
-                magnetic_correction,
                 despike,
                 flatline,
-                bool(trim_depths),
             ]
         )
 
@@ -1031,6 +1034,15 @@ class ProcessedDataset:
                 lat=lat,
                 lon=lon,
                 year=year,
+            )
+
+        # Depth trim (manual boundary-layer masking - runs right after
+        # magnetic correction, before the automated per-component checks,
+        # matching the Velocity Processing page's tab order)
+        if trim_depths:
+            runner.trim_depths(
+                depths=trim_depths,
+                apply_to_all_variables=trim_depths_apply_all_variables,
             )
 
         # Velocity threshold check
@@ -1055,14 +1067,6 @@ class ProcessedDataset:
                 cutoff=flatline_cutoff,
             )
 
-        # Depth trim (manual boundary-layer masking - applied last, as a
-        # targeted override on top of the automated per-component checks)
-        if trim_depths:
-            runner.trim_depths(
-                depths=trim_depths,
-                apply_to_all_variables=trim_depths_apply_all_variables,
-            )
-
         # Commit changes
         self.dataset = runner.finalize()
         self.reports.append(runner.get_pipeline_report())
@@ -1075,13 +1079,6 @@ class ProcessedDataset:
 
         # ---- record in config ------------------------------------------------
         self.config.isVelocityTest = True
-        # Threshold
-        self.config.isCutoffCheck_VT = any(
-            v is not None for v in [cutoff_u, cutoff_v, cutoff_w]
-        )
-        self.config.maxuvel_VT = cutoff_u if cutoff_u is not None else 2500.0
-        self.config.maxvvel_VT = cutoff_v if cutoff_v is not None else 2500.0
-        self.config.maxwvel_VT = cutoff_w if cutoff_w is not None else 500.0
         # Magnetic correction
         self.config.isMagnetCheck_VT = magnetic_correction
         if declination is not None:
@@ -1097,6 +1094,17 @@ class ProcessedDataset:
         # effect on the declination calculation (altitude is hardcoded to 0
         # in correct_magnetic_declination) and is not exposed in the UI.
         self.config.magnet_depth_VT = 0.0
+        # Depth trim
+        self.config.isDepthTrimCheck_VT = bool(trim_depths)
+        self.config.depth_trim_values_VT = list(trim_depths) if trim_depths else []
+        self.config.depth_trim_apply_all_vars_VT = trim_depths_apply_all_variables
+        # Threshold
+        self.config.isCutoffCheck_VT = any(
+            v is not None for v in [cutoff_u, cutoff_v, cutoff_w]
+        )
+        self.config.maxuvel_VT = cutoff_u if cutoff_u is not None else 2500.0
+        self.config.maxvvel_VT = cutoff_v if cutoff_v is not None else 2500.0
+        self.config.maxwvel_VT = cutoff_w if cutoff_w is not None else 500.0
         # Despike
         self.config.isDespikeCheck_VT = despike
         self.config.despike_kernel_VT = despike_kernel
@@ -1105,10 +1113,6 @@ class ProcessedDataset:
         self.config.isFlatlineCheck_VT = flatline
         self.config.flatline_kernel_VT = flatline_kernel
         self.config.flatline_cutoff_VT = flatline_cutoff
-        # Depth trim
-        self.config.isDepthTrimCheck_VT = bool(trim_depths)
-        self.config.depth_trim_values_VT = list(trim_depths) if trim_depths else []
-        self.config.depth_trim_apply_all_vars_VT = trim_depths_apply_all_variables
         # ----------------------------------------------------------------------
 
         return self
@@ -1522,9 +1526,6 @@ class ProcessedDataset:
         # ------------------------------------------------------------------
         if config.isVelocityTest:
             self.apply_velocity_check(
-                cutoff_u=config.maxuvel_VT if config.isCutoffCheck_VT else None,
-                cutoff_v=config.maxvvel_VT if config.isCutoffCheck_VT else None,
-                cutoff_w=config.maxwvel_VT if config.isCutoffCheck_VT else None,
                 magnetic_correction=config.isMagnetCheck_VT,
                 use_api=(config.magnet_method_VT == "api"),
                 lat=config.magnet_lat_VT,
@@ -1536,16 +1537,19 @@ class ProcessedDataset:
                     if config.magnet_method_VT == "user"
                     else None
                 ),
+                trim_depths=config.depth_trim_values_VT
+                if config.isDepthTrimCheck_VT
+                else None,
+                trim_depths_apply_all_variables=config.depth_trim_apply_all_vars_VT,
+                cutoff_u=config.maxuvel_VT if config.isCutoffCheck_VT else None,
+                cutoff_v=config.maxvvel_VT if config.isCutoffCheck_VT else None,
+                cutoff_w=config.maxwvel_VT if config.isCutoffCheck_VT else None,
                 despike=config.isDespikeCheck_VT,
                 despike_kernel=config.despike_kernel_VT,
                 despike_cutoff=config.despike_cutoff_VT,
                 flatline=config.isFlatlineCheck_VT,
                 flatline_kernel=config.flatline_kernel_VT,
                 flatline_cutoff=config.flatline_cutoff_VT,
-                trim_depths=config.depth_trim_values_VT
-                if config.isDepthTrimCheck_VT
-                else None,
-                trim_depths_apply_all_variables=config.depth_trim_apply_all_vars_VT,
             )
 
         # ------------------------------------------------------------------

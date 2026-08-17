@@ -74,6 +74,9 @@ to run. Individual checks within the stage have their own enable flags.
 |-----------|---------|-------------|
 | `isMagnetCheck_VT` | `False` | Enable magnetic declination correction |
 | `magnet_user_input_VT` | 0.0 | Declination in degrees (+ east) |
+| `isDepthTrimCheck_VT` | `False` | Enable depth trim (post-regrid boundary-layer masking) |
+| `depth_trim_values_VT` | `[]` | Depth values (m) to mask across every ensemble |
+| `depth_trim_apply_all_vars_VT` | `False` | If `True`, also masks echo/correlation/percent good at those depths, not just velocity |
 | `isCutoffCheck_VT` | `False` | Enable velocity threshold check |
 | `maxuvel_VT` | 2500.0 | U threshold (mm/s) |
 | `maxvvel_VT` | 2500.0 | V threshold (mm/s) |
@@ -82,9 +85,9 @@ to run. Individual checks within the stage have their own enable flags.
 | `despike_kernel_VT` | 5 | Despike window size |
 | `despike_cutoff_VT` | 3.0 | Despike threshold (σ) |
 | `isFlatlineCheck_VT` | `False` | Enable flatline detection |
-| `isDepthTrimCheck_VT` | `False` | Enable depth trim (post-regrid boundary-layer masking) |
-| `depth_trim_values_VT` | `[]` | Depth values (m) to mask across every ensemble |
-| `depth_trim_apply_all_vars_VT` | `False` | If `True`, also masks echo/correlation/percent good at those depths, not just velocity |
+
+Checks apply in this order: magnetic correction, depth trim, threshold,
+despike, flatline - matching the Velocity Processing page's tab order.
 
 ## INI File Format
 

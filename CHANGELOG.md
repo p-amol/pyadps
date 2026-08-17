@@ -6,6 +6,8 @@ All notable changes to `pyadps` are documented in this file. The format is based
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-17
+
 ### Added
 
 - `autoprocess()` and the Add-Ons "Auto Processing" page can now reproduce the exact
@@ -25,6 +27,44 @@ All notable changes to `pyadps` are documented in this file. The format is based
 - New CLI flags on `pyadps-auto` mirroring all of the above
   (`--include-echo`/`--include-correlation`/`--include-percent-good`/
   `--include-mask`, `--save-raw-netcdf`, `--raw-include-*`)
+- **Depth Trim**, a new manual QC step on the Velocity Processing page for
+  boundary-layer contamination (e.g. surface backscatter) that survives
+  `cut_bins_side_lobe()`'s geometric cutoff. That cutoff is computed from
+  `transducer_depth`, which drifts over a deployment, so a boundary depth
+  bin can end up only partially masked even when the underlying
+  contamination is present throughout. Depth Trim lets you visually
+  compare a candidate boundary depth cell against clean neighbors (speed
+  and echo intensity time series, plus a summary statistics table) and
+  manually mask it, and every cell beyond it toward the edge of the
+  profile. The page has two independent checkboxes, Shallow and Deep, so
+  either or both ends of the profile can be trimmed in one pass. Masks
+  velocity only by default, with an opt-in to also mask echo intensity/
+  correlation/percent good once the raw diagnostic itself is confirmed
+  contaminated. Available as `VelocityCheckRunner.trim_depths()`,
+  `ProcessedDataset.apply_velocity_check(trim_depths=...)`, and a new
+  `[VelocityTest]` `depth_trim`/`depth_trim_values`/
+  `depth_trim_apply_all_variables` section in `config.ini` (so
+  `autoprocess()` reproduces it too). Requires a regridded ('depth'
+  dimensioned) dataset
+- Raw NetCDF download from the Add-Ons "Auto Processing" page, mirroring
+  the existing Download Raw File page component picker (or reusing
+  `config.ini`'s `[RawExport]` selection)
+- The processing pipeline flowchart (front page) now includes Depth Trim
+
+### Changed
+
+- Despike's default kernel size changed from 13 to 7 ensembles and its
+  default cutoff from 3.0σ to 6.0σ, in `VelocityCheckRunner.despike()`,
+  `ProcessedDataset.apply_velocity_check()`, `ProcessingConfig`, and the
+  Velocity Processing page. This also fixes a pre-existing mismatch where
+  `ProcessingConfig`'s own default kernel size (5) silently disagreed with
+  the Runner/page default (13)
+- The Despike, Flatline, and Depth Trim charts on the Velocity Processing
+  page always render the full deployment now (the ensemble-range slider
+  that capped the default view at 1000 points has been removed) and use
+  time instead of ensemble number on the x-axis. Despike and Flatline let
+  you pick a depth instead of a raw cell index once the dataset has been
+  regridded (falls back to cell index otherwise)
 
 ### Fixed
 
@@ -58,6 +98,43 @@ All notable changes to `pyadps` are documented in this file. The format is based
   instead of the installed version
 - `pyadps_version` in `config.ini` stayed frozen at the original read's version after
   reprocessing with a different pyadps install
+- `regrid()` applied the QC/side-lobe mask to every beam-indexed variable
+  unconditionally before interpolating, including `echo_intensity`,
+  `correlation`, and `percent_good` — silently destroying the raw
+  diagnostic values in side-lobe-contaminated cells, since `regrid()` runs
+  upstream of both the Write File page and `autoprocess()`. Mask
+  application is now scoped to velocity only, matching the export path's
+  existing exemption for these variables
+- The Add-Ons "Auto Processing" tool could save a raw NetCDF alongside the
+  processed output (when the uploaded `config.ini` recorded a prior raw
+  download) but never exposed a control for it and only ever offered a
+  download button for the processed file, so the raw file had no way to
+  be retrieved. Separately, the processed-file lookup took the
+  alphabetically-first `*.nc` match and could mislabel the raw file as
+  the processed one when both existed, and clicking one download button
+  reran the whole page and wiped out the other button's results
+- A real infinite loop in the Depth Trim tab's default-depth-padding logic
+  could hang the page whenever the suggested defaults collided with an
+  already-picked value in a way the loop's exit condition never advanced
+  past
+- The Velocity Processing page's "Generate Preview" button applied checks
+  out of the documented pipeline order (threshold/despike/flatline before
+  depth trim, instead of depth trim running right after magnetic
+  correction), so the preview's per-check statistics didn't match what
+  actually happens when Apply Velocity Tests runs the checks in the
+  correct order
+- A `FigureResampler` crash (`AssertionError: ... must be sorted in
+  time`) on the Despike chart for large deployments — its spike-detection
+  envelope was drawn as a single `fill="toself"` trace built from a
+  folded/reversed x-array, which isn't monotonically increasing and
+  `plotly-resampler` requires strictly increasing x on every trace it
+  wraps. Rebuilt as two monotonic-x lines with `fill="tonexty"` instead
+- A `RuntimeWarning: Mean of empty slice` on the Depth Trim tab's
+  comparison chart and statistics table, whenever a boundary depth had
+  ensembles where every beam was a fill value — the normal case at the
+  edge of a profile, not something that should warn. `np.nanmean(...,
+  axis=0)` correctly returned `NaN` for those ensembles; only the warning
+  itself was spurious
 
 ## [1.0.2] - 2026-08-10
 

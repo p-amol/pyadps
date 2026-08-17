@@ -23,7 +23,7 @@ All methods return `self` for chaining.
 | `magnetic_correction(declination, lat, lon, year, use_api)` | — | Rotate U/V to correct for magnetic declination |
 | `trim_depths(depths, apply_to_all_variables=False)` | — | Manually mask specific depth bins across every ensemble (requires a regridded dataset) |
 | `threshold(cutoff_u=2500, cutoff_v=2500, cutoff_w=500)` | mm/s | Flag cells exceeding per-component velocity limits |
-| `despike(kernel_size=13, cutoff=3.0)` | σ=3 | Flag transient spikes using a median-filter approach |
+| `despike(kernel_size=7, cutoff=6.0)` | σ=6 | Flag transient spikes using a median-filter approach |
 | `flatline(kernel_size=4, cutoff=1.0)` | 1 mm/s | Flag constant-value segments (frozen sensor) |
 
 `ProcessedDataset.apply_velocity_check()` applies checks in this order:
@@ -55,7 +55,7 @@ ds_qc = (runner
     .magnetic_correction(declination=-5.0)
     .trim_depths(depths=[12.0])
     .threshold(cutoff_u=2500, cutoff_v=2500, cutoff_w=500)
-    .despike(kernel_size=13, cutoff=3.0)
+    .despike(kernel_size=7, cutoff=6.0)
     .flatline(kernel_size=4, cutoff=1.0)
     .finalize())
 

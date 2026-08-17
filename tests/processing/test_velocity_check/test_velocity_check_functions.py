@@ -637,8 +637,8 @@ class TestDespikeCheck:
 
     def test_default_parameters(self):
         """Default parameters should match module constants."""
-        assert DEFAULT_DESPIKE_KERNEL == 13
-        assert DEFAULT_DESPIKE_CUTOFF == 3.0
+        assert DEFAULT_DESPIKE_KERNEL == 7
+        assert DEFAULT_DESPIKE_CUTOFF == 6.0
 
 
 # ============================================================================

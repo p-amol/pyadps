@@ -62,8 +62,8 @@ DEFAULT_VELOCITY_THRESHOLD_U = 2500.0  # East component (horizontal)
 DEFAULT_VELOCITY_THRESHOLD_V = 2500.0  # North component (horizontal)
 DEFAULT_VELOCITY_THRESHOLD_W = 500.0  # Vertical component (typically weaker)
 
-DEFAULT_DESPIKE_KERNEL = 13
-DEFAULT_DESPIKE_CUTOFF = 3.0
+DEFAULT_DESPIKE_KERNEL = 7
+DEFAULT_DESPIKE_CUTOFF = 6.0
 DEFAULT_FLATLINE_KERNEL = 4
 DEFAULT_FLATLINE_CUTOFF = 1.0
 
@@ -990,9 +990,9 @@ class VelocityCheckRunner:
 
         Parameters
         ----------
-        kernel_size : int, default 13
+        kernel_size : int, default 7
             Window size for rolling median filter.
-        cutoff : float, default 3.0
+        cutoff : float, default 6.0
             Number of standard deviations to identify spikes.
 
         Returns

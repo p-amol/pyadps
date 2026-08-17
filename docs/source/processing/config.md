@@ -82,8 +82,8 @@ to run. Individual checks within the stage have their own enable flags.
 | `maxvvel_VT` | 2500.0 | V threshold (mm/s) |
 | `maxwvel_VT` | 500.0 | W threshold (mm/s) |
 | `isDespikeCheck_VT` | `False` | Enable despike filter |
-| `despike_kernel_VT` | 5 | Despike window size |
-| `despike_cutoff_VT` | 3.0 | Despike threshold (σ) |
+| `despike_kernel_VT` | 7 | Despike window size |
+| `despike_cutoff_VT` | 6.0 | Despike threshold (σ) |
 | `isFlatlineCheck_VT` | `False` | Enable flatline detection |
 
 Checks apply in this order: magnetic correction, depth trim, threshold,

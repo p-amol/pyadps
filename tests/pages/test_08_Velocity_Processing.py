@@ -135,7 +135,7 @@ class MockVelocityCheckRunner:
         return self
 
     def despike(
-        self, kernel_size: int = 13, cutoff: float = 3.0
+        self, kernel_size: int = 7, cutoff: float = 6.0
     ) -> "MockVelocityCheckRunner":
         self.statistics.append(
             MockQCCheckStats(
@@ -156,6 +156,19 @@ class MockVelocityCheckRunner:
                 threshold=(kernel_size, cutoff),
                 cells_newly_masked=3,
                 cells_total_masked=18,
+            )
+        )
+        return self
+
+    def trim_depths(
+        self, depths, apply_to_all_variables: bool = False
+    ) -> "MockVelocityCheckRunner":
+        self.statistics.append(
+            MockQCCheckStats(
+                check_name="Depth Trim",
+                threshold=None,
+                cells_newly_masked=len(depths) if depths else 0,
+                cells_total_masked=len(depths) if depths else 0,
             )
         )
         return self
@@ -240,6 +253,48 @@ def _make_ds(
     return ds
 
 
+def _make_regridded_ds(
+    n_beams: int = 4,
+    n_depths: int = 6,
+    n_time: int = 20,
+) -> xr.Dataset:
+    """Build a regridded (depth-indexed) dataset for Depth Trim tests."""
+    np.random.seed(42)
+    time = pd.date_range("2024-01-01", periods=n_time, freq="h")
+    depths = np.array([0.0, 4.0, 8.0, 12.0, 16.0, 20.0])[:n_depths]
+
+    velocity = (np.random.randn(n_beams, n_depths, n_time) * 500).astype(np.int16)
+    mask = np.zeros((n_beams, n_depths, n_time), dtype=np.int8)
+
+    ds = xr.Dataset(
+        {
+            "velocity": (["beam", "depth", "time"], velocity),
+            "mask": (["beam", "depth", "time"], mask),
+            "echo_intensity": (
+                ["beam", "depth", "time"],
+                np.random.randint(50, 200, (n_beams, n_depths, n_time), dtype=np.uint8),
+            ),
+            "correlation": (
+                ["beam", "depth", "time"],
+                np.random.randint(50, 200, (n_beams, n_depths, n_time), dtype=np.uint8),
+            ),
+        },
+        coords={
+            "time": time,
+            "depth": depths,
+            "beam": np.arange(n_beams),
+            "depth_cell_length": np.int64(400),
+            "bin_1_distance": np.int64(200),
+        },
+        attrs={
+            "beam_angle": 20,
+            "beam_direction": "Up",
+            "coordinate_system": "earth",
+        },
+    )
+    return ds
+
+
 def _make_ds_with_year(year: int, n_time: int = 20) -> xr.Dataset:
     """Build a dataset like _make_ds() but centered on a specific year."""
     ds = _make_ds(n_time=n_time)
@@ -308,6 +363,8 @@ def _full_ss(proc: MagicMock, **overrides) -> Dict[str, Any]:
         "flatline_cutoff": 1.0,
         # Depth trim
         "apply_trim_depths": False,
+        "apply_trim_depths_shallow": False,
+        "apply_trim_depths_deep": False,
         "trim_depths_selected": [],
         "trim_depths_apply_all_vars": False,
     }
@@ -791,9 +848,20 @@ class TestTab3DespIke:
     def test_despike_visualization_rendered_when_enabled(self, proc):
         ss = _full_ss(proc, apply_despike=True)
         at = _run(ss)
-        # Should render sliders for cell and ensemble range
+        # Cell-indexed (non-regridded) dataset -> slider, not depth selectbox.
         slider_keys = [s.key for s in at.slider]
         assert "despike_vis_cell" in slider_keys
+
+    def test_despike_visualization_uses_depth_selectbox_when_regridded(self):
+        ds_depth = _make_regridded_ds()
+        proc_depth = _make_mock_processor(ds_depth)
+        ss = _full_ss(proc_depth, apply_despike=True)
+        at = _run(ss)
+        assert not at.exception
+        selectbox_keys = [s.key for s in at.selectbox]
+        slider_keys = [s.key for s in at.slider]
+        assert "despike_vis_depth" in selectbox_keys
+        assert "despike_vis_cell" not in slider_keys
 
     def test_check_despike_checkbox(self, proc):
         ss = _full_ss(proc, apply_despike=False)
@@ -840,6 +908,17 @@ class TestTab4Flatline:
         slider_keys = [s.key for s in at.slider]
         assert "flatline_vis_cell" in slider_keys
 
+    def test_flatline_visualization_uses_depth_selectbox_when_regridded(self):
+        ds_depth = _make_regridded_ds()
+        proc_depth = _make_mock_processor(ds_depth)
+        ss = _full_ss(proc_depth, apply_flatline=True)
+        at = _run(ss)
+        assert not at.exception
+        selectbox_keys = [s.key for s in at.selectbox]
+        slider_keys = [s.key for s in at.slider]
+        assert "flatline_vis_depth" in selectbox_keys
+        assert "flatline_vis_cell" not in slider_keys
+
     def test_check_flatline_checkbox(self, proc):
         ss = _full_ss(proc, apply_flatline=False)
         at = _run(ss)
@@ -847,6 +926,114 @@ class TestTab4Flatline:
         cb.check().run()
         assert not at.exception
         assert at.session_state["apply_flatline"] is True
+
+
+# ===========================================================================
+# CLASS 5b — Tab 2: Depth Trim (shallow/deep independent checkboxes)
+# ===========================================================================
+
+
+class TestTab2DepthTrim:
+    """Tests for the Depth Trim tab's independent Shallow/Deep checkboxes."""
+
+    def test_tab2_renders_without_error(self):
+        ds_depth = _make_regridded_ds()
+        proc_depth = _make_mock_processor(ds_depth)
+        at = _run(_full_ss(proc_depth))
+        assert not at.exception
+
+    def test_guard_shown_and_state_cleared_when_not_regridded(self, proc):
+        """Non-regridded (cell-dim) dataset shows the guard and clears state."""
+        at = _run(_full_ss(proc))
+        assert not at.exception
+        assert at.session_state["apply_trim_depths"] is False
+        assert at.session_state["apply_trim_depths_shallow"] is False
+        assert at.session_state["apply_trim_depths_deep"] is False
+        assert at.session_state["trim_depths_selected"] == []
+
+    def test_both_checkboxes_present_when_regridded(self):
+        ds_depth = _make_regridded_ds()
+        proc_depth = _make_mock_processor(ds_depth)
+        at = _run(_full_ss(proc_depth))
+        keys = [c.key for c in at.checkbox]
+        assert "apply_trim_depths_shallow_cb" in keys
+        assert "apply_trim_depths_deep_cb" in keys
+
+    def test_shallow_only_masks_shallow_side(self):
+        ds_depth = _make_regridded_ds()  # depths: 0, 4, 8, 12, 16, 20
+        proc_depth = _make_mock_processor(ds_depth)
+        at = _run(_full_ss(proc_depth))
+
+        at.selectbox(key="trim_depths_shallow_cell_0").set_value(8.0)
+        at.run()
+        at.checkbox(key="apply_trim_depths_shallow_cb").set_value(True)
+        at.run()
+
+        assert not at.exception
+        assert at.session_state["apply_trim_depths"] is True
+        assert at.session_state["apply_trim_depths_deep"] is False
+        assert at.session_state["trim_depths_selected"] == [0.0, 4.0, 8.0]
+
+    def test_deep_only_masks_deep_side(self):
+        ds_depth = _make_regridded_ds()
+        proc_depth = _make_mock_processor(ds_depth)
+        at = _run(_full_ss(proc_depth))
+
+        at.selectbox(key="trim_depths_deep_cell_0").set_value(12.0)
+        at.run()
+        at.checkbox(key="apply_trim_depths_deep_cb").set_value(True)
+        at.run()
+
+        assert not at.exception
+        assert at.session_state["apply_trim_depths"] is True
+        assert at.session_state["apply_trim_depths_shallow"] is False
+        assert at.session_state["trim_depths_selected"] == [12.0, 16.0, 20.0]
+
+    def test_both_shallow_and_deep_masks_union(self):
+        ds_depth = _make_regridded_ds()
+        proc_depth = _make_mock_processor(ds_depth)
+        at = _run(_full_ss(proc_depth))
+
+        at.selectbox(key="trim_depths_shallow_cell_0").set_value(8.0)
+        at.selectbox(key="trim_depths_deep_cell_0").set_value(12.0)
+        at.run()
+        at.checkbox(key="apply_trim_depths_shallow_cb").set_value(True)
+        at.checkbox(key="apply_trim_depths_deep_cb").set_value(True)
+        at.run()
+
+        assert not at.exception
+        assert at.session_state["apply_trim_depths"] is True
+        assert at.session_state["trim_depths_selected"] == [
+            0.0,
+            4.0,
+            8.0,
+            12.0,
+            16.0,
+            20.0,
+        ]
+
+    def test_unchecking_one_side_keeps_the_other(self):
+        ds_depth = _make_regridded_ds()
+        proc_depth = _make_mock_processor(ds_depth)
+        ss = _full_ss(
+            proc_depth,
+            apply_trim_depths_shallow=True,
+            apply_trim_depths_deep=True,
+            apply_trim_depths=True,
+            trim_depths_shallow_cell_0=8.0,
+            trim_depths_deep_cell_0=12.0,
+            trim_depths_selected=[0.0, 4.0, 8.0, 12.0, 16.0, 20.0],
+        )
+        at = _run(ss)
+        assert not at.exception
+
+        at.checkbox(key="apply_trim_depths_deep_cb").uncheck().run()
+
+        assert not at.exception
+        assert at.session_state["apply_trim_depths_deep"] is False
+        assert at.session_state["apply_trim_depths_shallow"] is True
+        assert at.session_state["apply_trim_depths"] is True
+        assert at.session_state["trim_depths_selected"] == [0.0, 4.0, 8.0]
 
 
 # ===========================================================================
@@ -1723,10 +1910,10 @@ class TestPlottingFunctions:
         with patch("streamlit.plotly_chart"):
             page_module.plot_despike_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=5,
                 cutoff=3.0,
                 component_label="U (East)",
@@ -1738,10 +1925,10 @@ class TestPlottingFunctions:
         with patch("streamlit.plotly_chart"):
             page_module.plot_despike_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=3,
                 cutoff=1.0,
                 component_label="U (East)",
@@ -1753,10 +1940,10 @@ class TestPlottingFunctions:
         with patch("streamlit.plotly_chart"):
             page_module.plot_despike_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=5,
                 cutoff=3.0,
                 component_label="U (East)",
@@ -1768,10 +1955,10 @@ class TestPlottingFunctions:
         with patch("streamlit.plotly_chart"):
             page_module.plot_flatline_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=4,
                 cutoff=1.0,
                 component_label="U (East)",
@@ -1782,10 +1969,10 @@ class TestPlottingFunctions:
         with patch("streamlit.plotly_chart"):
             page_module.plot_flatline_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=4,
                 cutoff=0.0,
                 component_label="U (East)",
@@ -1797,10 +1984,10 @@ class TestPlottingFunctions:
         with patch("streamlit.plotly_chart"):
             page_module.plot_flatline_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=3,
                 cutoff=0.0,
                 component_label="U (East)",
@@ -2042,10 +2229,10 @@ class TestCoverageGaps:
         with patch("streamlit.plotly_chart"):
             page_module.plot_despike_timeseries(
                 velocity_data=vel,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=0,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 0",
                 kernel_size=3,
                 cutoff=3.0,
                 component_label="U",
@@ -2061,10 +2248,10 @@ class TestCoverageGaps:
             with patch("streamlit.plotly_chart"):
                 page_module.plot_despike_timeseries(
                     velocity_data=vel,
+                    time_axis=pd.date_range("2024-01-01", periods=n, freq="h"),
                     beam_idx=0,
                     cell_idx=2,
-                    ens_start=0,
-                    ens_end=n,
+                    cell_label="Cell 2",
                     kernel_size=3,
                     cutoff=3.0,
                     component_label="U",
@@ -2080,10 +2267,10 @@ class TestCoverageGaps:
         with patch("streamlit.plotly_chart"):
             page_module.plot_flatline_timeseries(
                 velocity_data=vel,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=0,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 0",
                 kernel_size=4,
                 cutoff=0.0,
                 component_label="U",
@@ -2102,10 +2289,10 @@ class TestCoverageGaps:
             with patch("streamlit.plotly_chart"):
                 page_module.plot_flatline_timeseries(
                     velocity_data=vel,
+                    time_axis=pd.date_range("2024-01-01", periods=n, freq="h"),
                     beam_idx=0,
                     cell_idx=0,
-                    ens_start=0,
-                    ens_end=n,
+                    cell_label="Cell 0",
                     kernel_size=3,
                     cutoff=0.5,
                     component_label="U",
@@ -2760,10 +2947,10 @@ class TestDefinitiveCoverage:
         with patch("streamlit.plotly_chart"):
             mod.plot_despike_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=3,
                 cutoff=3.0,
                 component_label="U (East)",
@@ -2780,10 +2967,10 @@ class TestDefinitiveCoverage:
         with patch("streamlit.plotly_chart"):
             mod.plot_despike_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=3,
                 cutoff=1.0,
                 component_label="U (East)",
@@ -2802,10 +2989,10 @@ class TestDefinitiveCoverage:
         with patch("streamlit.plotly_chart"):
             mod.plot_flatline_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=4,
                 cutoff=0.0,
                 component_label="U (East)",
@@ -2821,19 +3008,181 @@ class TestDefinitiveCoverage:
         with patch("streamlit.plotly_chart"):
             mod.plot_flatline_timeseries(
                 velocity_data=velocity_data,
+                time_axis=pd.date_range("2024-01-01", periods=20, freq="h"),
                 beam_idx=0,
                 cell_idx=3,
-                ens_start=0,
-                ens_end=20,
+                cell_label="Cell 3",
                 kernel_size=4,
                 cutoff=0.0,
                 component_label="U (East)",
             )
 
 
+class TestRealResampler:
+    """
+    Exercise the plot functions with the *real* plotly_resampler
+    (not forced to HAS_RESAMPLER=False like every other test in this file),
+    on datasets large enough to trigger the FigureResampler branch.
+
+    Regression test: the despike envelope trace used to build its x-data as
+    ``concatenate([x_axis, x_axis[::-1]])`` for a single fill="toself" trace,
+    which is not monotonically increasing - FigureResampler asserts strictly
+    increasing x on every trace it wraps and raised AssertionError as soon as
+    a real deployment (tens of thousands of ensembles) hit this branch.
+    """
+
+    def _load_fresh_mod(self, ds_override=None):
+        import importlib.util
+        import streamlit as st
+
+        ds = ds_override if ds_override is not None else _make_ds()
+        proc = _make_mock_processor(ds)
+
+        spec = importlib.util.spec_from_file_location("vel_real_resampler", SCRIPT_PATH)
+        mod = importlib.util.module_from_spec(spec)
+
+        ss = {
+            "processor": proc,
+            "velocity_initialized": True,
+            "preview_velocity_proc": MagicMock(dataset=ds),
+            "velocity_preview_run": False,
+            "velocity_applied": False,
+            "velocity_preview_stats": None,
+            "velocity_preview_modifications": None,
+            "apply_magnetic": False,
+            "magnetic_declination": None,
+            "magnetic_method": "pygeomag",
+            "magnetic_lat": 0.0,
+            "magnetic_lon": 0.0,
+            "magnetic_year": 2025,
+            "apply_threshold": True,
+            "cutoff_u": 2500,
+            "cutoff_v": 2500,
+            "cutoff_w": 500,
+            "apply_despike": False,
+            "despike_kernel": 13,
+            "despike_cutoff": 3.0,
+            "apply_flatline": False,
+            "flatline_kernel": 4,
+            "flatline_cutoff": 1.0,
+        }
+
+        with (
+            patch.object(st, "set_page_config"),
+            patch.object(st, "stop", side_effect=SystemExit(0)),
+            patch.object(st, "error"),
+            patch.object(st, "header"),
+            patch.object(st, "write"),
+            patch.object(st, "plotly_chart"),
+            patch.object(st, "warning"),
+            patch.object(
+                st,
+                "form",
+                return_value=MagicMock(
+                    __enter__=lambda s: s,
+                    __exit__=MagicMock(return_value=False),
+                ),
+            ),
+            patch.object(st, "tabs", return_value=[MagicMock() for _ in range(7)]),
+            patch.dict("streamlit.session_state", ss, clear=False),
+        ):
+            try:
+                spec.loader.exec_module(mod)
+            except SystemExit:
+                pass
+
+        mod.ds = ds
+        return mod
+
+    def test_has_resampler_true_in_this_environment(self, inject_pyadps_mock):
+        """plotly-resampler is a hard dependency - HAS_RESAMPLER must be True."""
+        mod = self._load_fresh_mod()
+        assert mod.HAS_RESAMPLER is True
+
+    def test_despike_envelope_with_real_resampler(self, inject_pyadps_mock):
+        mod = self._load_fresh_mod()
+        n = 6000
+        vel = (np.random.randn(4, 5, n) * 500).astype(np.int16)
+        time_axis = pd.date_range("2024-01-01", periods=n, freq="min")
+        with patch("streamlit.plotly_chart"):
+            mod.plot_despike_timeseries(
+                velocity_data=vel,
+                time_axis=time_axis,
+                beam_idx=0,
+                cell_idx=2,
+                cell_label="Cell 2",
+                kernel_size=3,
+                cutoff=3.0,
+                component_label="U",
+            )
+
+    def test_flatline_with_real_resampler(self, inject_pyadps_mock):
+        mod = self._load_fresh_mod()
+        n = 6000
+        vel = (np.random.randn(4, 5, n) * 500).astype(np.int16)
+        time_axis = pd.date_range("2024-01-01", periods=n, freq="min")
+        with patch("streamlit.plotly_chart"):
+            mod.plot_flatline_timeseries(
+                velocity_data=vel,
+                time_axis=time_axis,
+                beam_idx=0,
+                cell_idx=2,
+                cell_label="Cell 2",
+                kernel_size=4,
+                cutoff=1.0,
+                component_label="U",
+            )
+
+    def test_depth_trim_comparison_with_real_resampler(self, inject_pyadps_mock):
+        mod = self._load_fresh_mod()
+        n = 6000
+        vel = (np.random.randn(4, 5, n) * 500).astype(np.int16)
+        echo = np.random.randint(50, 200, (4, 5, n), dtype=np.uint8)
+        depth_coord = np.array([0.0, 4.0, 8.0, 12.0, 16.0])
+        time_axis = pd.date_range("2024-01-01", periods=n, freq="min")
+        with patch("streamlit.plotly_chart"):
+            mod.plot_depth_trim_comparison(
+                velocity_data=vel,
+                depth_coord=depth_coord,
+                echo_data=echo,
+                selected_depths=[0.0, 4.0, 8.0],
+                time_axis=time_axis,
+            )
+
+
+class TestDepthTrimSurvivesGeneratePreview:
+    """Depth Trim selections must survive clicking Generate Preview."""
+
+    def test_state_preserved_after_preview_click(self):
+        ds_depth = _make_regridded_ds()
+        proc_depth = _make_mock_processor(ds_depth)
+        ss = _full_ss(proc_depth)
+        at = _run(ss)
+        assert not at.exception
+
+        at.checkbox(key="apply_trim_depths_shallow_cb").set_value(True)
+        at.run()
+        at.selectbox(key="trim_depths_shallow_cell_0").set_value(12.0)
+        at.run()
+
+        assert at.session_state["trim_depths_shallow_cell_0"] == 12.0
+        assert at.session_state["trim_depths_selected"] == [0.0, 4.0, 8.0, 12.0]
+        assert at.session_state["apply_trim_depths"] is True
+
+        btn = next(b for b in at.button if b.key == "preview_velocity")
+        result = btn.click().run()
+
+        assert not result.exception
+        assert result.session_state["trim_depths_shallow_cell_0"] == 12.0
+        assert result.session_state["trim_depths_selected"] == [0.0, 4.0, 8.0, 12.0]
+        assert result.session_state["apply_trim_depths"] is True
+        assert result.session_state["apply_trim_depths_shallow_cb"] is True
+
+
 # ===========================================================================
 # MAIN
 # ===========================================================================
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

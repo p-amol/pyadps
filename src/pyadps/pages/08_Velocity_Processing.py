@@ -439,10 +439,10 @@ def detect_flatlines(data: np.ndarray, kernel_size: int, cutoff: float) -> np.nd
 
 def plot_despike_timeseries(
     velocity_data: np.ndarray,
+    time_axis,
     beam_idx: int,
     cell_idx: int,
-    ens_start: int,
-    ens_end: int,
+    cell_label: str,
     kernel_size: int,
     cutoff: float,
     component_label: str,
@@ -456,11 +456,10 @@ def plot_despike_timeseries(
     - Detected spikes highlighted
     - ±cutoff×std envelope
     """
-    # Extract data for the selected cell and ensemble range
-    vel_slice = velocity_data[beam_idx, cell_idx, ens_start:ens_end].astype(float)
+    vel_slice = velocity_data[beam_idx, cell_idx, :].astype(float)
     vel_slice[vel_slice == -32768] = np.nan
 
-    x_axis = np.arange(ens_start, ens_end)
+    x_axis = np.asarray(time_axis)
 
     # Detect spikes
     median_filtered, spike_mask, std_dev = detect_spikes(vel_slice, kernel_size, cutoff)
@@ -471,17 +470,30 @@ def plot_despike_timeseries(
     else:
         fig = go.Figure()
 
-    # Add envelope (±cutoff×std around median)
+    # Add envelope (±cutoff×std around median). Two monotonically-increasing-x
+    # lines with fill="tonexty" instead of one folded-x fill="toself" trace -
+    # FigureResampler requires strictly increasing x on every trace it wraps.
     upper_bound = median_filtered + cutoff * std_dev
     lower_bound = median_filtered - cutoff * std_dev
 
     fig.add_trace(
         go.Scatter(
-            x=np.concatenate([x_axis, x_axis[::-1]]),
-            y=np.concatenate([upper_bound, lower_bound[::-1]]),
-            fill="toself",
+            x=x_axis,
+            y=lower_bound,
+            mode="lines",
+            line=dict(color="rgba(135, 206, 250, 0)", width=0),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x_axis,
+            y=upper_bound,
+            mode="lines",
+            fill="tonexty",
             fillcolor="rgba(135, 206, 250, 0.3)",
-            line=dict(color="rgba(135, 206, 250, 0)"),
+            line=dict(color="rgba(135, 206, 250, 0)", width=0),
             name=f"±{cutoff}σ envelope",
             hoverinfo="skip",
         )
@@ -528,9 +540,8 @@ def plot_despike_timeseries(
     spike_pct = (n_spikes / n_valid * 100) if n_valid > 0 else 0
 
     fig.update_layout(
-        title=f"{component_label} - Cell {cell_idx} (Ensembles {ens_start}-{ens_end}) | "
-        f"Spikes: {n_spikes} ({spike_pct:.1f}%)",
-        xaxis_title="Ensemble",
+        title=f"{component_label} - {cell_label} | Spikes: {n_spikes} ({spike_pct:.1f}%)",
+        xaxis_title="Time",
         yaxis_title="Velocity (mm/s)",
         height=400,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -542,10 +553,10 @@ def plot_despike_timeseries(
 
 def plot_flatline_timeseries(
     velocity_data: np.ndarray,
+    time_axis,
     beam_idx: int,
     cell_idx: int,
-    ens_start: int,
-    ens_end: int,
+    cell_label: str,
     kernel_size: int,
     cutoff: float,
     component_label: str,
@@ -558,11 +569,10 @@ def plot_flatline_timeseries(
     - Detected flatline segments highlighted
     - Tolerance band visualization
     """
-    # Extract data for the selected cell and ensemble range
-    vel_slice = velocity_data[beam_idx, cell_idx, ens_start:ens_end].astype(float)
+    vel_slice = velocity_data[beam_idx, cell_idx, :].astype(float)
     vel_slice[vel_slice == -32768] = np.nan
 
-    x_axis = np.arange(ens_start, ens_end)
+    x_axis = np.asarray(time_axis)
 
     # Detect flatlines
     flatline_mask = detect_flatlines(vel_slice, kernel_size, cutoff)
@@ -616,8 +626,8 @@ def plot_flatline_timeseries(
         # Add shaded rectangles for each segment
         for seg_start, seg_end in segments:
             fig.add_vrect(
-                x0=x_axis[seg_start] - 0.5,
-                x1=x_axis[seg_end] + 0.5,
+                x0=x_axis[seg_start],
+                x1=x_axis[seg_end],
                 fillcolor="rgba(255, 0, 0, 0.1)",
                 layer="below",
                 line_width=0,
@@ -629,9 +639,8 @@ def plot_flatline_timeseries(
     flatline_pct = (n_flatline / n_valid * 100) if n_valid > 0 else 0
 
     fig.update_layout(
-        title=f"{component_label} - Cell {cell_idx} (Ensembles {ens_start}-{ens_end}) | "
-        f"Flatlines: {n_flatline} ({flatline_pct:.1f}%)",
-        xaxis_title="Ensemble",
+        title=f"{component_label} - {cell_label} | Flatlines: {n_flatline} ({flatline_pct:.1f}%)",
+        xaxis_title="Time",
         yaxis_title="Velocity (mm/s)",
         height=400,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -646,8 +655,7 @@ def plot_depth_trim_comparison(
     depth_coord: np.ndarray,
     echo_data: np.ndarray | None,
     selected_depths: list,
-    ens_start: int,
-    ens_end: int,
+    time_axis,
 ) -> None:
     """
     Plot speed and echo intensity time series for up to three depth cells,
@@ -656,23 +664,27 @@ def plot_depth_trim_comparison(
     velocity_data : (beam, depth, time) array
     echo_data : (beam, depth, time) array, or None if not available
     """
-    x_axis = np.arange(ens_start, ens_end)
+    x_axis = np.asarray(time_axis)
     colors = ["#2a78d6", "#eb6834", "#1baf7a"]
 
-    fig = make_subplots(
+    subplots = make_subplots(
         rows=2,
         cols=1,
         shared_xaxes=True,
         vertical_spacing=0.1,
         subplot_titles=("Speed (u, v magnitude)", "Echo Intensity (beam average)"),
     )
+    if HAS_RESAMPLER and len(x_axis) > 5000:
+        fig = FigureResampler(subplots)
+    else:
+        fig = subplots
 
     for i, depth in enumerate(selected_depths):
         depth_idx = int(np.argmin(np.abs(depth_coord - depth)))
         color = colors[i % len(colors)]
 
-        u = velocity_data[0, depth_idx, ens_start:ens_end].astype(float)
-        v = velocity_data[1, depth_idx, ens_start:ens_end].astype(float)
+        u = velocity_data[0, depth_idx, :].astype(float)
+        v = velocity_data[1, depth_idx, :].astype(float)
         u[u == -32768] = np.nan
         v[v == -32768] = np.nan
         speed = np.sqrt(u**2 + v**2)
@@ -691,7 +703,7 @@ def plot_depth_trim_comparison(
         )
 
         if echo_data is not None:
-            echo = echo_data[:, depth_idx, ens_start:ens_end].astype(float)
+            echo = echo_data[:, depth_idx, :].astype(float)
             echo[echo == -32768] = np.nan
             echo_mean = np.nanmean(echo, axis=0)
             fig.add_trace(
@@ -708,7 +720,7 @@ def plot_depth_trim_comparison(
                 col=1,
             )
 
-    fig.update_xaxes(title_text="Ensemble", row=2, col=1)
+    fig.update_xaxes(title_text="Time", row=2, col=1)
     fig.update_yaxes(title_text="mm/s", row=1, col=1)
     fig.update_yaxes(title_text="counts", row=2, col=1)
     fig.update_layout(
@@ -838,8 +850,8 @@ if not st.session_state.velocity_initialized:
 
     # Despike settings
     st.session_state.apply_despike = False
-    st.session_state.despike_kernel = 13
-    st.session_state.despike_cutoff = 3.0
+    st.session_state.despike_kernel = 7
+    st.session_state.despike_cutoff = 6.0
 
     # Flatline settings
     st.session_state.apply_flatline = False
@@ -848,6 +860,8 @@ if not st.session_state.velocity_initialized:
 
     # Depth trim settings
     st.session_state.apply_trim_depths = False
+    st.session_state.apply_trim_depths_shallow = False
+    st.session_state.apply_trim_depths_deep = False
     st.session_state.trim_depths_selected = []
     st.session_state.trim_depths_apply_all_vars = False
 
@@ -905,6 +919,10 @@ def _reset_velocity_tests():
     st.session_state.apply_magnetic = False
     st.session_state.magnetic_declination = None
     st.session_state.apply_trim_depths = False
+    st.session_state.apply_trim_depths_shallow = False
+    st.session_state.apply_trim_depths_deep = False
+    st.session_state.apply_trim_depths_shallow_cb = False
+    st.session_state.apply_trim_depths_deep_cb = False
     st.session_state.trim_depths_selected = []
     st.session_state.trim_depths_apply_all_vars = False
 
@@ -1229,22 +1247,38 @@ with tab4:
         # Time-series visualization
         st.divider()
         st.write("**📈 Despike Visualization**")
-        st.write("Preview spike detection for a specific cell and ensemble range.")
+        st.write("Preview spike detection for a specific depth.")
 
         n_cells = get_total_cells()
         n_ensembles = get_total_ensembles()
+        has_depth = "depth" in ds.dims
 
         # Selection controls
         col_cell, col_comp = st.columns(2)
 
         with col_cell:
-            despike_vis_cell = st.slider(
-                "Select Cell/Depth",
-                min_value=0,
-                max_value=max(0, n_cells - 1),
-                value=min(n_cells // 2, n_cells - 1) if n_cells > 0 else 0,
-                key="despike_vis_cell",
-            )
+            if has_depth:
+                depth_values = sorted(ds["depth"].values.tolist())
+                despike_vis_depth = st.selectbox(
+                    "Select Depth",
+                    options=depth_values,
+                    index=len(depth_values) // 2 if depth_values else 0,
+                    key="despike_vis_depth",
+                    format_func=lambda d: f"{d:g} m",
+                )
+                despike_vis_cell = int(
+                    np.argmin(np.abs(ds["depth"].values - despike_vis_depth))
+                )
+                despike_cell_label = f"{despike_vis_depth:g} m"
+            else:
+                despike_vis_cell = st.slider(
+                    "Select Cell",
+                    min_value=0,
+                    max_value=max(0, n_cells - 1),
+                    value=min(n_cells // 2, n_cells - 1) if n_cells > 0 else 0,
+                    key="despike_vis_cell",
+                )
+                despike_cell_label = f"Cell {despike_vis_cell}"
 
         with col_comp:
             despike_vis_component = st.radio(
@@ -1255,16 +1289,6 @@ with tab4:
                 key="despike_vis_component",
             )
 
-        # Ensemble range slider
-        default_end = min(1000, n_ensembles)
-        despike_ens_range = st.slider(
-            "Ensemble Range",
-            min_value=0,
-            max_value=n_ensembles,
-            value=(0, default_end),
-            key="despike_ens_range",
-        )
-
         # Show the visualization
         if "velocity" in ds.data_vars and n_ensembles > 0 and n_cells > 0:
             velocity_data = ds["velocity"].values
@@ -1272,18 +1296,17 @@ with tab4:
 
             plot_despike_timeseries(
                 velocity_data=velocity_data,
+                time_axis=get_time_axis(),
                 beam_idx=despike_vis_component,
                 cell_idx=despike_vis_cell,
-                ens_start=despike_ens_range[0],
-                ens_end=despike_ens_range[1],
+                cell_label=despike_cell_label,
                 kernel_size=st.session_state.despike_kernel,
                 cutoff=st.session_state.despike_cutoff,
                 component_label=component_labels[despike_vis_component],
             )
 
             st.caption(
-                f"🔍 Showing {despike_ens_range[1] - despike_ens_range[0]} ensembles. "
-                f"Green = valid data, Red X = detected spikes, Blue line = median filter, "
+                "🔍 Green = valid data, Red X = detected spikes, Blue line = median filter, "
                 f"Shaded area = ±{st.session_state.despike_cutoff}σ envelope."
             )
         else:
@@ -1346,22 +1369,38 @@ with tab5:
         # Time-series visualization
         st.divider()
         st.write("**📈 Flatline Visualization**")
-        st.write("Preview flatline detection for a specific cell and ensemble range.")
+        st.write("Preview flatline detection for a specific depth.")
 
         n_cells = get_total_cells()
         n_ensembles = get_total_ensembles()
+        has_depth = "depth" in ds.dims
 
         # Selection controls
         col_cell, col_comp = st.columns(2)
 
         with col_cell:
-            flatline_vis_cell = st.slider(
-                "Select Cell/Depth",
-                min_value=0,
-                max_value=max(0, n_cells - 1),
-                value=min(n_cells // 2, n_cells - 1) if n_cells > 0 else 0,
-                key="flatline_vis_cell",
-            )
+            if has_depth:
+                depth_values = sorted(ds["depth"].values.tolist())
+                flatline_vis_depth = st.selectbox(
+                    "Select Depth",
+                    options=depth_values,
+                    index=len(depth_values) // 2 if depth_values else 0,
+                    key="flatline_vis_depth",
+                    format_func=lambda d: f"{d:g} m",
+                )
+                flatline_vis_cell = int(
+                    np.argmin(np.abs(ds["depth"].values - flatline_vis_depth))
+                )
+                flatline_cell_label = f"{flatline_vis_depth:g} m"
+            else:
+                flatline_vis_cell = st.slider(
+                    "Select Cell",
+                    min_value=0,
+                    max_value=max(0, n_cells - 1),
+                    value=min(n_cells // 2, n_cells - 1) if n_cells > 0 else 0,
+                    key="flatline_vis_cell",
+                )
+                flatline_cell_label = f"Cell {flatline_vis_cell}"
 
         with col_comp:
             flatline_vis_component = st.radio(
@@ -1372,16 +1411,6 @@ with tab5:
                 key="flatline_vis_component",
             )
 
-        # Ensemble range slider
-        default_end = min(1000, n_ensembles)
-        flatline_ens_range = st.slider(
-            "Ensemble Range",
-            min_value=0,
-            max_value=n_ensembles,
-            value=(0, default_end),
-            key="flatline_ens_range",
-        )
-
         # Show the visualization
         if "velocity" in ds.data_vars and n_ensembles > 0 and n_cells > 0:
             velocity_data = ds["velocity"].values
@@ -1389,18 +1418,17 @@ with tab5:
 
             plot_flatline_timeseries(
                 velocity_data=velocity_data,
+                time_axis=get_time_axis(),
                 beam_idx=flatline_vis_component,
                 cell_idx=flatline_vis_cell,
-                ens_start=flatline_ens_range[0],
-                ens_end=flatline_ens_range[1],
+                cell_label=flatline_cell_label,
                 kernel_size=st.session_state.flatline_kernel,
                 cutoff=st.session_state.flatline_cutoff,
                 component_label=component_labels[flatline_vis_component],
             )
 
             st.caption(
-                f"🔍 Showing {flatline_ens_range[1] - flatline_ens_range[0]} ensembles. "
-                f"Green = normal data, Red = flatline segments (≥{st.session_state.flatline_kernel} consecutive points "
+                f"🔍 Green = normal data, Red = flatline segments (≥{st.session_state.flatline_kernel} consecutive points "
                 f"with ≤{st.session_state.flatline_cutoff} mm/s variation)."
             )
         else:
@@ -1431,111 +1459,117 @@ with tab2:
             "**Regrid** on the **Profile Operations** page first."
         )
         st.session_state.apply_trim_depths = False
-        st.session_state.apply_trim_depths_cb = False
+        st.session_state.apply_trim_depths_shallow = False
+        st.session_state.apply_trim_depths_deep = False
+        st.session_state.apply_trim_depths_shallow_cb = False
+        st.session_state.apply_trim_depths_deep_cb = False
+        st.session_state.trim_depths_selected = []
     else:
-        # Everything below is always shown - exploring the comparison chart
-        # doesn't require committing to anything. "Apply depth trim" (at
-        # the bottom) is the only thing that decides whether the depths
-        # shown here actually get staged for masking.
+        # Everything below is always shown - exploring the comparison charts
+        # doesn't require committing to anything. Each direction has its own
+        # "Apply ... depth trim" checkbox, independent of the other - check
+        # both to chop both ends of the profile in one pass.
         depth_values = sorted(ds["depth"].values.tolist())
 
-        direction = st.radio(
-            "Boundary",
-            options=["Shallow", "Deep"],
-            horizontal=True,
-            key="trim_depths_direction",
-            help="Which end of the profile to inspect. Determines the "
-            "suggested default cells below - you can still pick any "
-            "three depths regardless.",
-        )
+        depths_by_direction = {}
+        enabled_by_direction = {}
+        boundary_by_direction = {}
 
-        default_depths = _default_trim_depths(direction)
-        fallback = (
-            depth_values if direction == "Shallow" else list(reversed(depth_values))
-        )
-        for candidate in fallback:
-            if len(default_depths) >= 3:
-                break
-            if candidate not in default_depths:
-                default_depths.append(candidate)
+        for direction in ["Shallow", "Deep"]:
+            key_prefix = direction.lower()
+            st.subheader(direction)
 
-        st.write("**Select three depth cells to compare:**")
-        st.caption(
-            "Cell 1 is the boundary - masking applies to it and every "
-            "cell beyond it toward the edge of the profile. Cells 2 and "
-            "3 are clean reference neighbors, for comparison only."
-        )
-        cols = st.columns(3)
-        selected_depths = []
-        for i, col in enumerate(cols):
-            with col:
-                default_val = (
-                    default_depths[i] if i < len(default_depths) else depth_values[0]
-                )
-                depth_choice = st.selectbox(
-                    f"Cell {i + 1}" + (" (boundary)" if i == 0 else ""),
-                    options=depth_values,
-                    index=depth_values.index(default_val),
-                    key=f"trim_depths_cell_{i}",
-                    format_func=lambda d: f"{d:g} m",
-                )
-                selected_depths.append(depth_choice)
-
-        if len(set(selected_depths)) != 3:
-            st.warning("Select three distinct depth cells to compare.")
-
-        boundary_depth = selected_depths[0]
-        if direction == "Shallow":
-            depths_to_mask = [d for d in depth_values if d <= boundary_depth]
-        else:
-            depths_to_mask = [d for d in depth_values if d >= boundary_depth]
-
-        n_ensembles = get_total_ensembles()
-        default_end = min(1000, n_ensembles)
-        trim_ens_range = st.slider(
-            "Ensemble Range",
-            min_value=0,
-            max_value=n_ensembles,
-            value=(0, default_end),
-            key="trim_depths_ens_range",
-        )
-
-        if "velocity" in ds.data_vars:
-            echo_var_name = (
-                "echo_intensity"
-                if "echo_intensity" in ds.data_vars
-                else ("echo" if "echo" in ds.data_vars else None)
+            default_depths = _default_trim_depths(direction)
+            fallback = (
+                depth_values if direction == "Shallow" else list(reversed(depth_values))
             )
-            correlation_var_name = "correlation" if "correlation" in ds.data_vars else None
+            for candidate in fallback:
+                if len(default_depths) >= 3:
+                    break
+                if candidate not in default_depths:
+                    default_depths.append(candidate)
 
-            plot_depth_trim_comparison(
-                velocity_data=ds["velocity"].values,
-                depth_coord=ds["depth"].values,
-                echo_data=ds[echo_var_name].values if echo_var_name else None,
-                selected_depths=selected_depths,
-                ens_start=trim_ens_range[0],
-                ens_end=trim_ens_range[1],
-            )
+            st.write("**Select three depth cells to compare:**")
             st.caption(
-                "🔍 Compare the selected depths - a contaminated boundary "
-                "cell typically shows elevated/erratic echo intensity and "
-                "noisier speed than its clean neighbors."
+                "Cell 1 is the boundary - masking applies to it and every "
+                "cell beyond it toward the edge of the profile. Cells 2 and "
+                "3 are clean reference neighbors, for comparison only."
+            )
+            cols = st.columns(3)
+            selected_depths = []
+            for i, col in enumerate(cols):
+                with col:
+                    default_val = (
+                        default_depths[i]
+                        if i < len(default_depths)
+                        else depth_values[0]
+                    )
+                    depth_choice = st.selectbox(
+                        f"Cell {i + 1}" + (" (boundary)" if i == 0 else ""),
+                        options=depth_values,
+                        index=depth_values.index(default_val),
+                        key=f"trim_depths_{key_prefix}_cell_{i}",
+                        format_func=lambda d: f"{d:g} m",
+                    )
+                    selected_depths.append(depth_choice)
+
+            if len(set(selected_depths)) != 3:
+                st.warning("Select three distinct depth cells to compare.")
+
+            boundary_depth = selected_depths[0]
+            if direction == "Shallow":
+                depths_to_mask = [d for d in depth_values if d <= boundary_depth]
+            else:
+                depths_to_mask = [d for d in depth_values if d >= boundary_depth]
+
+            if "velocity" in ds.data_vars:
+                echo_var_name = (
+                    "echo_intensity"
+                    if "echo_intensity" in ds.data_vars
+                    else ("echo" if "echo" in ds.data_vars else None)
+                )
+                correlation_var_name = (
+                    "correlation" if "correlation" in ds.data_vars else None
+                )
+
+                plot_depth_trim_comparison(
+                    velocity_data=ds["velocity"].values,
+                    depth_coord=ds["depth"].values,
+                    echo_data=ds[echo_var_name].values if echo_var_name else None,
+                    selected_depths=selected_depths,
+                    time_axis=get_time_axis(),
+                )
+                st.caption(
+                    "🔍 Compare the selected depths - a contaminated boundary "
+                    "cell typically shows elevated/erratic echo intensity and "
+                    "noisier speed than its clean neighbors."
+                )
+
+                st.write("**📊 Summary statistics:**")
+                render_depth_trim_stats(
+                    velocity_data=ds["velocity"].values,
+                    depth_coord=ds["depth"].values,
+                    echo_data=ds[echo_var_name].values if echo_var_name else None,
+                    correlation_data=ds[correlation_var_name].values
+                    if correlation_var_name
+                    else None,
+                    selected_depths=selected_depths,
+                )
+            else:
+                st.info("No velocity data available for visualization.")
+
+            apply_key = f"apply_trim_depths_{key_prefix}"
+            st.session_state[apply_key] = st.checkbox(
+                f"Apply {direction.lower()} depth trim",
+                value=st.session_state[apply_key],
+                key=f"{apply_key}_cb",
             )
 
-            st.write("**📊 Summary statistics:**")
-            render_depth_trim_stats(
-                velocity_data=ds["velocity"].values,
-                depth_coord=ds["depth"].values,
-                echo_data=ds[echo_var_name].values if echo_var_name else None,
-                correlation_data=ds[correlation_var_name].values
-                if correlation_var_name
-                else None,
-                selected_depths=selected_depths,
-            )
-        else:
-            st.info("No velocity data available for visualization.")
+            depths_by_direction[direction] = depths_to_mask
+            enabled_by_direction[direction] = st.session_state[apply_key]
+            boundary_by_direction[direction] = boundary_depth
 
-        st.divider()
+            st.divider()
 
         st.session_state.trim_depths_apply_all_vars = st.checkbox(
             "Also mask echo intensity / correlation / percent good at these depths",
@@ -1548,22 +1582,29 @@ with tab2:
             key="trim_depths_apply_all_cb",
         )
 
-        st.session_state.apply_trim_depths = st.checkbox(
-            "Apply depth trim",
-            value=st.session_state.apply_trim_depths,
-            key="apply_trim_depths_cb",
+        combined_depths = sorted(
+            set(
+                (depths_by_direction["Shallow"] if enabled_by_direction["Shallow"] else [])
+                + (depths_by_direction["Deep"] if enabled_by_direction["Deep"] else [])
+            )
         )
+        st.session_state.apply_trim_depths = (
+            enabled_by_direction["Shallow"] or enabled_by_direction["Deep"]
+        )
+        st.session_state.trim_depths_selected = combined_depths
 
         if st.session_state.apply_trim_depths:
-            st.session_state.trim_depths_selected = depths_to_mask
-            comparator = "≤" if direction == "Shallow" else "≥"
+            parts = []
+            if enabled_by_direction["Shallow"]:
+                parts.append(f"shallow ≤ {boundary_by_direction['Shallow']:g} m")
+            if enabled_by_direction["Deep"]:
+                parts.append(f"deep ≥ {boundary_by_direction['Deep']:g} m")
             st.success(
-                f"Will mask {len(depths_to_mask)} depth bin(s) "
-                f"({comparator} {boundary_depth:g} m): "
-                + ", ".join(f"{d:g} m" for d in depths_to_mask)
+                f"Will mask {len(combined_depths)} depth bin(s) ("
+                + " and ".join(parts)
+                + "): "
+                + ", ".join(f"{d:g} m" for d in combined_depths)
             )
-        else:
-            st.session_state.trim_depths_selected = []
 
 
 # =============================================================================
@@ -1649,6 +1690,13 @@ with tab6:
                         declination=st.session_state.magnetic_declination
                     )
 
+                # Apply depth trim (if enabled and at least one depth checked)
+                if st.session_state.apply_trim_depths and st.session_state.trim_depths_selected:
+                    runner.trim_depths(
+                        depths=st.session_state.trim_depths_selected,
+                        apply_to_all_variables=st.session_state.trim_depths_apply_all_vars,
+                    )
+
                 # Apply threshold check (if enabled)
                 if st.session_state.apply_threshold:
                     runner.threshold(
@@ -1669,13 +1717,6 @@ with tab6:
                     runner.flatline(
                         kernel_size=st.session_state.flatline_kernel,
                         cutoff=st.session_state.flatline_cutoff,
-                    )
-
-                # Apply depth trim (if enabled and at least one depth checked)
-                if st.session_state.apply_trim_depths and st.session_state.trim_depths_selected:
-                    runner.trim_depths(
-                        depths=st.session_state.trim_depths_selected,
-                        apply_to_all_variables=st.session_state.trim_depths_apply_all_vars,
                     )
 
                 # Commit to staging processor

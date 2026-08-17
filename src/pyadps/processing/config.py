@@ -258,8 +258,8 @@ class ProcessingConfig:
 
     # Despike
     isDespikeCheck_VT: bool = False
-    despike_kernel_VT: int = 5
-    despike_cutoff_VT: float = 3.0
+    despike_kernel_VT: int = 7
+    despike_cutoff_VT: float = 6.0
 
     # Flatline detection
     isFlatlineCheck_VT: bool = False
@@ -595,10 +595,10 @@ class ProcessingConfig:
                 "VelocityTest", "despike", fallback=False
             )
             kwargs["despike_kernel_VT"] = config.getint(
-                "VelocityTest", "despike_kernel_size", fallback=5
+                "VelocityTest", "despike_kernel_size", fallback=7
             )
             kwargs["despike_cutoff_VT"] = config.getfloat(
-                "VelocityTest", "despike_cutoff", fallback=3.0
+                "VelocityTest", "despike_cutoff", fallback=6.0
             )
 
             # Flatline

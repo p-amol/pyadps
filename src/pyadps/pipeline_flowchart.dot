@@ -171,12 +171,13 @@ digraph pipeline {
         margin=22;
         penwidth=1.2;
 
-        vel_magdec   [label="Magnetic Declination\nCorrection (Optional)", fillcolor="#e7f2ec", color="#2e7d5b", fontcolor="#1c3d2e"];
-        vel_thresh   [label="Apply Velocity\nThresholds (Optional)", fillcolor="#e7f2ec", color="#2e7d5b", fontcolor="#1c3d2e"];
-        vel_despike  [label="Despike Data\n(Optional)", fillcolor="#e7f2ec", color="#2e7d5b", fontcolor="#1c3d2e"];
-        vel_flatline [label="Flatline Detection\n(Optional)", fillcolor="#e7f2ec", color="#2e7d5b", fontcolor="#1c3d2e"];
+        vel_magdec    [label="Magnetic Declination\nCorrection (Optional)", fillcolor="#e7f2ec", color="#2e7d5b", fontcolor="#1c3d2e"];
+        vel_depthtrim [label="Depth Trim\n(Optional)", fillcolor="#e7f2ec", color="#2e7d5b", fontcolor="#1c3d2e"];
+        vel_thresh    [label="Apply Velocity\nThresholds (Optional)", fillcolor="#e7f2ec", color="#2e7d5b", fontcolor="#1c3d2e"];
+        vel_despike   [label="Despike Data\n(Optional)", fillcolor="#e7f2ec", color="#2e7d5b", fontcolor="#1c3d2e"];
+        vel_flatline  [label="Flatline Detection\n(Optional)", fillcolor="#e7f2ec", color="#2e7d5b", fontcolor="#1c3d2e"];
 
-        vel_magdec -> vel_thresh -> vel_despike -> vel_flatline;
+        vel_magdec -> vel_depthtrim -> vel_thresh -> vel_despike -> vel_flatline;
     }
 
     finalize [label="Finalize & Export\n(NetCDF / CSV)", fillcolor="#1f3a5f", color="#14293f",

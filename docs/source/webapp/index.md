@@ -349,17 +349,19 @@ out-of-range values, spikes, and frozen/stuck readings respectively.
 ```
 
 ```{note}
-**Depth Trim**'s comparison chart and cell picker are always visible once
-the dataset has been regridded (Page 7 — Profile Operations) — exploring
-them doesn't require committing to anything. It's a manual safety net for
-boundary-layer contamination (e.g. surface backscatter) that survives
-side-lobe cutting's geometric cutoff: pick a boundary depth cell (Cell 1)
-after comparing it against two clean neighbor cells (speed and echo
-intensity time series, plus a summary statistics table), and every depth
-from there to the edge of the profile is masked once "Apply depth trim" is
-checked. By default only velocity is masked; there's an option to also
-mask echo intensity/correlation/percent good if you've confirmed the raw
-diagnostic itself is contaminated.
+**Depth Trim** has two independent sections, Shallow and Deep, each always
+visible once the dataset has been regridded (Page 7 — Profile Operations) —
+exploring them doesn't require committing to anything. It's a manual safety
+net for boundary-layer contamination (e.g. surface backscatter) that
+survives side-lobe cutting's geometric cutoff: in either section, pick a
+boundary depth cell (Cell 1) after comparing it against two clean neighbor
+cells (speed and echo intensity time series, plus a summary statistics
+table), then check that section's "Apply shallow/deep depth trim" box to
+mask every depth from the boundary to the edge of the profile. The two
+checkboxes are independent — check just Shallow, just Deep, or both to trim
+both ends of the profile in one pass. By default only velocity is masked;
+there's a shared option to also mask echo intensity/correlation/percent
+good if you've confirmed the raw diagnostic itself is contaminated.
 ```
 
 ---

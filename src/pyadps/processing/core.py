@@ -925,8 +925,8 @@ class ProcessedDataset:
         cutoff_w: Optional[float] = None,
         # Despike
         despike: bool = False,
-        despike_kernel: int = 13,
-        despike_cutoff: float = 3.0,
+        despike_kernel: int = 7,
+        despike_cutoff: float = 6.0,
         # Flatline
         flatline: bool = False,
         flatline_kernel: int = 4,
@@ -973,9 +973,9 @@ class ProcessedDataset:
             W (Vertical) velocity magnitude cutoff in mm/s. None = skip.
         despike : bool, default False
             Enable despike filter.
-        despike_kernel : int, default 13
+        despike_kernel : int, default 7
             Kernel size for despike filter.
-        despike_cutoff : float, default 3.0
+        despike_cutoff : float, default 6.0
             Despike threshold in standard deviations.
         flatline : bool, default False
             Enable flatline detection.

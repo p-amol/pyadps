@@ -142,8 +142,8 @@ class TestProcessingConfigDefaults:
         assert cfg.maxvvel_VT == 2500.0
         assert cfg.maxwvel_VT == 500.0
         assert cfg.isDespikeCheck_VT is False
-        assert cfg.despike_kernel_VT == 5
-        assert cfg.despike_cutoff_VT == 3.0
+        assert cfg.despike_kernel_VT == 7
+        assert cfg.despike_cutoff_VT == 6.0
         assert cfg.isFlatlineCheck_VT is False
         assert cfg.flatline_kernel_VT == 5
         assert cfg.flatline_cutoff_VT == 3.0

@@ -471,9 +471,9 @@ def despike_check(
     ----------
     ds : xr.Dataset
         Input dataset.
-    kernel_size : int, default 13
+    kernel_size : int, default 7
         Window size for rolling median filter.
-    cutoff : float, default 3.0
+    cutoff : float, default 6.0
         Number of standard deviations to identify spikes.
 
     Returns
@@ -517,6 +517,13 @@ def despike_check(
 
             # Diff
             diff = np.abs(ts_data - filt)
+
+            # medfilt propagates NaN across any window touching one, so a
+            # sparsely-valid ts_data (scattered gaps, not fully NaN) can
+            # still end up with an entirely-NaN diff - skip rather than
+            # let nanstd warn on an empty slice below.
+            if np.all(np.isnan(diff)):
+                continue
 
             # Threshold
             std_dev = np.nanstd(diff)

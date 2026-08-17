@@ -6,6 +6,18 @@ All notable changes to `pyadps` are documented in this file. The format is based
 
 ## [Unreleased]
 
+### Fixed
+
+- `despike_check()` guarded against a cell whose raw data is entirely NaN, but
+  not against one that's mostly-but-not-entirely NaN. `scipy.signal.medfilt`
+  propagates NaN across any filter window that touches one, so a cell with
+  only a few scattered valid pings - exactly what boundary/regridded depths
+  look like - could end up with an entirely-NaN filtered result even though
+  the raw input wasn't all-NaN, triggering a spurious
+  `RuntimeWarning: Degrees of freedom <= 0 for slice` from `np.nanstd()`.
+  Verified the fix doesn't change masking output at all on a real deployment
+  file - it only skips the redundant, warning-producing computation.
+
 ## [1.1.0] - 2026-08-17
 
 ### Added

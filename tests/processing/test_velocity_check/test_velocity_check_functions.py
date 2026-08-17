@@ -640,6 +640,44 @@ class TestDespikeCheck:
         assert DEFAULT_DESPIKE_KERNEL == 7
         assert DEFAULT_DESPIKE_CUTOFF == 6.0
 
+    def test_sparsely_valid_cell_does_not_warn(self, recwarn):
+        """
+        A cell with scattered valid points (not entirely missing, but few
+        enough that every medfilt window contains a gap) can end up with
+        an entirely-NaN filtered diff, even though the raw data itself
+        passes the "skip if all NaN" guard. Regression test: this reached
+        np.nanstd() on an all-NaN array and raised "Degrees of freedom <=
+        0 for slice" on a real deployment after regridding.
+        """
+        n_beams, n_cells, n_time = 4, 1, 30
+        velocity_data = np.full((n_beams, n_cells, n_time), np.nan, dtype=np.float32)
+        # Only 3 valid pings, spaced far enough apart that a kernel_size=7
+        # window is never fully valid.
+        velocity_data[:, 0, 5] = 100.0
+        velocity_data[:, 0, 15] = 200.0
+        velocity_data[:, 0, 25] = 150.0
+
+        coords = {
+            "beam": np.arange(n_beams),
+            "cell": np.arange(n_cells),
+            "time": np.arange(n_time),
+        }
+        velocity = xr.DataArray(velocity_data, dims=["beam", "cell", "time"], coords=coords)
+        mask = xr.DataArray(
+            np.zeros((n_beams, n_cells, n_time), dtype=np.int8),
+            dims=["beam", "cell", "time"],
+            coords=coords,
+        )
+        ds = xr.Dataset({"velocity": velocity, "mask": mask})
+
+        result = despike_check(ds, kernel_size=7, cutoff=6.0)
+
+        assert "mask" in result.data_vars
+        assert not any(
+            "Degrees of freedom" in str(w.message) or "Mean of empty slice" in str(w.message)
+            for w in recwarn.list
+        )
+
 
 # ============================================================================
 # TEST: flatline_check

@@ -84,7 +84,7 @@ with emoji-headed subsections / `## Detailed Changes` table).
 
 ```bash
 gh release create vX.Y.Z \
-  --title "Software Release: Version vX.Y.Z" \
+  --title "vX.Y.Z" \
   --notes-file /path/to/release_notes.md \
   --target main
 ```
